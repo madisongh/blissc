@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		7A9D4C9E1635A88F0013AE09 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A9D4C9D1635A88F0013AE09 /* main.c */; };
 		7A9D4CA01635A88F0013AE09 /* blissc.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = 7A9D4C9F1635A88F0013AE09 /* blissc.1 */; };
+		7A9D4CA71635A93A0013AE09 /* fileio.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A9D4CA61635A93A0013AE09 /* fileio.c */; };
+		7A9D4CAB1635CEA30013AE09 /* scanner.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A9D4CAA1635CEA30013AE09 /* scanner.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -28,6 +30,10 @@
 		7A9D4C991635A88F0013AE09 /* blissc */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = blissc; sourceTree = BUILT_PRODUCTS_DIR; };
 		7A9D4C9D1635A88F0013AE09 /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
 		7A9D4C9F1635A88F0013AE09 /* blissc.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = blissc.1; sourceTree = "<group>"; };
+		7A9D4CA61635A93A0013AE09 /* fileio.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = fileio.c; sourceTree = "<group>"; };
+		7A9D4CA81635ACCA0013AE09 /* fileio.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = fileio.h; sourceTree = "<group>"; };
+		7A9D4CA91635CE970013AE09 /* scanner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = scanner.h; sourceTree = "<group>"; };
+		7A9D4CAA1635CEA30013AE09 /* scanner.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = scanner.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -61,6 +67,10 @@
 			isa = PBXGroup;
 			children = (
 				7A9D4C9D1635A88F0013AE09 /* main.c */,
+				7A9D4CA61635A93A0013AE09 /* fileio.c */,
+				7A9D4CA91635CE970013AE09 /* scanner.h */,
+				7A9D4CAA1635CEA30013AE09 /* scanner.c */,
+				7A9D4CA81635ACCA0013AE09 /* fileio.h */,
 				7A9D4C9F1635A88F0013AE09 /* blissc.1 */,
 			);
 			path = blissc;
@@ -118,6 +128,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				7A9D4C9E1635A88F0013AE09 /* main.c in Sources */,
+				7A9D4CA71635A93A0013AE09 /* fileio.c in Sources */,
+				7A9D4CAB1635CEA30013AE09 /* scanner.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
