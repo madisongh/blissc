@@ -19,11 +19,18 @@ struct filectx_s {
     size_t            fnlen;
     size_t            bufpos;
     size_t            buflen;
-    char              fname[1024];
+    char              *fname;
     char              filebuf[4096];
 };
 
 static filectx_t input_files;
+
+/*
+ * Note that file names are NOT freed with the
+ * file context structures; this is on purpose,
+ * as we may need to display the file name in
+ * an error message after it is closed.
+ */
 
 void
 fileio_init (void)
@@ -48,7 +55,8 @@ file_open_input (const char *fname, size_t fnlen)
     filectx_t ctx = malloc(sizeof(struct filectx_s));
     if (ctx == 0)
         return ctx;
-    if (fnlen >= sizeof(ctx->fname)) {
+    ctx->fname = malloc(fnlen+1);
+    if (ctx->fname == 0) {
         free(ctx);
         return 0;
     }
@@ -89,6 +97,12 @@ file_close (filectx_t ctx)
     }
     close(cur->fd);
     free(cur);
+}
+
+char *
+file_getname (filectx_t ctx)
+{
+    return ctx->fname;
 }
 
 int
