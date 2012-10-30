@@ -10,14 +10,35 @@
 #define blissc_nametable_h
 
 #include <string.h>
+#include "utils.h"
 
 #define NAME_SIZE       32
-#define NAME_M_RSVDKWD  (1<<0)
+
+#define NAME_M_RESERVED (1<<0) // error if the name is redefined
+#define NAME_M_QFUNC    (1<<1) // %QUOTE/%UNQUOTE/%EXPAND
+#define NAME_M_NOTDCL   (1<<2) // not declared
+
+typedef enum {
+    NAMETYPE_KEYWORD,
+    NAMETYPE_LEXFUNC,
+    NAMETYPE_LEXNAME,
+    NAMETYPE_DATA
+} nametype_t;
+
+typedef enum {
+    LNTYPE_MACRO,
+    LNTYPE_MACPARAM,
+    LNTYPE_COMPILETIME,
+    LNTYPE_LITERAL
+} lntype_t;
+
 struct name_s {
     struct name_s       *next;
-    void                *namedata;
-    size_t               namelen;
+    nametype_t           nametype;
+    lntype_t             name_lntype;
     unsigned int         nameflags;
+    data_t               namedata;
+    size_t               namelen;
     char                 name[NAME_SIZE];
 };
 // NB: max name length is (NAME_SIZE-1)
@@ -26,19 +47,22 @@ struct name_s {
  * Macros for building static tables of reserved keywords
  * and predeclared names
  */
-#define KWDDEF(kwd, data) { 0, (void *)(data), \
-                            sizeof(kwd)-1, NAME_M_RSVDKWD, \
-                            (kwd) }
-#define PREDEF(kwd, data) { 0, (void *)(data), \
-                            sizeof(kwd)-1, 0, (kwd) }
-
+#define KWDDEF(kwd, data) { 0, NAMETYPE_KEYWORD, 0, \
+                            NAME_M_RESERVED, (void *)(data), \
+                            sizeof(kwd)-1, (kwd) }
+#define LEXDEF(kwd, data, f) { 0, NAMETYPE_LEXFUNC, 0, \
+                            (NAME_M_RESERVED|(f)), (void *)(data), \
+                            sizeof(kwd)-1, (kwd) }
+#define PREDEF(kwd, data) { 0, NAMETYPE_KEYWORD, 0, \
+                            0, (void *)(data), \
+                            sizeof(kwd)-1, (kwd) }
 
 typedef struct name_s name_t;
 struct scopectx_s;
 typedef struct scopectx_s *scopectx_t;
 
 name_t *name_search(scopectx_t scope, const char *id,
-                    size_t len);
+                    size_t len, int do_create);
 void name_insert(scopectx_t scope, name_t *name);
 scopectx_t scope_begin (scopectx_t parent);
 scopectx_t scope_end (scopectx_t scope);

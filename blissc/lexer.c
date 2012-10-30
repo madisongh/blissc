@@ -13,7 +13,6 @@
 #include "lexeme.h"
 #include "lexer.h"
 #include "scanner.h"
-#include "nametable.h"
 
 struct lexchain_s {
     struct lexchain_s   *nextchain;
@@ -33,12 +32,13 @@ static lextype_t opertypes[] = {
     LEXTYPE_OP_SHIFT
 };
 
-static const char delimiters[] = ",;:()[]<>";
+static const char delimiters[] = ",;:()[]<>%";
 static lextype_t delimtypes[] = {
     LEXTYPE_DELIM_COMMA, LEXTYPE_DELIM_SEMI, LEXTYPE_DELIM_COLON,
     LEXTYPE_DELIM_LPAR, LEXTYPE_DELIM_RPAR,
     LEXTYPE_DELIM_LBRACK, LEXTYPE_DELIM_RBRACK,
-    LEXTYPE_DELIM_LANGLE, LEXTYPE_DELIM_RANGLE
+    LEXTYPE_DELIM_LANGLE, LEXTYPE_DELIM_RANGLE,
+    LEXTYPE_DELIM_PERCENT
 };
 
 static lexchain_t *
@@ -115,29 +115,25 @@ makelex (lexer_ctx_t ctx, scopectx_t scope,
          scantype_t type, char *tok, size_t len)
 {
     lexeme_t lex;
-    name_t *np;
     char *cp;
 
     memset(&lex, 0, sizeof(lex));
 
     switch (type) {
-        case SCANTYPE_END:
-            lex.type = LEXTYPE_END;
-            break;
         case SCANTYPE_DECLITERAL:
             lex.type = LEXTYPE_NUMERIC;
             errno = 0;
-            lex.data.val = strtol(tok, &cp, 10);
+            lex.data.val_signed = strtol(tok, &cp, 10);
             if (errno != 0) {
                 /* XXX error condition */
             }
             break;
         case SCANTYPE_QUOTEDSTRING:
             lex.type = LEXTYPE_STRING;
-            lex.data.ptr = malloc(len+1);
-            if (lex.data.ptr != 0) {
-                memcpy(lex.data.ptr, tok, len);
-                *((char *)lex.data.ptr+len) = '\0';
+            lex.data.val_string.ptr = malloc(len);
+            if (lex.data.val_string.ptr != 0) {
+                memcpy(lex.data.val_string.ptr, tok, len);
+                lex.data.val_string.len = len;
             } else {
                 /* XXX error condition */
             }
@@ -151,9 +147,8 @@ makelex (lexer_ctx_t ctx, scopectx_t scope,
             lex.type = delimtypes[cp-tok];
             break;
         case SCANTYPE_IDENTIFIER:
-            lex.data.ptr = np = name_search(scope, tok, len);
-            lex.type = ((np->nameflags & NAME_M_RSVDKWD) ?
-                        LEXTYPE_KEYWORD : LEXTYPE_NAME);
+            lex.type = LEXTYPE_IDENT;
+            lex.data.ptr = name_search(scope, tok, len, 0);
             break;
         default:
             break;
@@ -179,6 +174,7 @@ lexer_next (lexer_ctx_t ctx, scopectx_t scope, int erroneof)
         if (chain->head != 0) {
             lex = chain->head;
             chain->head = lex->next;
+            lex->next = 0;
             break;
         }
         if (chain->sctx != 0) {
@@ -189,6 +185,17 @@ lexer_next (lexer_ctx_t ctx, scopectx_t scope, int erroneof)
             if (!scan_ok(type)) {
                 /* XXX error condition */
                 break;
+            }
+            if (type == SCANTYPE_END) {
+                scan_finish(chain->sctx);
+                chain->sctx = 0;
+                ctx->chain = chain->nextchain;
+                lexchain_free(chain);
+                if (ctx->chain == 0) {
+                    lex = lexeme_alloc(LEXTYPE_END);
+                    break;
+                }
+                continue;
             }
             tokbuf[len] = '\0';
             lex = makelex(ctx, scope, type, tokbuf, len);
@@ -218,4 +225,31 @@ lexer_insert (lexer_ctx_t ctx, lexeme_t *lexchain)
         ctx->chain = chain;
     }
     chain->head = lexchain;
+}
+
+// Insert a new file at the front of the stream
+// (for REQUIRE and %REQUIRE)
+int
+lexer_newfile (lexer_ctx_t ctx, const char *fname, size_t fnlen)
+{
+    lexchain_t *chain = lexchain_alloc();
+
+    if (chain == 0) {
+        /* XXX error condition */
+        return 0;
+    }
+    chain->sctx = scan_init();
+    if (chain->sctx == 0) {
+        lexchain_free(chain);
+        return 0;
+    }
+    if (!scan_fopen(chain->sctx, fname, fnlen)) {
+        scan_finish(chain->sctx);
+        chain->sctx = 0;
+        lexchain_free(chain);
+        return 0;
+    }
+    chain->nextchain = ctx->chain;
+    ctx->chain = chain;
+    return 1;
 }

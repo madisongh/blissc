@@ -59,7 +59,7 @@ name_alloc (const char *name, size_t namelen)
     np->name[namelen] = '\0';
     np->nameflags = NAME_M_ALLOCATED;
     np->namelen = namelen;
-    np->namedata = 0;
+    memset(&np->namedata, 0, sizeof(np->namedata));
     return np;
 }
 
@@ -117,17 +117,18 @@ scope_end (scopectx_t scope)
 }
 
 name_t *
-name_search (scopectx_t scope, const char *id, size_t len)
+name_search (scopectx_t scope, const char *id, size_t len, int do_create)
 {
     int i;
-    name_t *np;
+    name_t *np = 0;
 
     while (scope != 0) {
         if (scope->namecount > 0) {
             i = hash(id, len);
             for (np = scope->hashtable[i]; np != 0;
                  np = np->next) {
-                if (len == np->namelen &&
+                if (!(np->nameflags & NAME_M_NOTDCL) &&
+                    len == np->namelen &&
                     memcmp(id, np->name, len)) {
                     return np;
                 }
@@ -136,7 +137,13 @@ name_search (scopectx_t scope, const char *id, size_t len)
         scope = scope->parent;
     }
 
-    return 0;
+    if (do_create) {
+        np = name_alloc(id, len);
+        if (np != 0) {
+            np->nameflags |= NAME_M_NOTDCL;
+        }
+    }
+    return np;
 }
 
 void

@@ -19,5 +19,6 @@ lexer_ctx_t lexer_init(const char *fname, size_t fnlen);
 void lexer_finish(lexer_ctx_t ctx);
 lexeme_t *lexer_next(lexer_ctx_t ctx, scopectx_t scope, int erroneof);
 void lexer_insert(lexer_ctx_t ctx, lexeme_t *lexchain);
+int lexer_newfile(lexer_ctx_t ctx, const char *fname, size_t fnlen);
 
 #endif

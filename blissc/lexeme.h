@@ -10,12 +10,13 @@
 #define blissc_lexeme_h
 
 #include <string.h>
+#include "utils.h"
 
 typedef enum {
-    LEXTYPE_KEYWORD = 1,
-    LEXTYPE_NAME,
+    LEXTYPE_IDENT = 1,
     LEXTYPE_NUMERIC,
     LEXTYPE_STRING,
+    LEXTYPE_CSTRING,
     LEXTYPE_END,
     LEXTYPE_OP_ADD,
     LEXTYPE_OP_SUB,
@@ -32,7 +33,8 @@ typedef enum {
     LEXTYPE_DELIM_LBRACK,
     LEXTYPE_DELIM_RBRACK,
     LEXTYPE_DELIM_LANGLE,
-    LEXTYPE_DELIM_RANGLE
+    LEXTYPE_DELIM_RANGLE,
+    LEXTYPE_DELIM_PERCENT
 } lextype_t;
 
 static inline int __unused
@@ -51,11 +53,7 @@ lex_is_delimiter (lextype_t lt)
 struct lexeme_s {
     struct lexeme_s *next;
     lextype_t        type;
-    union {
-        void         *ptr;
-        long          val;
-        unsigned long val_unsigned;
-    } data;
+    data_t           data;
 };
 typedef struct lexeme_s lexeme_t;
 
