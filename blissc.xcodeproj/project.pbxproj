@@ -14,6 +14,7 @@
 		7A9D4CA01635A88F0013AE09 /* blissc.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = 7A9D4C9F1635A88F0013AE09 /* blissc.1 */; };
 		7A9D4CA71635A93A0013AE09 /* fileio.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A9D4CA61635A93A0013AE09 /* fileio.c */; };
 		7A9D4CAB1635CEA30013AE09 /* scanner.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A9D4CAA1635CEA30013AE09 /* scanner.c */; };
+		7A9E1C13163DA445009ACBD0 /* parser.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A9E1C12163DA445009ACBD0 /* parser.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -43,6 +44,9 @@
 		7A9D4CA81635ACCA0013AE09 /* fileio.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = fileio.h; sourceTree = "<group>"; };
 		7A9D4CA91635CE970013AE09 /* scanner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = scanner.h; sourceTree = "<group>"; };
 		7A9D4CAA1635CEA30013AE09 /* scanner.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = scanner.c; sourceTree = "<group>"; };
+		7A9E1C11163DA331009ACBD0 /* utils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = utils.h; sourceTree = "<group>"; };
+		7A9E1C12163DA445009ACBD0 /* parser.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = parser.c; sourceTree = "<group>"; };
+		7A9E1C14163DA45A009ACBD0 /* parser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = parser.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -85,6 +89,9 @@
 				7A995E0C163C2286003BEAC7 /* lexeme.c */,
 				7A7FD5171636C2A700B2D7FC /* lexer.h */,
 				7A7FD5181636C65200B2D7FC /* lexeme.h */,
+				7A9E1C12163DA445009ACBD0 /* parser.c */,
+				7A9E1C14163DA45A009ACBD0 /* parser.h */,
+				7A9E1C11163DA331009ACBD0 /* utils.h */,
 				7A9D4CA81635ACCA0013AE09 /* fileio.h */,
 				7A9D4C9F1635A88F0013AE09 /* blissc.1 */,
 			);
@@ -148,6 +155,7 @@
 				7A7FD5151636C29C00B2D7FC /* lexer.c in Sources */,
 				7A995E0D163C2286003BEAC7 /* lexeme.c in Sources */,
 				7A995E10163C2F82003BEAC7 /* nametable.c in Sources */,
+				7A9E1C13163DA445009ACBD0 /* parser.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
