@@ -22,5 +22,6 @@ void parser_finish(parse_ctx_t pctx);
 void *parser_get_cctx(parse_ctx_t pctx);
 lexeme_t *parser_next(parse_ctx_t pctx);
 void parser_insert(parse_ctx_t pctx, lexeme_t *lex);
+void parser_skip_to_delim(parse_ctx_t pctx, lextype_t delimtype);
 
 #endif

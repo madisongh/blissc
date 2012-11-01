@@ -17,6 +17,7 @@ static const char *ltnames[] = { DOLEXTYPES };
 #define ALLOC_QTY 128
 
 static lexeme_t *freepool = 0;
+static lexeme_t errlex = { 0, LEXTYPE_NONE };
 
 const char *
 lextype_name (lextype_t lt)
@@ -37,7 +38,7 @@ lexeme_alloc (lextype_t type)
         freepool = malloc(ALLOC_QTY * sizeof(lexeme_t));
         if (freepool == 0) {
             /* XXX error condition */
-            return 0;
+            return &errlex;
         }
         for (i = 0, lex = freepool; i < ALLOC_QTY-1; i++, lex++) {
             lex->next = lex + 1;
@@ -55,8 +56,10 @@ lexeme_alloc (lextype_t type)
 void
 lexeme___free (lexeme_t *lex)
 {
-    lex->next = freepool;
-    freepool = lex;
+    if (lex != &errlex) {
+        lex->next = freepool;
+        freepool = lex;
+    }
 }
 
 lexeme_t *
@@ -65,7 +68,7 @@ lexeme_copy (lexeme_t *orig)
     lexeme_t *lex = lexeme_alloc(0);
     if (lex == 0) {
         /* XXX error condition */
-        return lex;
+        return &errlex;
     }
     memcpy(lex, orig, sizeof(lexeme_t));
     lex->next = 0;

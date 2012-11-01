@@ -24,6 +24,7 @@ typedef struct lexchain_s lexchain_t;
 
 struct lexer_ctx_s {
     lexchain_t   *chain;
+    int          atend;
 };
 
 static const char operators[] = "+-*/=.^";
@@ -41,6 +42,9 @@ static lextype_t delimtypes[] = {
     LEXTYPE_DELIM_LANGLE, LEXTYPE_DELIM_RANGLE,
     LEXTYPE_DELIM_PERCENT
 };
+
+static lexeme_t errlex = { 0, LEXTYPE_NONE };
+static lexeme_t endlex = { 0, LEXTYPE_END };
 
 static lexchain_t *
 lexchain_alloc (void)
@@ -120,9 +124,12 @@ lexeme_create (lexer_ctx_t ctx, scopectx_t scope,
 
     if (type < LEXTYPE_MIN || type > LEXTYPE_MAX) {
         /* XXX error condition */
-        return 0;
+        return &errlex;
     }
     lex  = lexeme_alloc(type);
+    if (lex->type == LEXTYPE_NONE) {
+        return &errlex;
+    }
     switch (type) {
         case LEXTYPE_NUMERIC:
             errno = 0;
@@ -162,6 +169,9 @@ lexeme_create (lexer_ctx_t ctx, scopectx_t scope,
 void
 lexeme_free (lexeme_t *lex)
 {
+    if (lex == &errlex || lex == &endlex) {
+        return;
+    }
     switch (lex->type) {
         case LEXTYPE_STRING:
         case LEXTYPE_CSTRING:
@@ -205,7 +215,7 @@ makelex (lexer_ctx_t ctx, scopectx_t scope,
             break;
     }
 
-    return (lextype == 0 ? 0 : lexeme_create(ctx, scope, lextype, tok, len));
+    return (lextype == 0 ? &errlex : lexeme_create(ctx, scope, lextype, tok, len));
 
 }
 
@@ -216,8 +226,13 @@ lexer_next (lexer_ctx_t ctx, scopectx_t scope, int erroneof)
     char tokbuf[65];
     size_t len;
 
-    if (ctx == 0)
-        return 0;
+    if (ctx == 0) {
+        return &errlex;
+    }
+
+    if (ctx->atend) {
+        return &endlex;
+    }
 
     while (ctx->chain != 0) {
         lexchain_t *chain = ctx->chain;
@@ -243,6 +258,7 @@ lexer_next (lexer_ctx_t ctx, scopectx_t scope, int erroneof)
                 lexchain_free(chain);
                 if (ctx->chain == 0) {
                     lex = lexeme_alloc(LEXTYPE_END);
+                    ctx->atend = 1;
                     break;
                 }
                 continue;
@@ -265,6 +281,10 @@ lexer_insert (lexer_ctx_t ctx, lexeme_t *lexchain)
 {
     lexchain_t *chain = ctx->chain;
 
+    if (lexchain == &errlex || lexchain == &endlex) {
+        return;
+    }
+    
     if (chain == 0 || chain->head != 0) {
         chain = lexchain_alloc();
         if (chain == 0) {
