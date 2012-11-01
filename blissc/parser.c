@@ -394,6 +394,7 @@ parse_string_literal (parse_ctx_t pctx, int whichtype)
             if (acstr != 0) {
                 string_free(&lex->data.val_string);
                 memcpy(&lex->data.val_string, acstr, sizeof(strdesc_t));
+                lex->type = LEXTYPE_CSTRING;
             }
         }
         lexer_insert(pctx->lexctx, lex);
@@ -429,23 +430,31 @@ parse_numeric_literal (parse_ctx_t pctx, int base)
 
     if (lex->type != LEXTYPE_STRING) {
         /* XXX error condition */
-        lexeme_free(lex);
+        lexer_insert(pctx->lexctx, lex);
     } else {
-        char *cp;
+        char *cp, buf[32];
         lex->next = 0;
         lex->type = LEXTYPE_NUMERIC;
         errno = 0;
         // XXX probably need to do this ourselves, rather than rely on C lib
-        numval = strtol(lex->data.val_string.ptr, &cp, base);
-        if (errno != 0 || (cp-lex->data.val_string.ptr) != lex->data.val_string.len) {
+        if (lex->data.val_string.len >= sizeof(buf)) {
+            cp = buf + sizeof(buf)-1;
+        } else {
+            cp = buf+lex->data.val_string.len;
+        }
+        memcpy(buf, lex->data.val_string.ptr, cp-buf);
+        *cp = '\0';
+        numval = strtol(buf, &cp, base);
+        if (errno != 0 || (cp-buf) != lex->data.val_string.len) {
             /* XXX error condition */
             lexeme_free(lex);
+        } else {
+            // XXX need to validate that the value fits into the
+            // target machine's word length
+            string_free(&lex->data.val_string);
+            lex->data.val_signed = numval;
+            lexer_insert(pctx->lexctx, lex);
         }
-        // XXX need to validate that the value fits into the
-        // target machine's word length
-        string_free(&lex->data.val_string);
-        lex->data.val_signed = numval;
-        lexer_insert(pctx->lexctx, lex);
     }
     return 1;
 } /* parse_numeric_literal */
@@ -649,6 +658,15 @@ parse_EXACTSTRING (parse_ctx_t pctx)
         lexeme_free(lex);
     }
     if (!skip_to_paren) {
+        lex = parser_next(pctx);
+        if (lex == 0 || lex->type != LEXTYPE_DELIM_COMMA) {
+            skip_to_paren = 1;
+        }
+        if (lex != 0) {
+            lexeme_free(lex);
+        }
+    }
+    if (!skip_to_paren) {
         if (parse_Expression(pctx)) {
             lex = lexer_next(pctx->lexctx, pctx->curscope, 0);
         } else {
@@ -667,6 +685,15 @@ parse_EXACTSTRING (parse_ctx_t pctx)
                 skip_to_paren = 1;
 
             }
+            lexeme_free(lex);
+        }
+    }
+    if (!skip_to_paren) {
+        lex = parser_next(pctx);
+        if (lex == 0 || lex->type != LEXTYPE_DELIM_COMMA) {
+            skip_to_paren = 1;
+        }
+        if (lex != 0) {
             lexeme_free(lex);
         }
     }

@@ -290,21 +290,20 @@ scan_getnext (scanctx_t ctx, char *buf, size_t bufsiz, size_t *len,
 
         // OK, hit end of line (linemark).
 
+        curbuf->curpos = cp - &curbuf->linebuf[0];
         switch (curstate) {
             case STATE_IN_DECLIT:
-                curbuf->curpos = cp - &curbuf->linebuf[0];
                 *len = outp - buf;
                 return SCANTYPE_DECLITERAL;
             case STATE_IN_IDENTIFIER:
-                curbuf->curpos = cp - &curbuf->linebuf[0];
                 *len = outp - buf;
                 return SCANTYPE_IDENTIFIER;
             case STATE_IN_QSTRING:
-                curbuf->curpos = cp - &curbuf->linebuf[0];
                 return SCANTYPE_ERR_QSTR;
-
+            case STATE_EXIT:
+                *len = outp - buf;
+                return rettype;
             default:
-                curbuf->curpos = cp - &curbuf->linebuf[0];
                 break;
         }
 

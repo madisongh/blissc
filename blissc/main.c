@@ -148,6 +148,8 @@ test_parser (int argc, const char *argv[])
     if (lex == 0) {
         fprintf(stderr, "parser_next returned NULL\n");
         return 997;
+    } else {
+        printf("<<end of input>>\n");
     }
     parser_finish(pctx);
     scope_end(mainscope);

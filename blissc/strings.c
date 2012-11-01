@@ -212,7 +212,7 @@ string_alloc (strdesc_t *dest, size_t len)
         return 0;
     }
     if (dest == 0) {
-        return &str->desc;
+        dest = &str->desc;
     }
     dest->flags = 0;
     dest->ptr = str->desc.ptr;
