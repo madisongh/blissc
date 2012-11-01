@@ -14,6 +14,8 @@
 #include "lexeme.h"
 #include "lexer.h"
 #include "nametable.h"
+#include "strings.h"
+#include "expression.h"
 
 struct parse_ctx_s {
     scopectx_t      curscope;
@@ -41,7 +43,25 @@ static int parse_EXPAND(parse_ctx_t);
     DODEF(O) \
     DODEF(DECIMAL) \
     DODEF(X) \
-    DODEF(C)
+    DODEF(C) \
+    DODEF(CHAR) \
+    DODEF(CHARCOUNT) \
+    DODEF(CTCE) \
+    DODEF(DECLARED) \
+    DODEF(EXPLODE) \
+    DODEF(IDENTICAL) \
+    DODEF(INFORM) \
+    DODEF(ISSTRING) \
+    DODEF(MESSAGE) \
+    DODEF(NAME) \
+    DODEF(NUMBER) \
+    DODEF(PRINT) \
+    DODEF(REMOVE) \
+    DODEF(REQUIRE) \
+    DODEF(SBTTL) \
+    DODEF(STRING) \
+    DODEF(TITLE) \
+    DODEF(WARN)
 
 #define DODEF(name_) static int parse_##name_ (parse_ctx_t);
 DODEFS
@@ -140,8 +160,7 @@ parser_next (parse_ctx_t pctx)
         lex = lexer_next(pctx->lexctx, pctx->curscope, pctx->no_eof);
         keepgoing = 0;
         np = lex->data.ptr;
-        if (lex->type != LEXTYPE_IDENT || pctx->do_quote || np == 0
-            || (np->nameflags & NAME_M_NOTDCL)) {
+        if (lex->type != LEXTYPE_IDENT || pctx->do_quote) {
             pctx->do_quote = pctx->do_unquote = 0;
             break;
         }
@@ -222,13 +241,8 @@ parse_QUOTE (parse_ctx_t pctx)
         lex->type != LEXTYPE_DELIM_PERCENT) {
         /* XXX error condition */
     } else if (lex->type == LEXTYPE_IDENT) {
-        name_t *np;
-        np = lex->data.ptr;
-        if (np == 0) {
-            np = name_search(pctx->curscope, lex->data.val_string.ptr,
-                             lex->data.val_string.len, 0);
-        }
-        if (np != 0 && np->nametype == NAMETYPE_KEYWORD) {
+        name_t *np = lex->data.ptr;
+        if (np->nametype == NAMETYPE_KEYWORD) {
             /* XXX error condition */
         }
         pctx->do_quote = 1;
@@ -258,13 +272,8 @@ parse_unquote_expand (parse_ctx_t pctx, int is_expand)
         /* XXX error condition */
     } else {
         name_t *np = lex->data.ptr;
-        if (np == 0) {
-            np = name_search(pctx->curscope, lex->data.val_string.ptr,
-                             lex->data.val_string.len, 0);
-        }
-        if (np == 0) {
-            /* XXX error condition */
-        } else if (np->nametype == NAMETYPE_KEYWORD ||
+        if (np->nametype == NAMETYPE_KEYWORD ||
+            np->nametype == NAMETYPE_UNDECLARED ||
             (is_expand && !((np->nametype == NAMETYPE_LEXFUNC) ||
                             (np->nametype == NAMETYPE_LEXNAME &&
                              np->name_lntype == LNTYPE_MACRO)))) {
@@ -299,22 +308,15 @@ parse_string_literal (parse_ctx_t pctx, int whichtype)
         lexeme_free(lex);
     } else {
         lex->next = 0;
-        if (whichtype != 0) {
-            char *newstr;
-            newstr = malloc(lex->data.val_string.len+1);
-            if (newstr == 0) {
-                    /* XXX error condition */
-            } else {
-                memcpy(newstr+(whichtype-1), lex->data.val_string.ptr, lex->data.val_string.len);
-                if (whichtype == 1) {
-                    newstr[lex->data.val_string.len+1] = '\0';
-                } else {
-                    *newstr = lex->data.val_string.len;
-                    lex->type = LEXTYPE_CSTRING;
-                }
-                free(lex->data.val_string.ptr);
-                lex->data.val_string.ptr = newstr;
-                lex->data.val_string.len += 1;
+        if (whichtype == 1) {
+            static strdesc_t nullchr = STRZDEF("");
+            string_append(&lex->data.val_string, &nullchr);
+        } else if (whichtype == 2) {
+            strdesc_t *acstr = ascic_string_from_chrs(0, lex->data.val_string.ptr,
+                                                      lex->data.val_string.len);
+            if (acstr != 0) {
+                string_free(&lex->data.val_string);
+                memcpy(&lex->data.val_string, acstr, sizeof(strdesc_t));
             }
         }
         lexer_insert(pctx->lexctx, lex);
@@ -368,10 +370,221 @@ parse_C (parse_ctx_t pctx) {
         lexeme_free(lex);
     } else {
         char ch = *lex->data.val_string.ptr & 0x7f;
-        free(lex->data.val_string.ptr);
+        string_free(&lex->data.val_string);
         lex->type = LEXTYPE_NUMERIC;
         lex->data.val_signed = ch;
         lexer_insert(pctx->lexctx, lex);
     }
     return 1;
+}
+
+static lexeme_t *
+string_params (parse_ctx_t pctx, int already_have_open_paren)
+{
+    lexeme_t *lex;
+    char      stringresult[1024];
+    size_t    resultlen = 0;
+    int       ql_was_normal = 0;
+
+    if (!already_have_open_paren) {
+        lex = parser_next(pctx);
+        if (lex->type != LEXTYPE_DELIM_LPAR) {
+            // put back the lexeme before returning? right?
+            lexer_insert(pctx->lexctx, lex);
+            /* XXX error condition */
+            return 0;
+        }
+        lexeme_free(lex);
+    }
+
+    if (pctx->quotelevel == QL_NORMAL) {
+        pctx->quotelevel = QL_NAME;
+        ql_was_normal = 1;
+    } else {
+        /* XXX would this ever happen? */
+    }
+
+    while (1) {
+        lex = parser_next(pctx);
+        if (lex->type == LEXTYPE_DELIM_RPAR) {
+            lexeme_free(lex);
+            break;
+        }
+        // It's OK to have a null argument
+        if (lex->type == LEXTYPE_DELIM_COMMA) {
+            lexeme_free(lex);
+            continue;
+        }
+        if (lex->type == LEXTYPE_NUMERIC) {
+            size_t len;
+            len = snprintf(stringresult+resultlen,
+                           sizeof(stringresult)-resultlen,
+                           "%ld", lex->data.val_signed);
+            resultlen += len;
+            lexeme_free(lex);
+        } else if (lex->type == LEXTYPE_STRING ||
+                   lex->type == LEXTYPE_CSTRING) {
+            char *strp = lex->data.val_string.ptr;
+            size_t len = lex->data.val_string.len;
+            if (lex->type == LEXTYPE_CSTRING) {
+                len -= 1;
+                strp += 1;
+            }
+            if (len > sizeof(stringresult)-resultlen) {
+                len = sizeof(stringresult)-resultlen;
+            }
+            memcpy(stringresult+resultlen, strp, len);
+            resultlen += len;
+            lexeme_free(lex);
+        } else if (lex->type == LEXTYPE_IDENT) {
+            name_t *np = lex->data.ptr;
+            size_t len = np->namelen;
+            if (len > sizeof(stringresult)-resultlen) {
+                len = sizeof(stringresult)-resultlen;
+            }
+            memcpy(stringresult+resultlen, np->name, len);
+            resultlen += len;
+            lexeme_free(lex);
+        } else {
+            /* XXX error condition */
+            lexer_insert(pctx->lexctx, lex);
+            if (ql_was_normal) {
+                pctx->quotelevel = QL_NORMAL;
+            }
+            return 0;
+        }
+        // OK, now we expect a comma or closing paren
+        lex = parser_next(pctx);
+        if (lex->type == LEXTYPE_DELIM_RPAR) {
+            lexeme_free(lex);
+            break;
+        }
+        if (lex->type != LEXTYPE_DELIM_COMMA) {
+            /* XXX error condition */
+            lexer_insert(pctx->lexctx, lex);
+            if (ql_was_normal) {
+                pctx->quotelevel = QL_NORMAL;
+            }
+            return 0;
+        }
+        // otherwise, continue
+    }
+
+    if (ql_was_normal) {
+        pctx->quotelevel = QL_NORMAL;
+    }
+    return lexeme_create(pctx->lexctx, pctx->curscope, LEXTYPE_STRING,
+                        stringresult, resultlen);
+}
+
+static int
+parse_STRING (parse_ctx_t pctx)
+{
+    lexeme_t *lex = string_params(pctx, 0);
+
+    if (lex == 0) {
+        /* XXX error condition */
+    } else {
+        lexer_insert(pctx->lexctx, lex);
+    }
+    return 1;
+}
+
+static int
+parse_EXACTSTRING (parse_ctx_t pctx)
+{
+    lexeme_t *lex, *result = 0;
+    char fillchr = 0;
+    size_t len = 0;
+    int skip_to_paren = 0;
+
+    lex = parser_next(pctx);
+    if (lex->type != LEXTYPE_DELIM_LPAR) {
+        /* XXX error condition */
+        lexer_insert(pctx->lexctx, lex);
+        return 1;
+    }
+    lexeme_free(lex);
+    if (parse_Expression(pctx)) {
+        lex = lexer_next(pctx->lexctx, pctx->curscope, 0);
+    } else {
+        lex = 0;
+    }
+    if (lex == 0 || lex->type != LEXTYPE_NUMERIC) {
+        /* XXX error condition */
+        skip_to_paren = 1;
+        if (lex != 0) {
+            lexeme_free(lex);
+        }
+    } else {
+        len = lex->data.val_signed;
+        if (len > 1024) {
+            /* XXX error condition - string too long */
+            skip_to_paren = 1;
+        }
+        lexeme_free(lex);
+    }
+    if (!skip_to_paren) {
+        if (parse_Expression(pctx)) {
+            lex = lexer_next(pctx->lexctx, pctx->curscope, 0);
+        } else {
+            lex = 0;
+        }
+        if (lex == 0 || lex->type != LEXTYPE_NUMERIC) {
+            /* XXX error condition */
+            skip_to_paren = 1;
+            if (lex != 0) {
+                lexeme_free(lex);
+            }
+        } else {
+            fillchr = lex->data.val_signed & 0xff;
+            if (lex->data.val_signed > 255) {
+                /* XXX error condition - invalid char */
+                skip_to_paren = 1;
+
+            }
+            lexeme_free(lex);
+        }
+    }
+    if (!skip_to_paren) {
+        lex = string_params(pctx, 1);
+        if (lex == 0) {
+            /* XXX error condition */
+        } else {
+            if (lex->data.val_string.len < len) {
+                strdesc_t *filldsc;
+                filldsc = string_alloc(0, len - lex->data.val_string.len);
+                if (filldsc == 0) {
+                    /* XXX error condition */
+                } else {
+                    memset(filldsc->ptr, fillchr, filldsc->len);
+                    if (string_append(&lex->data.val_string, filldsc) == 0) {
+                        /* XXX error condition */
+                    }
+                    string_free(filldsc);
+                }
+            } else if (lex->data.val_string.len > len) {
+                lex->data.val_string.len = len;
+            }
+            result = lex;
+        }
+    } else {
+        for (lex = parser_next(pctx); lex != 0; lex = parser_next(pctx)) {
+            if (lex->type == LEXTYPE_DELIM_RPAR ||
+                lex->type == LEXTYPE_DELIM_SEMI ||
+                lex->type == LEXTYPE_END) {
+                break;
+            }
+        }
+        if (lex != 0) {
+            lexer_insert(pctx->lexctx, lex);
+        }
+    }
+
+    if (result != 0) {
+        lexer_insert(pctx->lexctx, result);
+    }
+
+    return 1;
+
 }

@@ -13,6 +13,7 @@
 #include "lexeme.h"
 #include "lexer.h"
 #include "scanner.h"
+#include "strings.h"
 
 struct lexchain_s {
     struct lexchain_s   *nextchain;
@@ -110,53 +111,102 @@ lexer_finish (lexer_ctx_t ctx)
     free(ctx);
 }
 
-static lexeme_t *
-makelex (lexer_ctx_t ctx, scopectx_t scope,
-         scantype_t type, char *tok, size_t len)
+lexeme_t *
+lexeme_create (lexer_ctx_t ctx, scopectx_t scope,
+               lextype_t type, const char *tok, size_t len)
 {
-    lexeme_t lex;
+    lexeme_t *lex;
     char *cp;
 
-    memset(&lex, 0, sizeof(lex));
-
+    if (type < LEXTYPE_MIN || type > LEXTYPE_MAX) {
+        /* XXX error condition */
+        return 0;
+    }
+    lex  = lexeme_alloc(type);
     switch (type) {
-        case SCANTYPE_DECLITERAL:
-            lex.type = LEXTYPE_NUMERIC;
+        case LEXTYPE_NUMERIC:
             errno = 0;
-            lex.data.val_signed = strtol(tok, &cp, 10);
+            lex->data.val_signed = strtol(tok, &cp, 10);
             if (errno != 0) {
                 /* XXX error condition */
             }
             break;
-        case SCANTYPE_QUOTEDSTRING:
-            lex.type = LEXTYPE_STRING;
-            lex.data.val_string.ptr = malloc(len);
-            if (lex.data.val_string.ptr != 0) {
-                memcpy(lex.data.val_string.ptr, tok, len);
-                lex.data.val_string.len = len;
-            } else {
+        case LEXTYPE_STRING:
+            if (string_from_chrs(&lex->data.val_string, tok, len) == 0) {
                 /* XXX error condition */
+                lexeme_free(lex);
+                return 0;
             }
             break;
-        case SCANTYPE_OPERATOR:
-            cp = strchr(operators, *tok);
-            lex.type = opertypes[cp-tok];
+        case LEXTYPE_CSTRING:
+            if (len > 255) {
+                len = 255;
+            }
+            if (ascic_string_from_chrs(&lex->data.val_string, tok, len) == 0) {
+                /* XXX error condition */
+                lexeme_free(lex);
+                return 0;
+            }
             break;
-        case SCANTYPE_PUNCTUATION:
-            cp = strchr(delimiters, *tok);
-            lex.type = delimtypes[cp-tok];
-            break;
-        case SCANTYPE_IDENTIFIER:
-            lex.type = LEXTYPE_IDENT;
-            lex.data.ptr = name_search(scope, tok, len, 0);
+        case LEXTYPE_IDENT:
+            lex->data.ptr = name_search(scope, tok, len, 1);
             break;
         default:
             break;
     }
-    if (lex.type != 0) {
-        return lexeme_copy(&lex);
+
+    lex->type = type;
+    return lex;
+}
+
+void
+lexeme_free (lexeme_t *lex)
+{
+    switch (lex->type) {
+        case LEXTYPE_STRING:
+        case LEXTYPE_CSTRING:
+            free(lex->data.val_string.ptr);
+            break;
+        case LEXTYPE_IDENT:
+            name_free(lex->data.ptr);
+            break;
+        default:
+            break;
     }
-    return 0;
+    lexeme___free(lex);
+}
+
+static lexeme_t *
+makelex (lexer_ctx_t ctx, scopectx_t scope,
+         scantype_t type, char *tok, size_t len)
+{
+    lextype_t lextype = 0;
+    char *cp;
+
+    switch (type) {
+        case SCANTYPE_DECLITERAL:
+            lextype = LEXTYPE_NUMERIC;
+            break;
+        case SCANTYPE_QUOTEDSTRING:
+            lextype = LEXTYPE_STRING;
+            break;
+        case SCANTYPE_OPERATOR:
+            cp = strchr(operators, *tok);
+            lextype = opertypes[cp-tok];
+            break;
+        case SCANTYPE_PUNCTUATION:
+            cp = strchr(delimiters, *tok);
+            lextype = delimtypes[cp-tok];
+            break;
+        case SCANTYPE_IDENTIFIER:
+            lextype = LEXTYPE_IDENT;
+            break;
+        default:
+            break;
+    }
+
+    return (lextype == 0 ? 0 : lexeme_create(ctx, scope, lextype, tok, len));
+
 }
 
 lexeme_t *

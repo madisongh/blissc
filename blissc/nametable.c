@@ -11,7 +11,7 @@
 
 #define NAME_M_ALLOCATED (1<<16)
 
-#define HT_BUCKETS  32
+#define HT_BUCKETS  128
 
 static inline int
 hash (const char *str, size_t len)
@@ -52,6 +52,7 @@ name_alloc (const char *name, size_t namelen)
     np = freenames;
     freenames = np->next;
     np->next = 0;
+    np->namescope = 0;
     if (namelen > NAME_SIZE-1) {
         namelen = NAME_SIZE-1;
     }
@@ -59,14 +60,17 @@ name_alloc (const char *name, size_t namelen)
     np->name[namelen] = '\0';
     np->nameflags = NAME_M_ALLOCATED;
     np->namelen = namelen;
+    np->nametype = NAMETYPE_UNDECLARED;
+    np->name_lntype = LNTYPE_NONE;
     memset(&np->namedata, 0, sizeof(np->namedata));
     return np;
 }
 
-static void
+void
 name_free (name_t *np)
 {
-    if (np->nameflags & NAME_M_ALLOCATED) {
+    if (np->namescope == 0 &&
+        (np->nameflags & NAME_M_ALLOCATED)) {
         np->next = freenames;
         freenames = np;
     }
@@ -106,6 +110,7 @@ scope_end (scopectx_t scope)
             name = scope->hashtable[i];
             while (name != 0) {
                 next = name->next;
+                name->namescope = 0;
                 name_free(name);
                 name = next;
             }
@@ -127,7 +132,7 @@ name_search (scopectx_t scope, const char *id, size_t len, int do_create)
             i = hash(id, len);
             for (np = scope->hashtable[i]; np != 0;
                  np = np->next) {
-                if (!(np->nameflags & NAME_M_NOTDCL) &&
+                if (!(np->nametype != NAMETYPE_UNDECLARED) &&
                     len == np->namelen &&
                     memcmp(id, np->name, len)) {
                     return np;
@@ -138,10 +143,7 @@ name_search (scopectx_t scope, const char *id, size_t len, int do_create)
     }
 
     if (do_create) {
-        np = name_alloc(id, len);
-        if (np != 0) {
-            np->nameflags |= NAME_M_NOTDCL;
-        }
+        np = name_alloc(id, len); // automatically sets as undeclared
     }
     return np;
 }
@@ -160,5 +162,6 @@ name_insert (scopectx_t scope, name_t *np)
     scope->hashtable[i] = np;
 
     scope->namecount += 1;
+    np->namescope = scope;
 
 }

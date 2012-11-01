@@ -34,8 +34,12 @@ typedef enum {
     LEXTYPE_DELIM_RBRACK,
     LEXTYPE_DELIM_LANGLE,
     LEXTYPE_DELIM_RANGLE,
-    LEXTYPE_DELIM_PERCENT
+    LEXTYPE_DELIM_PERCENT,
+    LEXTYPE_COUNT           // MUST BE LAST
 } lextype_t;
+
+#define LEXTYPE_MIN LEXTYPE_IDENT
+#define LEXTYPE_MAX (LEXTYPE_COUNT-1)
 
 static inline int __unused
 lex_is_operator (lextype_t lt)
@@ -59,6 +63,6 @@ typedef struct lexeme_s lexeme_t;
 
 lexeme_t *lexeme_alloc(lextype_t type);
 lexeme_t *lexeme_copy(lexeme_t *orig);
-void lexeme_free(lexeme_t *lex);
+void lexeme___free(lexeme_t *lex);
 
 #endif
