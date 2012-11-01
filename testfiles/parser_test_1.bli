@@ -13,3 +13,12 @@
 -654
 %O'-177'
 %B'1101'
+%CHARCOUNT('ABCD')
+%CHARCOUNT(%STRING('hello'),%ASCIZ' there')
+%CHAR(65)
+%CHAR(65, 66, 67, %x'0d', %x'0a', 68, 69, 70)
+%REMOVE((A,B,C))
+%REMOVE([1,2,3])
+%REMOVE((A)+(B))
+%REMOVE(%REMOVE(%REMOVE(<<<goaway>>>)))
+%NAME(%STRING('hello'), %CHAR(10), 'there')
