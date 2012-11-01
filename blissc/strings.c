@@ -86,9 +86,9 @@ stringpool_expand (int idx)
         str->desc.ptr = cp;
     }
     // on exit, 'str' still points to the last allocated entry
-    str->next = pool[i].freelist;
-    pool[i].freelist = (string_t *) more;
-    return 0;
+    str->next = pool[idx].freelist;
+    pool[idx].freelist = (string_t *) more;
+    return 1;
 }
 
 int

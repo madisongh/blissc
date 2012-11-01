@@ -12,31 +12,38 @@
 #include <string.h>
 #include "utils.h"
 
+#undef DOLEXTYPE
+#define DOLEXTYPES \
+    DOLEXTYPE(NONE) \
+    DOLEXTYPE(IDENT) \
+    DOLEXTYPE(NUMERIC) \
+    DOLEXTYPE(STRING) \
+    DOLEXTYPE(CSTRING) \
+    DOLEXTYPE(END) \
+    DOLEXTYPE(OP_ADD) \
+    DOLEXTYPE(OP_SUB) \
+    DOLEXTYPE(OP_MUL) \
+    DOLEXTYPE(OP_DIV) \
+    DOLEXTYPE(OP_ASSIGN) \
+    DOLEXTYPE(OP_FETCH) \
+    DOLEXTYPE(OP_SHIFT) \
+    DOLEXTYPE(DELIM_COMMA) \
+    DOLEXTYPE(DELIM_SEMI) \
+    DOLEXTYPE(DELIM_COLON) \
+    DOLEXTYPE(DELIM_LPAR) \
+    DOLEXTYPE(DELIM_RPAR) \
+    DOLEXTYPE(DELIM_LBRACK) \
+    DOLEXTYPE(DELIM_RBRACK) \
+    DOLEXTYPE(DELIM_LANGLE) \
+    DOLEXTYPE(DELIM_RANGLE) \
+    DOLEXTYPE(DELIM_PERCENT)
+
+#define DOLEXTYPE(lt) LEXTYPE_##lt,
 typedef enum {
-    LEXTYPE_IDENT = 1,
-    LEXTYPE_NUMERIC,
-    LEXTYPE_STRING,
-    LEXTYPE_CSTRING,
-    LEXTYPE_END,
-    LEXTYPE_OP_ADD,
-    LEXTYPE_OP_SUB,
-    LEXTYPE_OP_MUL,
-    LEXTYPE_OP_DIV,
-    LEXTYPE_OP_ASSIGN,
-    LEXTYPE_OP_FETCH,
-    LEXTYPE_OP_SHIFT,
-    LEXTYPE_DELIM_COMMA,
-    LEXTYPE_DELIM_SEMI,
-    LEXTYPE_DELIM_COLON,
-    LEXTYPE_DELIM_LPAR,
-    LEXTYPE_DELIM_RPAR,
-    LEXTYPE_DELIM_LBRACK,
-    LEXTYPE_DELIM_RBRACK,
-    LEXTYPE_DELIM_LANGLE,
-    LEXTYPE_DELIM_RANGLE,
-    LEXTYPE_DELIM_PERCENT,
+    DOLEXTYPES
     LEXTYPE_COUNT           // MUST BE LAST
 } lextype_t;
+#undef DOLEXTYPE
 
 #define LEXTYPE_MIN LEXTYPE_IDENT
 #define LEXTYPE_MAX (LEXTYPE_COUNT-1)
@@ -64,5 +71,6 @@ typedef struct lexeme_s lexeme_t;
 lexeme_t *lexeme_alloc(lextype_t type);
 lexeme_t *lexeme_copy(lexeme_t *orig);
 void lexeme___free(lexeme_t *lex);
+const char *lextype_name(lextype_t lt);
 
 #endif

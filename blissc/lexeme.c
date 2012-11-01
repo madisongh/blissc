@@ -10,9 +10,22 @@
 #include <stdlib.h>
 #include "lexeme.h"
 
+#define DOLEXTYPE(lt) "LEXTYPE_" #lt,
+static const char *ltnames[] = { DOLEXTYPES };
+#undef DOLEXTYPE
+
 #define ALLOC_QTY 128
 
 static lexeme_t *freepool = 0;
+
+const char *
+lextype_name (lextype_t lt)
+{
+    if (lt < LEXTYPE_MIN || lt > LEXTYPE_MAX) {
+        return "*LEXTYPE_OUTOFRANGE*";
+    }
+    return ltnames[lt];
+}
 
 lexeme_t *
 lexeme_alloc (lextype_t type)
@@ -26,7 +39,6 @@ lexeme_alloc (lextype_t type)
             /* XXX error condition */
             return 0;
         }
-
         for (i = 0, lex = freepool; i < ALLOC_QTY-1; i++, lex++) {
             lex->next = lex + 1;
         }
@@ -35,13 +47,13 @@ lexeme_alloc (lextype_t type)
 
     lex = freepool;
     freepool = lex->next;
-    memset(lex, 0, sizeof(lextype_t));
+    memset(lex, 0, sizeof(lexeme_t));
     lex->type = type;
     return lex;
 }
 
 void
-lexeme_free (lexeme_t *lex)
+lexeme___free (lexeme_t *lex)
 {
     lex->next = freepool;
     freepool = lex;

@@ -132,9 +132,9 @@ name_search (scopectx_t scope, const char *id, size_t len, int do_create)
             i = hash(id, len);
             for (np = scope->hashtable[i]; np != 0;
                  np = np->next) {
-                if (!(np->nametype != NAMETYPE_UNDECLARED) &&
+                if (np->nametype != NAMETYPE_UNDECLARED &&
                     len == np->namelen &&
-                    memcmp(id, np->name, len)) {
+                    memcmp(id, np->name, len) == 0) {
                     return np;
                 }
             }

@@ -165,7 +165,7 @@ lexeme_free (lexeme_t *lex)
     switch (lex->type) {
         case LEXTYPE_STRING:
         case LEXTYPE_CSTRING:
-            free(lex->data.val_string.ptr);
+            string_free(&lex->data.val_string);
             break;
         case LEXTYPE_IDENT:
             name_free(lex->data.ptr);
@@ -192,11 +192,11 @@ makelex (lexer_ctx_t ctx, scopectx_t scope,
             break;
         case SCANTYPE_OPERATOR:
             cp = strchr(operators, *tok);
-            lextype = opertypes[cp-tok];
+            lextype = opertypes[cp-operators];
             break;
         case SCANTYPE_PUNCTUATION:
             cp = strchr(delimiters, *tok);
-            lextype = delimtypes[cp-tok];
+            lextype = delimtypes[cp-delimiters];
             break;
         case SCANTYPE_IDENTIFIER:
             lextype = LEXTYPE_IDENT;

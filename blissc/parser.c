@@ -19,6 +19,7 @@
 
 struct parse_ctx_s {
     scopectx_t      curscope;
+    void            *cctx;
     lexer_ctx_t     lexctx;
     int             lib_compile;
     enum { QL_NORMAL, QL_NAME, QL_MACRO } quotelevel;
@@ -26,8 +27,6 @@ struct parse_ctx_s {
     int             do_quote, do_unquote;
 };
 
-static int is_valid_lib_decl(lexeme_t *lex);
-static int is_module_decl(lexeme_t *lex);
 static int macro_expand(parse_ctx_t pctx, name_t *macroname);
 
 static int parse_QUOTE(parse_ctx_t);
@@ -44,25 +43,27 @@ static int parse_EXPAND(parse_ctx_t);
     DODEF(DECIMAL) \
     DODEF(X) \
     DODEF(C) \
-    DODEF(CHAR) \
-    DODEF(CHARCOUNT) \
-    DODEF(CTCE) \
-    DODEF(DECLARED) \
-    DODEF(EXPLODE) \
-    DODEF(IDENTICAL) \
-    DODEF(INFORM) \
-    DODEF(ISSTRING) \
-    DODEF(MESSAGE) \
-    DODEF(NAME) \
-    DODEF(NUMBER) \
-    DODEF(PRINT) \
-    DODEF(REMOVE) \
-    DODEF(REQUIRE) \
-    DODEF(SBTTL) \
     DODEF(STRING) \
-    DODEF(TITLE) \
-    DODEF(WARN)
-
+    DODEF(EXACTSTRING)
+/*
+ DODEF(CHAR) \
+ DODEF(CHARCOUNT) \
+ DODEF(CTCE) \
+ DODEF(DECLARED) \
+ DODEF(EXPLODE) \
+ DODEF(IDENTICAL) \
+ DODEF(INFORM) \
+ DODEF(ISSTRING) \
+ DODEF(MESSAGE) \
+ DODEF(NAME) \
+ DODEF(NUMBER) \
+ DODEF(PRINT) \
+ DODEF(REMOVE) \
+ DODEF(REQUIRE) \
+ DODEF(SBTTL) \
+ DODEF(TITLE) \
+ DODEF(WARN)
+*/
 #define DODEF(name_) static int parse_##name_ (parse_ctx_t);
 DODEFS
 #undef DODEF
@@ -75,78 +76,103 @@ name_t parser_names[] = {
     LEXDEF("%EXPAND", parse_EXPAND, NAME_M_QFUNC)
 };
 
-void
-parser_init (scopectx_t kwdscope)
+/*
+ *  --- Public API for this module ---
+ */
+
+/*
+ * parser_init
+ *
+ * Initializes the parser by registering the lexical functions
+ * in a name table (whose scope is passed by the caller) and
+ * allocating a context block.  The caller may pass in a context
+ * pointer to be stored in the block.
+ */
+parse_ctx_t
+parser_init (scopectx_t kwdscope, void *cctx)
 {
+    parse_ctx_t pctx;
     int i;
+
     for (i = 0; i < sizeof(parser_names)/sizeof(parser_names[0]); i++) {
         name_insert(kwdscope, &parser_names[i]);
     }
-}
+    pctx = malloc(sizeof(struct parse_ctx_s));
+    if (pctx != 0) {
+        memset(pctx, 0, sizeof(struct parse_ctx_s));
+        pctx->curscope = scope_begin(kwdscope);
+        pctx->cctx = cctx;
+        pctx->quotelevel = QL_NORMAL;
+    }
 
+    return pctx;
+} /* parser_init */
 
-int
-parser_run (scopectx_t initscope,
-            const char *fname, size_t fnlen, int is_lib)
+/*
+ * parser_finish
+ *
+ * Cleans up a parsing context.
+ */
+void
+parser_finish (parse_ctx_t pctx)
 {
-    struct parse_ctx_s topctx;
-    lexeme_t *lex;
-    int ret = 0;
+    if (pctx->lexctx != 0) {
+        lexer_finish(pctx->lexctx);
+    }
+    scope_end(pctx->curscope);
+    free(pctx);
+} /* parser_finish */
 
-    memset(&topctx, 0, sizeof(topctx));
-    topctx.curscope = initscope;
-    topctx.lexctx = lexer_init(fname, fnlen);
-    if (topctx.lexctx == 0) {
-        /* XXX error condition */
+/*
+ * parser_fopen
+ *
+ * Begin parsing a file.
+ */
+int
+parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen)
+{
+    pctx->curscope = scope_begin(pctx->curscope);
+    if (pctx->curscope == 0) {
         return 0;
     }
-    topctx.lib_compile = is_lib;
-    topctx.quotelevel = QL_NORMAL;
-    topctx.no_eof = 0; // set when in macro def or lexical conditional
+    pctx->lexctx = lexer_init(fname, fnlen);
+    if (pctx->lexctx == 0) {
+        return 0;
+    }
+    return 1;
+} /* parser_fopen */
 
-    if (is_lib) {
-        int keepgoing = 1;
-        while (keepgoing) {
-            lex = parser_next(&topctx);
-            if (lex == 0) {
-                /* XXX error condition */
-                return 0;
-            }
-            if (lex->type == LEXTYPE_END) {
-                keepgoing = 0;
-                ret = 1; // success
-            } else if (is_valid_lib_decl(lex)) {
-                parser_dispatch_t doit = lex->data.ptr;
-                keepgoing = doit(&topctx);
-            } else {
-                /* XXX error condition */
-                keepgoing = 0;
-            }
-        }
-    } else {
-        lex = parser_next(&topctx);
-        if (is_module_decl(lex)) {
-            parser_dispatch_t doit = lex->data.ptr;
-            if (doit(&topctx)) {
-                lex = parser_next(&topctx);
-                if (lex->type != LEXTYPE_END) {
-                    /* XXX error condition */
-                } else {
-                    ret = 1;
-                }
-            } else {
-                /* XXX error condition */
-            }
-        } else {
-            /* XXX error condition */
-        }
-    } /* lib or module? */
+/*
+ * parser_get_cctx
+ *
+ * Retrieves the 'cctx' pointer from the parsing
+ * context block.
+ */
+void *
+parser_get_cctx (parse_ctx_t pctx) {
+    return pctx->cctx;
+} /* parser_get_cctx */
 
-    lexer_finish(topctx.lexctx);
+/*
+ * parser_insert
+ *
+ * Insert a lexeme to the front of the parsing stream.
+ */
+void
+parser_insert (parse_ctx_t pctx, lexeme_t *lex)
+{
+    lexer_insert(pctx->lexctx, lex);
+} /* parser_insert */
 
-    return ret;
-}
-
+/*
+ * parser_next
+ *
+ * Retrieve the next lexeme from the parse stream.  This is
+ * the main workhorse routine for the parser.  It handles
+ * quoting levels and binding of compile-time names (literals,
+ * COMPILETIME variables) to their values, expanding macros,
+ * and dispatching to process keywords and lexical functions.
+ */
 lexeme_t *
 parser_next (parse_ctx_t pctx)
 {
@@ -218,8 +244,29 @@ parser_next (parse_ctx_t pctx)
     } /* while keepgoing */
 
     return lex;
+} /* parser_next */
+
+/*
+ * --- end of public API ---
+ *
+ * All of the following routines are internal only.
+ *
+ */
+
+static int
+macro_expand (parse_ctx_t pctx, name_t *macroname)
+{
+    /* XXX - placeholder */
+    return 1;
 }
 
+/*
+ * %QUOTE
+ *
+ * Prevents the next lexeme from being bound (i.e., replaced
+ * with its value, if it's a compile-time name, like a macro
+ * or literal).  Only permitted at name-quote or macro-quote level.
+ */
 static int
 parse_QUOTE (parse_ctx_t pctx)
 {
@@ -252,8 +299,16 @@ parse_QUOTE (parse_ctx_t pctx)
     // no matter what, put back the lexeme we just peeked at
     lexer_insert(pctx->lexctx, lex);
     return 1;
-}
+} /* parse_QUOTE */
 
+/*
+ * parse_unquote_expand
+ *
+ * Common handler for %UNQUOTE and %EXPAND.
+ * %UNQUOTE - binds the next lexeme, if it's a name.
+ * %EXPAND  - binds the next lexeme, and expands it if it's a
+ *            lexical function or a macro.
+ */
 static int
 parse_unquote_expand (parse_ctx_t pctx, int is_expand)
 {
@@ -285,20 +340,42 @@ parse_unquote_expand (parse_ctx_t pctx, int is_expand)
     lex->next = 0;
     lexer_insert(pctx->lexctx, lex);
     return 1;
-}
+} /* parse_unquote_expand */
 
+/*
+ * %UNQUOTE
+ *
+ * Binds (i.e., replaces the name with its value, if it's
+ * a compile-time variable or a literal) the next lexeme.
+ * Only permitted at name-quote or macro-quote level.
+ */
 static int
 parse_UNQUOTE (parse_ctx_t pctx)
 {
     return parse_unquote_expand(pctx, 0);
-}
+} /* parse_UNQUOTE */
 
+/*
+ * %EXPAND
+ *
+ * Expands the next lexeme, which must be either a
+ * lexical function call or a macro name.  Only permitted
+ * at macro-quote level.
+ */
 static int
 parse_EXPAND (parse_ctx_t pctx)
 {
     return parse_unquote_expand(pctx, 1);
-}
+} /* parse_EXPAND */
 
+/*
+ * parse_string_literal
+ *
+ * Forms a string literal lexeme from a string expression.
+ * If 'whichtype' is 0, normal string.
+ * If 'whichtype' is 1, null-terminated (%ASCIZ).
+ * If 'whichtype' is 2, counted (%ASCIC).
+ */
 static int
 parse_string_literal (parse_ctx_t pctx, int whichtype)
 {
@@ -322,12 +399,28 @@ parse_string_literal (parse_ctx_t pctx, int whichtype)
         lexer_insert(pctx->lexctx, lex);
     }
     return 1;
-}
+} /* parse_string_literal */
 
+/*
+ * %ASCII's', %ASCIZ's', %ASCIC's'
+ *
+ * String literals (plain, null-terminated, counted).
+ *
+ * Note that 's' can be a string expression (e.g., %STRING(...) or
+ * another instance of %ASCI[IZ]).
+ */
 static int parse_ASCII (parse_ctx_t pctx) { return parse_string_literal(pctx, 0); }
 static int parse_ASCIZ (parse_ctx_t pctx) { return parse_string_literal(pctx, 1); }
 static int parse_ASCIC (parse_ctx_t pctx) { return parse_string_literal(pctx, 2); }
 
+/*
+ * parse_numeric_literal
+ *
+ * Common routine for parsing strings as numeric literals.
+ *
+ * Can begin with +/- sign, followed by one or more digits
+ * in the specified 'base'.
+ */
 static int
 parse_numeric_literal (parse_ctx_t pctx, int base)
 {
@@ -350,18 +443,29 @@ parse_numeric_literal (parse_ctx_t pctx, int base)
         }
         // XXX need to validate that the value fits into the
         // target machine's word length
-        free(lex->data.val_string.ptr);
+        string_free(&lex->data.val_string);
         lex->data.val_signed = numval;
         lexer_insert(pctx->lexctx, lex);
     }
     return 1;
-}
+} /* parse_numeric_literal */
 
+/*
+ * %B's', %O's', %X's', %DECIMAL's'
+ *
+ * Binary, octal, hexadecimal, and decimal literals.
+ */
 static int parse_B (parse_ctx_t pctx) { return parse_numeric_literal(pctx, 2); }
 static int parse_O (parse_ctx_t pctx) { return parse_numeric_literal(pctx, 8); }
 static int parse_X (parse_ctx_t pctx) { return parse_numeric_literal(pctx, 16); }
 static int parse_DECIMAL (parse_ctx_t pctx) { return parse_numeric_literal(pctx, 10); }
 
+/*
+ * %C'c'
+ *
+ * Numeric (ASCII) value of the character 'c'.
+ *
+ */
 static int
 parse_C (parse_ctx_t pctx) {
     lexeme_t *lex = parser_next(pctx);
@@ -376,8 +480,17 @@ parse_C (parse_ctx_t pctx) {
         lexer_insert(pctx->lexctx, lex);
     }
     return 1;
-}
+} /* parse_C */
 
+/*
+ * string_params
+ *
+ * Parses parameters for a %STRING-style lexical
+ * function.  If 'already_have_open_paren' is non-zero,
+ * the calling function has already parsed the opening
+ * parenthesis for the parameter list (e.g., %EXACTSTRING).
+ *
+ */
 static lexeme_t *
 string_params (parse_ctx_t pctx, int already_have_open_paren)
 {
@@ -475,8 +588,13 @@ string_params (parse_ctx_t pctx, int already_have_open_paren)
     }
     return lexeme_create(pctx->lexctx, pctx->curscope, LEXTYPE_STRING,
                         stringresult, resultlen);
-}
+} /* string_params */
 
+/*
+ * %STRING(#p...)
+ *
+ * Forms a single string by concatenating the parameters.
+ */
 static int
 parse_STRING (parse_ctx_t pctx)
 {
@@ -488,8 +606,14 @@ parse_STRING (parse_ctx_t pctx)
         lexer_insert(pctx->lexctx, lex);
     }
     return 1;
-}
+} /* parse_STRING */
 
+/*
+ * %EXACTSTRING(n, fill, #p...)
+ *
+ * Returns a string that is exactly 'n' characters,
+ * either truncated, or filled with the 'fill' character.
+ */
 static int
 parse_EXACTSTRING (parse_ctx_t pctx)
 {
@@ -587,4 +711,4 @@ parse_EXACTSTRING (parse_ctx_t pctx)
 
     return 1;
 
-}
+} /* parse_EXACTSTRING */
