@@ -36,6 +36,7 @@
 		7A7FD5141636C29C00B2D7FC /* lexer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = lexer.c; sourceTree = "<group>"; };
 		7A7FD5171636C2A700B2D7FC /* lexer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lexer.h; sourceTree = "<group>"; };
 		7A7FD5181636C65200B2D7FC /* lexeme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lexeme.h; sourceTree = "<group>"; };
+		7A8735071642CA6F006BFC30 /* parser_test_1.bli */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = parser_test_1.bli; path = testfiles/parser_test_1.bli; sourceTree = SOURCE_ROOT; };
 		7A95BCEB1641CC2F002F851E /* strings.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = strings.c; sourceTree = "<group>"; };
 		7A95BCEE1641E17C002F851E /* strings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = strings.h; sourceTree = "<group>"; };
 		7A995E0C163C2286003BEAC7 /* lexeme.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = lexeme.c; sourceTree = "<group>"; };
@@ -104,6 +105,7 @@
 				7A95BCEE1641E17C002F851E /* strings.h */,
 				7A9D4CA81635ACCA0013AE09 /* fileio.h */,
 				7A9D4C9F1635A88F0013AE09 /* blissc.1 */,
+				7A8735071642CA6F006BFC30 /* parser_test_1.bli */,
 			);
 			path = blissc;
 			sourceTree = "<group>";

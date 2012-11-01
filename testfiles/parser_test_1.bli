@@ -1,0 +1,14 @@
+%STRING('this', ' is ',
+        'a ', 'test')
+%ASCII %STRING('ascii-string')
+%ASCIZ'asciz-string'
+%ASCIC %ASCII %STRING('complicated-ascic-string')
+%EXACTSTRING(16, %C' ', 'makeit16')
+%X'7f'
+%C' '
+%DECIMAL'1234'
+2345
++789
+-654
+%O'177'
+%B'1101'
