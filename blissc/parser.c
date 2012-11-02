@@ -52,12 +52,12 @@ static int parse_EXPAND(parse_ctx_t);
     DODEF(NAME) \
     DODEF(QUOTENAME) \
     DODEF(NULL) \
-    DODEF(IDENTICAL)
+    DODEF(IDENTICAL) \
+    DODEF(ISSTRING)
 /*
  DODEF(CTCE) \
  DODEF(DECLARED) \
  DODEF(INFORM) \
- DODEF(ISSTRING) \
  DODEF(MESSAGE) \
  DODEF(NUMBER) \
  DODEF(PRINT) \
@@ -79,6 +79,11 @@ name_t parser_names[] = {
 };
 
 static lexeme_t errlex = { 0, LEXTYPE_NONE };
+
+static lextype_t opener[3] = {
+    LEXTYPE_DELIM_LPAR, LEXTYPE_DELIM_LANGLE, LEXTYPE_DELIM_LBRACK };
+static lextype_t closer[3] = {
+    LEXTYPE_DELIM_RPAR, LEXTYPE_DELIM_RANGLE, LEXTYPE_DELIM_RBRACK };
 
 /*
  *  --- Public API for this module ---
@@ -880,6 +885,11 @@ parse_EXPLODE (parse_ctx_t pctx)
             last->next = clex;
             last = clex;
         }
+        if (remain > 1) {
+            clex = lexeme_alloc(LEXTYPE_DELIM_COMMA);
+            last->next = clex;
+            last = clex;
+        }
     }
     if (result != 0) {
         lexer_insert(pctx->lexctx, result);
@@ -887,6 +897,73 @@ parse_EXPLODE (parse_ctx_t pctx)
     return 1;
 
 } /* parse_EXPLODE */
+
+/*
+ * parse_lexeme_seq
+ *
+ * Parses an arbitrary sequence of lexemes until hitting
+ * a specified delimiter, returning the sequence as a chain.
+ * Handles parentheses, brackets, etc.
+ */
+static int
+parse_lexeme_seq (parse_ctx_t pctx, lextype_t terms[],
+                  int nterms, lexeme_t **chain, lextype_t *term)
+{
+    lexeme_t *lex;
+    lexeme_t *result, *last;
+    int i;
+    int depth[3], status, hit_term;
+
+    *chain = 0;
+    result = last = 0;
+    depth[0] = depth[1] = depth[2] = 0;
+    status = 1;
+    hit_term = 0;
+
+    while (status) {
+        lex = parser_next(pctx);
+        if (lex->type == LEXTYPE_END) {
+            lexer_insert(pctx->lexctx, lex);
+            status = 0;
+            break;
+        }
+        for (i = 0; i < nterms; i++) {
+            if (lex->type == terms[i] && depth[0] == 0 &&
+                depth[1] == 0 && depth[2] == 0) {
+                hit_term = 1;
+                break;
+            }
+        }
+        if (hit_term) {
+            if (term != 0) *term = lex->type;
+            lexeme_free(lex);
+            break;
+        }
+        for (i = 0; i < 3; i++) {
+            if (lex->type == opener[i]) {
+                depth[i]+= 1;
+                break;
+            } else if (lex->type == closer[i]) {
+                if (depth[i] > 0) {
+                    depth[i] -= 1;
+                } else {
+                    status = 0;
+                }
+                break;
+            }
+        }
+        if (result == 0) {
+            result = last = lex;
+        } else {
+            last->next = lex;
+            last = lex;
+        }
+    }
+
+    *chain = result;
+    return status;
+
+} /* parse_lexeme_seq */
 
 /*
  * %REMOVE(#p)
@@ -902,11 +979,8 @@ parse_REMOVE (parse_ctx_t pctx)
     lexeme_t *result, *last;
     int return_to_normal = 0;
     int i;
-    static lextype_t opener[3] = {
-        LEXTYPE_DELIM_LPAR, LEXTYPE_DELIM_LANGLE, LEXTYPE_DELIM_LBRACK };
-    static lextype_t closer[3] = {
-        LEXTYPE_DELIM_RPAR, LEXTYPE_DELIM_RANGLE, LEXTYPE_DELIM_RBRACK };
-    int depth[3], keepgoing;
+    int depth[3];
+    lextype_t rpar[1] = {LEXTYPE_DELIM_RPAR};
 
     lex = parser_next(pctx);
     if (lex->type != LEXTYPE_DELIM_LPAR) {
@@ -920,56 +994,24 @@ parse_REMOVE (parse_ctx_t pctx)
         pctx->quotelevel = QL_NAME;
     }
 
-    /*
-     *  XXX
-     *
-     *  Generalize this routine to be callable by anything
-     *  that needs to parse a lexeme sequence up to an
-     *  arbitrary delimiter.  Could use it for %IDENTICAL,
-     *  for instance.
-     */
-    // Scan forward until we hit the closing parenthesis, building
-    // the result chain.
-    //
-    // Must handle the case of nested brackets, parens, etc.
-    result = last = 0;
-    depth[0] = depth[1] = depth[2] = 0;
-    keepgoing = 1;
-    while (1) {
-        lex = parser_next(pctx);
-        for (i = 0; i < 3; i++) {
-            if (lex->type == opener[i]) {
-                depth[i]+= 1;
-                break;
-            } else if (lex->type == closer[i]) {
-                if (closer[i] == LEXTYPE_DELIM_RPAR &&
-                    depth[0] == 0 && depth[1] == 0 && depth[2] == 0) {
-                    keepgoing = 0;
-                }
-                if (depth[i] > 0) {
-                    depth[i] -= 1;
-                }
-                break;
-            }
-        }
-        if (!keepgoing) {
-            lexeme_free(lex);
-            break;
-        }
-        if (result == 0) {
-            result = last = lex;
-        } else {
-            last->next = lex;
-            last = lex;
-        }
+    if (!parse_lexeme_seq(pctx, rpar, 1, &result, 0)) {
+        /* XXX error condition */
+        lexseq_free(result);
+        return 1;
     }
 
     if (result == 0) {
         return 1;
     }
+
+    for (last = result; last->next != 0; last = last->next);
+
     // If the chain begins with an opener and ends with
     // its corresponding closer, trim them off before
-    // inserting the chain back into the stream.
+    // inserting the chain back into the stream.  However,
+    // we can't just blindly trim without checking to make
+    // sure that they're really enclosing the entire sequence.
+    // Otherwise, we'd trim '(A)+(B)', for instance.
     for (i = 0; i < 3; i++) {
         if (result->type == opener[i]) {
             break;
@@ -994,7 +1036,7 @@ parse_REMOVE (parse_ctx_t pctx)
         // If 'doit' is true, then we haven't found a premature
         // closing of the inner opener, so we should trim.
         if (doit) {
-            lex->next = 0; // it's pointing to last right now
+            lex->next = 0; // it's pointing to the new tail right now
             lexeme_free(last);
             lex = result;
             result = result->next;
@@ -1008,6 +1050,7 @@ parse_REMOVE (parse_ctx_t pctx)
     }
 
     return 1;
+
 } /* parse_REMOVE */
 
 /*
@@ -1058,6 +1101,8 @@ parse_NULL (parse_ctx_t pctx)
     lexeme_t *lex;
     int allnull = 1;
     int return_to_normal = pctx->quotelevel == QL_NORMAL;
+    lextype_t terms[2] = { LEXTYPE_DELIM_COMMA, LEXTYPE_DELIM_RPAR };
+    lextype_t which;
 
     lex = parser_next(pctx);
     if (lex->type != LEXTYPE_DELIM_LPAR) {
@@ -1066,33 +1111,38 @@ parse_NULL (parse_ctx_t pctx)
         return 1;
     }
     lexeme_free(lex);
+
     if (return_to_normal) {
         pctx->quotelevel = QL_NAME;
     }
+
+    lex = 0;
     while (1) {
-        lex = parser_next(pctx);
-        if (lex->type == LEXTYPE_DELIM_RPAR) {
-            break;
-        }
-        if (lex->type == LEXTYPE_END) {
+        if (!parse_lexeme_seq(pctx, terms, 2, &lex, &which)) {
             /* XXX error condition */
-            lexeme_free(lex);
+            lexseq_free(lex);
             if (return_to_normal) {
                 pctx->quotelevel = QL_NORMAL;
             }
             return 1;
         }
-        if (lex->type != LEXTYPE_DELIM_COMMA) {
+        if (lex != 0) {
+            lexseq_free(lex);
             allnull = 0;
         }
-        lexeme_free(lex);
+        if (which == LEXTYPE_DELIM_RPAR) {
+            break;
+        }
     }
+
     lex = lexeme_alloc(LEXTYPE_NUMERIC);
     lex->data.val_signed = allnull;
     lexer_insert(pctx->lexctx, lex);
+
     if (return_to_normal) {
         pctx->quotelevel = QL_NORMAL;
     }
+
     return 1;
 
 } /* parse_NULL */
@@ -1108,8 +1158,8 @@ parse_IDENTICAL (parse_ctx_t pctx)
 {
     lexeme_t *lex;
     int return_to_normal = pctx->quotelevel == QL_NORMAL;
-    lexeme_t *chain[2], *last[2];
-    int which;
+    lexeme_t *chain[2];
+    lextype_t terms[2] = { LEXTYPE_DELIM_COMMA, LEXTYPE_DELIM_RPAR };
 
     lex = parser_next(pctx);
     if (lex->type != LEXTYPE_DELIM_LPAR) {
@@ -1123,50 +1173,66 @@ parse_IDENTICAL (parse_ctx_t pctx)
     }
 
     chain[0] = chain[1] = 0;
-    last[0] = last[1] = 0;
-    which = 0;
-    while (1) {
-        lex = parser_next(pctx);
-        if (lex->type == LEXTYPE_DELIM_RPAR) {
-            break;
-        }
-        if (lex->type == LEXTYPE_END) {
-            /* XXX error condition */
-            lexeme_free(lex);
-            lexseq_free(chain[0]);
-            lexseq_free(chain[1]);
-            if (return_to_normal) {
-                pctx->quotelevel = QL_NORMAL;
-            }
-            return 1;
-        }
-        if (lex->type == LEXTYPE_DELIM_COMMA) {
-            which += 1;
-            lexeme_free(lex);
-            continue;
-        }
-        if (which < 2) {
-            if (chain[which] == 0) {
-                chain[which] = lex;
-                last[which] = lex;
-            } else {
-                last[which]->next = lex;
-                last[which] = lex;
-            }
-        }
-    }
-    if (which >= 2) {
-        /* XXX error condition */
-    } else {
+    if (parse_lexeme_seq(pctx, &terms[0], 1, &chain[0], 0) &&
+        parse_lexeme_seq(pctx, &terms[1], 1, &chain[1], 0)) {
         lex = lexeme_alloc(LEXTYPE_NUMERIC);
         lex->data.val_signed = lexemes_match(chain[0], chain[1]);
         lexer_insert(pctx->lexctx, lex);
+    } else {
+        /* XXX error condition */
     }
+
     lexseq_free(chain[0]);
     lexseq_free(chain[1]);
+
     if (return_to_normal) {
         pctx->quotelevel = QL_NORMAL;
     }
     return 1;
 
 } /* parse_IDENTICAL */
+
+/*
+ * %ISSTRING(exp,...)
+ *
+ * Returns 1 if every expression results in a quoted-string
+ * lexeme, otherwise 0.
+ */
+static int
+parse_ISSTRING (parse_ctx_t pctx)
+{
+    lexeme_t *lex;
+    lextype_t terms[2] = { LEXTYPE_DELIM_COMMA, LEXTYPE_DELIM_RPAR };
+    lextype_t which;
+    int allstr = 1;
+
+    lex = parser_next(pctx);
+    if (lex->type != LEXTYPE_DELIM_LPAR) {
+        /* XXX error condition */
+        lexer_insert(pctx->lexctx, lex);
+        return 1;
+    }
+    lexeme_free(lex);
+    lex = 0;
+
+    while (1) {
+        if (!parse_lexeme_seq(pctx, terms, 2, &lex, &which)) {
+            /* XXX error condition */
+            lexseq_free(lex);
+            return 1;
+        }
+        if (lex == 0 || (lex->type != LEXTYPE_STRING &&
+                         lex->type != LEXTYPE_CSTRING) || lex->next != 0) {
+            allstr = 0;
+        }
+        lexseq_free(lex);
+        if (which == LEXTYPE_DELIM_RPAR) {
+            break;
+        }
+    }
+    lex = lexeme_alloc(LEXTYPE_NUMERIC);
+    lex->data.val_signed = allstr;
+    lexer_insert(pctx->lexctx, lex);
+
+    return 1;
+}
