@@ -28,3 +28,9 @@
 %IDENTICAL(a,b)
 %IDENTICAL(,)
 %IDENTICAL(a+b,A+B)
+%IDENTICAL((a,b),(A,B))
+%ASCII'Checking %ISSTRING'
+%ISSTRING(,)
+%ISSTRING('a',%ASCII'hello',%ASCIZ'farfel',%ASCIC'xyzzy')
+%ISSTRING(%STRING('a','b','c'))
+%ISSTRING(%EXPLODE(%STRING('bite me')))
