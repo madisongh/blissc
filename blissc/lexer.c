@@ -186,6 +186,16 @@ lexeme_free (lexeme_t *lex)
     lexeme___free(lex);
 }
 
+void
+lexseq_free (lexeme_t *seq)
+{
+    lexeme_t *lex, *next;
+    for (lex = seq; lex != 0; lex = next) {
+        next = lex->next;
+        lexeme_free(lex);
+    }
+}
+
 static lexeme_t *
 makelex (lexer_ctx_t ctx, scopectx_t scope,
          scantype_t type, char *tok, size_t len)
@@ -323,3 +333,45 @@ lexer_newfile (lexer_ctx_t ctx, const char *fname, size_t fnlen)
     ctx->chain = chain;
     return 1;
 }
+
+int
+lexemes_match (lexeme_t *a, lexeme_t *b)
+{
+    name_t *an, *bn;
+
+    while (a != 0 && b != 0) {
+        if (a->type != b->type) {
+            return 0;
+        }
+        switch (a->type) {
+            case LEXTYPE_IDENT:
+                an = a->data.ptr;
+                bn = b->data.ptr;
+                if (an->namelen != bn->namelen) {
+                    return 0;
+                }
+                if (memcmp(an->name, bn->name, an->namelen) != 0) {
+                    return 0;
+                }
+                break;
+            case LEXTYPE_STRING:
+            case LEXTYPE_CSTRING:
+                if (!strings_eql(&a->data.val_string, &b->data.val_string)) {
+                    return 0;
+                }
+                break;
+            case LEXTYPE_NUMERIC:
+                if (a->data.val_signed != b->data.val_signed) {
+                    return 0;
+                }
+                break;
+            default:
+                break;
+        }
+        a = a->next;
+        b = b->next;
+    }
+
+    return (a == 0 && b == 0);
+
+} /* lexemes_match */

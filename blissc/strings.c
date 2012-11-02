@@ -247,3 +247,12 @@ string_copy (strdesc_t *dest, strdesc_t *src)
     memcpy(dest->ptr, src->ptr, src->len);
     return dest;
 }
+
+int
+strings_eql (strdesc_t *a, strdesc_t *b)
+{
+    if (a->len != b->len) {
+        return 0;
+    }
+    return memcmp(a->ptr, b->ptr, a->len) == 0;
+}

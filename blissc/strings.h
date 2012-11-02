@@ -21,5 +21,6 @@ strdesc_t *string_append(strdesc_t *trg, strdesc_t *add);
 strdesc_t *string_alloc(strdesc_t *dest, size_t len);
 strdesc_t *string_copy(strdesc_t *dest, strdesc_t *src);
 void string_free(strdesc_t *dsc);
+int strings_eql(strdesc_t *a, strdesc_t *b);
 
 #endif

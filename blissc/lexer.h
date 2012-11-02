@@ -23,5 +23,6 @@ int lexer_newfile(lexer_ctx_t ctx, const char *fname, size_t fnlen);
 lexeme_t *lexeme_create(lexer_ctx_t ctx, scopectx_t scope,
                         lextype_t type, const char *tok, size_t len);
 void lexeme_free(lexeme_t *lex);
-
+void lexseq_free(lexeme_t *seq);
+int lexemes_match(lexeme_t *a, lexeme_t *b);
 #endif

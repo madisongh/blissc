@@ -50,11 +50,12 @@ static int parse_EXPAND(parse_ctx_t);
     DODEF(EXPLODE) \
     DODEF(REMOVE) \
     DODEF(NAME) \
-    DODEF(QUOTENAME)
+    DODEF(QUOTENAME) \
+    DODEF(NULL) \
+    DODEF(IDENTICAL)
 /*
  DODEF(CTCE) \
  DODEF(DECLARED) \
- DODEF(IDENTICAL) \
  DODEF(INFORM) \
  DODEF(ISSTRING) \
  DODEF(MESSAGE) \
@@ -919,6 +920,14 @@ parse_REMOVE (parse_ctx_t pctx)
         pctx->quotelevel = QL_NAME;
     }
 
+    /*
+     *  XXX
+     *
+     *  Generalize this routine to be callable by anything
+     *  that needs to parse a lexeme sequence up to an
+     *  arbitrary delimiter.  Could use it for %IDENTICAL,
+     *  for instance.
+     */
     // Scan forward until we hit the closing parenthesis, building
     // the result chain.
     //
@@ -1038,3 +1047,126 @@ do_name_qname (parse_ctx_t pctx, int doquote)
 static int parse_NAME (parse_ctx_t pctx) { return do_name_qname(pctx, 0); }
 static int parse_QUOTENAME (parse_ctx_t pctx) { return do_name_qname(pctx, 1); }
 
+/*
+ * %NULL(#p,..)
+ *
+ * Returns 1 if all of the parameters are null, 0 otherwise.
+ */
+static int
+parse_NULL (parse_ctx_t pctx)
+{
+    lexeme_t *lex;
+    int allnull = 1;
+    int return_to_normal = pctx->quotelevel == QL_NORMAL;
+
+    lex = parser_next(pctx);
+    if (lex->type != LEXTYPE_DELIM_LPAR) {
+        /* XXX error condition */
+        lexer_insert(pctx->lexctx, lex);
+        return 1;
+    }
+    lexeme_free(lex);
+    if (return_to_normal) {
+        pctx->quotelevel = QL_NAME;
+    }
+    while (1) {
+        lex = parser_next(pctx);
+        if (lex->type == LEXTYPE_DELIM_RPAR) {
+            break;
+        }
+        if (lex->type == LEXTYPE_END) {
+            /* XXX error condition */
+            lexeme_free(lex);
+            if (return_to_normal) {
+                pctx->quotelevel = QL_NORMAL;
+            }
+            return 1;
+        }
+        if (lex->type != LEXTYPE_DELIM_COMMA) {
+            allnull = 0;
+        }
+        lexeme_free(lex);
+    }
+    lex = lexeme_alloc(LEXTYPE_NUMERIC);
+    lex->data.val_signed = allnull;
+    lexer_insert(pctx->lexctx, lex);
+    if (return_to_normal) {
+        pctx->quotelevel = QL_NORMAL;
+    }
+    return 1;
+
+} /* parse_NULL */
+
+/*
+ * %IDENTICAL(#s1, #s2)
+ *
+ * Returns 1 if the two sequences of lexemes are
+ * identical.
+ */
+static int
+parse_IDENTICAL (parse_ctx_t pctx)
+{
+    lexeme_t *lex;
+    int return_to_normal = pctx->quotelevel == QL_NORMAL;
+    lexeme_t *chain[2], *last[2];
+    int which;
+
+    lex = parser_next(pctx);
+    if (lex->type != LEXTYPE_DELIM_LPAR) {
+        /* XXX error condition */
+        lexer_insert(pctx->lexctx, lex);
+        return 1;
+    }
+    lexeme_free(lex);
+    if (return_to_normal) {
+        pctx->quotelevel = QL_NAME;
+    }
+
+    chain[0] = chain[1] = 0;
+    last[0] = last[1] = 0;
+    which = 0;
+    while (1) {
+        lex = parser_next(pctx);
+        if (lex->type == LEXTYPE_DELIM_RPAR) {
+            break;
+        }
+        if (lex->type == LEXTYPE_END) {
+            /* XXX error condition */
+            lexeme_free(lex);
+            lexseq_free(chain[0]);
+            lexseq_free(chain[1]);
+            if (return_to_normal) {
+                pctx->quotelevel = QL_NORMAL;
+            }
+            return 1;
+        }
+        if (lex->type == LEXTYPE_DELIM_COMMA) {
+            which += 1;
+            lexeme_free(lex);
+            continue;
+        }
+        if (which < 2) {
+            if (chain[which] == 0) {
+                chain[which] = lex;
+                last[which] = lex;
+            } else {
+                last[which]->next = lex;
+                last[which] = lex;
+            }
+        }
+    }
+    if (which >= 2) {
+        /* XXX error condition */
+    } else {
+        lex = lexeme_alloc(LEXTYPE_NUMERIC);
+        lex->data.val_signed = lexemes_match(chain[0], chain[1]);
+        lexer_insert(pctx->lexctx, lex);
+    }
+    lexseq_free(chain[0]);
+    lexseq_free(chain[1]);
+    if (return_to_normal) {
+        pctx->quotelevel = QL_NORMAL;
+    }
+    return 1;
+
+} /* parse_IDENTICAL */
