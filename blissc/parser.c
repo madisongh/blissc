@@ -53,7 +53,8 @@ static int parse_EXPAND(parse_ctx_t);
     DODEF(QUOTENAME) \
     DODEF(NULL) \
     DODEF(IDENTICAL) \
-    DODEF(ISSTRING)
+    DODEF(ISSTRING) \
+    DODEF(IF)
 /*
  DODEF(CTCE) \
  DODEF(DECLARED) \
@@ -75,7 +76,10 @@ static name_t parser_names[] = {
     DODEFS
     LEXDEF("%QUOTE", parse_QUOTE, NAME_M_QFUNC),
     LEXDEF("%UNQUOTE", parse_UNQUOTE, NAME_M_QFUNC),
-    LEXDEF("%EXPAND", parse_EXPAND, NAME_M_QFUNC)
+    LEXDEF("%EXPAND", parse_EXPAND, NAME_M_QFUNC),
+    LEXDEF("%THEN", LEXTYPE_DELIM_PTHEN, NAME_M_OPERATOR),
+    LEXDEF("%ELSE", LEXTYPE_DELIM_PELSE, NAME_M_OPERATOR),
+    LEXDEF("%FI", LEXTYPE_DELIM_PFI, NAME_M_OPERATOR)
 };
 #undef DODEFS
 #undef DODEF
@@ -235,10 +239,16 @@ parser_next (parse_ctx_t pctx)
         if (do_bind || do_expand) {
             if ((do_bind && np->nametype == NAMETYPE_KEYWORD) ||
                 (do_expand && np->nametype == NAMETYPE_LEXFUNC)) {
-                doit = np->namedata.ptr;
-                keepgoing = doit(pctx);
-                lexeme_free(lex);
-                lex = 0;
+                if (np->nameflags & NAME_M_OPERATOR) {
+                    lexeme_free(lex);
+                    lex = lexeme_alloc((lextype_t) np->namedata.val_signed);
+                    keepgoing = 0;
+                } else {
+                    doit = np->namedata.ptr;
+                    keepgoing = doit(pctx);
+                    lexeme_free(lex);
+                    lex = 0;
+                }
             } else if (do_bind && np->nametype == NAMETYPE_LEXNAME &&
                        np->name_lntype != LNTYPE_MACRO) {
                 lexer_insert(pctx->lexctx, lexeme_copy(np->namedata.ptr));
@@ -1252,14 +1262,66 @@ parse_ISSTRING (parse_ctx_t pctx)
 static int
 parse_IF (parse_ctx_t pctx)
 {
-    lexeme_t *lex;
+    lexeme_t *lex, *cons, *alt;
+    int testval;
+    lextype_t terms[2] = {LEXTYPE_DELIM_PELSE, LEXTYPE_DELIM_PFI}, which;
 
+    // Note the use of increment/decrement here -- this is to handle
+    // nesting of instances in which hitting end-of-file is a no-no.
+    pctx->no_eof += 1;
+
+    if (!parse_Expression(pctx)) {
+        /* XXX error condition */
+        pctx->no_eof -= 1;
+        parser_skip_to_delim(pctx, LEXTYPE_DELIM_PFI);
+        return 1;
+    }
+
+    // if the expression is compile-time constant,
+    // we will have a numeric literal next in the stream.
     lex = parser_next(pctx);
     if (lex->type != LEXTYPE_NUMERIC) {
         /* XXX error condition */
-        lexer_insert(pctx->lexctx, lex);
+        if (lex->type != LEXTYPE_DELIM_PFI) {
+            parser_skip_to_delim(pctx, LEXTYPE_DELIM_PFI);
+        }
+        lexeme_free(lex);
+        pctx->no_eof -= 1;
         return 1;
     }
+
+    testval = lex->data.val_unsigned & 1;
+
     lex = parser_next(pctx);
+    if (lex->type != LEXTYPE_DELIM_PTHEN) {
+        /* XXX error condition */
+        if (lex->type != LEXTYPE_DELIM_PFI) {
+            parser_skip_to_delim(pctx, LEXTYPE_DELIM_PFI);
+        }
+        lexeme_free(lex);
+        pctx->no_eof -= 1;
+        return 1;
+    }
+
+    cons = alt = 0;
+    if (!parse_lexeme_seq(pctx, terms, 2, &cons, &which)) {
+        /* XXX error condition */
+        pctx->no_eof -= 1;
+        lexseq_free(cons);
+        return 1;
+    }
+    if (which == LEXTYPE_DELIM_PELSE) {
+        if (!parse_lexeme_seq(pctx, &terms[1], 1, &alt, 0)) {
+            /* XXX error condition */
+            pctx->no_eof -= 1;
+            lexseq_free(cons);
+            lexseq_free(alt);
+            return 1;
+        }
+    }
+
+    lexer_insert(pctx->lexctx, (testval ? cons : alt));
+    lexseq_free((testval ? alt : cons));
+    pctx->no_eof -= 1;
     return 1;
 }

@@ -426,8 +426,9 @@ lexer_insert (lexer_ctx_t ctx, lexeme_t *lexchain)
 {
     lexchain_t *chain = ctx->chain;
 
-    // The static ones should never be inserted.
-    if (lexchain == &errlex || lexchain == &endlex) {
+    // The static ones should never be inserted, and
+    // just ignore nulls.
+    if (lexchain == &errlex || lexchain == &endlex || lexchain == 0) {
         return;
     }
     

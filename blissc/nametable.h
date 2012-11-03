@@ -64,7 +64,6 @@ struct name_s {
 #define OPRDEF(kwd, data) { 0, NAMETYPE_KEYWORD, 0, 0, \
                             NAME_M_RESERVED|NAME_M_OPERATOR, \
                             {(void *)(data)}, sizeof(kwd)-1, (kwd) }
-
 typedef struct name_s name_t;
 
 name_t *name_search(scopectx_t scope, const char *id,

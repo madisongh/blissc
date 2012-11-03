@@ -41,7 +41,8 @@
     DOLEXTYPE(DELIM_RBRACK) \
     DOLEXTYPE(DELIM_LANGLE) \
     DOLEXTYPE(DELIM_RANGLE) \
-    DOLEXTYPE(DELIM_PERCENT)
+    DOLEXTYPE(DELIM_PERCENT) \
+    DOLEXTYPE(DELIM_PTHEN) DOLEXTYPE(DELIM_PELSE) DOLEXTYPE(DELIM_PFI)
 
 #define DOLEXTYPE(lt) LEXTYPE_##lt,
 typedef enum {
@@ -63,7 +64,7 @@ static inline int __unused
 lex_is_delimiter (lextype_t lt)
 {
     return (lt >= LEXTYPE_DELIM_COMMA &&
-            lt <= LEXTYPE_DELIM_RANGLE);
+            lt <= LEXTYPE_DELIM_RANGLE); // just normal delimiters, not lexical
 }
 
 struct lexeme_s {
