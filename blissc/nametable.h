@@ -19,6 +19,7 @@ typedef struct scopectx_s *scopectx_t;
 
 #define NAME_M_RESERVED (1<<0) // error if the name is redefined
 #define NAME_M_QFUNC    (1<<1) // %QUOTE/%UNQUOTE/%EXPAND
+#define NAME_M_OPERATOR (1<<2)
 
 typedef enum {
     NAMETYPE_KEYWORD,
@@ -32,7 +33,7 @@ typedef enum {
     LNTYPE_MACRO,
     LNTYPE_MACPARAM,
     LNTYPE_COMPILETIME,
-    LNTYPE_LITERAL
+    LNTYPE_LITERAL,
 } lntype_t;
 
 struct name_s {
@@ -60,6 +61,9 @@ struct name_s {
 #define PREDEF(kwd, data) { 0, NAMETYPE_KEYWORD, 0, 0,\
                             0, {(void *)(data)}, \
                             sizeof(kwd)-1, (kwd) }
+#define OPRDEF(kwd, data) { 0, NAMETYPE_KEYWORD, 0, 0, \
+                            NAME_M_RESERVED|NAME_M_OPERATOR, \
+                            {(void *)(data)}, sizeof(kwd)-1, (kwd) }
 
 typedef struct name_s name_t;
 

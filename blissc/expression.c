@@ -7,7 +7,8 @@
 //
 
 #include "expression.h"
-
+#include "parser.h"
+#include "lexeme.h"
 
 int parse_Expression (parse_ctx_t pctx)
 {

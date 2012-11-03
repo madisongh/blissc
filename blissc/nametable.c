@@ -9,10 +9,22 @@
 #include <stdlib.h>
 #include "nametable.h"
 
+/*
+ * Internal flag for distinguishing dynamically-allocated
+ * name blocks from others
+ */
 #define NAME_M_ALLOCATED (1<<16)
 
+/*
+ * Hash table size.
+ */
 #define HT_BUCKETS  128
 
+/*
+ * hash
+ *
+ * Computes the hash table index for a name.
+ */
 static inline int
 hash (const char *str, size_t len)
 {
@@ -25,6 +37,9 @@ hash (const char *str, size_t len)
     return result & (HT_BUCKETS-1);
 }
 
+/*
+ * Name scope tracking structures
+ */
 struct scopectx_s {
     struct scopectx_s *parent;
     int                namecount;
@@ -34,6 +49,11 @@ struct scopectx_s {
 struct scopectx_s *freescopes = 0;
 struct name_s     *freenames = 0;
 
+/*
+ * name_alloc
+ *
+ * Allocates and initializes a name_t structure.
+ */
 static name_t *
 name_alloc (const char *name, size_t namelen)
 {
@@ -64,8 +84,15 @@ name_alloc (const char *name, size_t namelen)
     np->name_lntype = LNTYPE_NONE;
     memset(&np->namedata, 0, sizeof(np->namedata));
     return np;
-}
 
+} /* name_alloc */
+
+/*
+ * name_free
+ *
+ * Frees a name_t structure, if it's owned by this module,
+ * and if the name is not referenced in any scope.
+ */
 void
 name_free (name_t *np)
 {
@@ -74,8 +101,13 @@ name_free (name_t *np)
         np->next = freenames;
         freenames = np;
     }
-}
+} /* name_free */
 
+/*
+ * scope_begin
+ *
+ * Establishes a new name scope, underneath 'parent'.
+ */
 scopectx_t
 scope_begin (scopectx_t parent)
 {
@@ -96,8 +128,14 @@ scope_begin (scopectx_t parent)
     freescopes = scope->parent;
     scope->parent = parent;
     return scope;
-}
 
+} /* scope_begin */
+
+/*
+ * scope_end
+ *
+ * Deletes a name scope and all of the names in it.
+ */
 scopectx_t
 scope_end (scopectx_t scope)
 {
@@ -119,15 +157,26 @@ scope_end (scopectx_t scope)
     scope->parent = freescopes;
     freescopes = scope;
     return parent;
-}
 
+} /* scope_end */
+
+/*
+ * name_search
+ *
+ * Looks up a name, starting from the specified scope and working
+ * backwards through the ancestor scopes.  Returns the found name_t
+ * structure, if the name was found and not marked UNDECLAREd.
+ * If the name is not found, and 'do_create' is set, the name
+ * is inserted in the current scope, marked UNDECLAREd.
+ */
 name_t *
-name_search (scopectx_t scope, const char *id, size_t len, int do_create)
+name_search (scopectx_t curscope, const char *id, size_t len, int do_create)
 {
     int i;
     name_t *np = 0;
+    scopectx_t scope;
 
-    while (scope != 0) {
+    for (scope = curscope; scope != 0; scope = scope->parent) {
         if (scope->namecount > 0) {
             i = hash(id, len);
             for (np = scope->hashtable[i]; np != 0;
@@ -139,15 +188,21 @@ name_search (scopectx_t scope, const char *id, size_t len, int do_create)
                 }
             }
         }
-        scope = scope->parent;
     }
 
     if (do_create) {
         np = name_alloc(id, len); // automatically sets as undeclared
+        name_insert(curscope, np);
     }
     return np;
-}
+    
+} /* name_search */
 
+/*
+ * name_insert
+ *
+ * Inserts the name_t structure into the hash table.
+ */
 void
 name_insert (scopectx_t scope, name_t *np)
 {
@@ -164,4 +219,4 @@ name_insert (scopectx_t scope, name_t *np)
     scope->namecount += 1;
     np->namescope = scope;
 
-}
+} /* name_insert */

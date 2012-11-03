@@ -18,7 +18,7 @@
 #include "expression.h"
 
 struct parse_ctx_s {
-    scopectx_t      curscope;
+    scopectx_t      kwdscope, curscope;
     void            *cctx;
     lexer_ctx_t     lexctx;
     int             lib_compile;
@@ -71,12 +71,14 @@ DODEFS
 #undef DODEF
 #define DODEF(name_) LEXDEF("%" #name_, parse_##name_, 0),
 
-name_t parser_names[] = {
+static name_t parser_names[] = {
     DODEFS
     LEXDEF("%QUOTE", parse_QUOTE, NAME_M_QFUNC),
     LEXDEF("%UNQUOTE", parse_UNQUOTE, NAME_M_QFUNC),
     LEXDEF("%EXPAND", parse_EXPAND, NAME_M_QFUNC)
 };
+#undef DODEFS
+#undef DODEF
 
 static lexeme_t errlex = { 0, LEXTYPE_NONE };
 
@@ -109,7 +111,9 @@ parser_init (scopectx_t kwdscope, void *cctx)
     pctx = malloc(sizeof(struct parse_ctx_s));
     if (pctx != 0) {
         memset(pctx, 0, sizeof(struct parse_ctx_s));
-        pctx->curscope = scope_begin(kwdscope);
+        pctx->kwdscope = (kwdscope == 0 ? scope_begin(0) : kwdscope);
+        pctx->curscope = pctx->kwdscope;
+        lexer_init(pctx->kwdscope);
         pctx->cctx = cctx;
         pctx->quotelevel = QL_NORMAL;
     }
@@ -144,7 +148,7 @@ parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen)
     if (pctx->curscope == 0) {
         return 0;
     }
-    pctx->lexctx = lexer_init(fname, fnlen);
+    pctx->lexctx = lexer_fopen(fname, fnlen);
     if (pctx->lexctx == 0) {
         return 0;
     }
@@ -283,7 +287,6 @@ parser_skip_to_delim (parse_ctx_t pctx, lextype_t delimtype)
  * All of the following routines are internal only.
  *
  */
-
 static int
 macro_expand (parse_ctx_t pctx, name_t *macroname)
 {
@@ -1234,5 +1237,29 @@ parse_ISSTRING (parse_ctx_t pctx)
     lex->data.val_signed = allstr;
     lexer_insert(pctx->lexctx, lex);
 
+    return 1;
+}
+
+/*
+ * %IF lexical-test %THEN ... [ %ELSE ... ] %FI
+ *
+ * Lexical conditional processing.
+ *  - macros using %IF must have a fully formed sequence
+ *  - end-of-file not permitted in the middle of this sequence
+ *  - must handle nested sequences!!
+ *  - The test is TRUE only if the *** low-order bit *** is 1
+ */
+static int
+parse_IF (parse_ctx_t pctx)
+{
+    lexeme_t *lex;
+
+    lex = parser_next(pctx);
+    if (lex->type != LEXTYPE_NUMERIC) {
+        /* XXX error condition */
+        lexer_insert(pctx->lexctx, lex);
+        return 1;
+    }
+    lex = parser_next(pctx);
     return 1;
 }

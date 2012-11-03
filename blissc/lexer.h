@@ -15,7 +15,8 @@
 struct lexer_ctx_s;
 typedef struct lexer_ctx_s *lexer_ctx_t;
 
-lexer_ctx_t lexer_init(const char *fname, size_t fnlen);
+void lexer_init(scopectx_t kwdscope);
+lexer_ctx_t lexer_fopen(const char *fname, size_t fnlen);
 void lexer_finish(lexer_ctx_t ctx);
 lexeme_t *lexer_next(lexer_ctx_t ctx, scopectx_t scope, int erroneof);
 void lexer_insert(lexer_ctx_t ctx, lexeme_t *lexchain);
