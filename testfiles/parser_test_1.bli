@@ -1,9 +1,11 @@
+%ASCII'--- String literals ---'
 %STRING('this', ' is ',
         'a ', 'test')
 %ASCII %STRING('ascii-string')
 %ASCIZ'asciz-string'
 %ASCIC %ASCII %STRING('complicated-ascic-string')
 %EXACTSTRING(16, %C' ', 'makeit16')
+%ASCII'--- Numeric literals ---'
 %X'7f'
 %C' '
 %DECIMAL'1234'
@@ -13,24 +15,33 @@
 -654
 %O'-177'
 %B'1101'
+%ASCII'--- %CHARCOUNT and %CHAR ---'
 %CHARCOUNT('ABCD')
 %CHARCOUNT(%STRING('hello'),%ASCIZ' there')
 %CHAR(65)
 %CHAR(65, 66, 67, %x'0d', %x'0a', 68, 69, 70)
+%ASCII'--- %REMOVE ---'
 %REMOVE((A,B,C))
 %REMOVE([1,2,3])
 %REMOVE((A)+(B))
 %REMOVE(%REMOVE(%REMOVE(<<<goaway>>>)))
+%ASCII'--- %NAME ---'
 %NAME(%STRING('hello'), %CHAR(10), 'there')
+%ASCII'--- %NULL ---'
 %NULL(,,,,)
 %NULL('hello')
 %NULL(,b)
+%ASCII'--- %IDENTICAL ---'
 %IDENTICAL(a,b)
 %IDENTICAL(,)
 %IDENTICAL(a+b,A+B)
 %IDENTICAL((a,b),(A,B))
-%ASCII'Checking %ISSTRING'
+%ASCII'--- %ISSTRING ---'
 %ISSTRING(,)
 %ISSTRING('a',%ASCII'hello',%ASCIZ'farfel',%ASCIC'xyzzy')
 %ISSTRING(%STRING('a','b','c'))
 %ISSTRING(%EXPLODE(%STRING('bite me')))
+%ASCII'--- Keyword-style operators ---'
+AND OR NOT XOR EQV
+EQL EQLU EQLA GEQ GEQU GEQA GTR GTRU GTRA
+NEQ NEQU NEQA LEQ LEQU LEQA LSS LSSU LSSA
