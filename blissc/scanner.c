@@ -191,6 +191,7 @@ scan_getnext (scanctx_t ctx, char *buf, size_t bufsiz, size_t *len,
                             if (bufsiz > 0) {
                                 *outp++ = '\'';
                                 bufsiz -= 1;
+                                cp++; remain--;
                             }
                         } else {
                             rettype = SCANTYPE_QUOTEDSTRING;

@@ -17,21 +17,29 @@
 #include "strings.h"
 #include "expression.h"
 
+typedef enum {
+    COND_NORMAL = 0,
+    COND_CWC, COND_CWA,
+    COND_AWC, COND_AWA
+} condstate_t;
+
 struct parse_ctx_s {
     scopectx_t      kwdscope, curscope;
     void            *cctx;
     lexer_ctx_t     lexctx;
     int             lib_compile;
     enum { QL_NORMAL, QL_NAME, QL_MACRO } quotelevel;
+    condstate_t     condstate[64];
+    int             condlevel;
     int             no_eof;
     int             do_quote, do_unquote;
 };
 
 static int macro_expand(parse_ctx_t pctx, name_t *macroname);
 
-static int parse_QUOTE(parse_ctx_t);
-static int parse_UNQUOTE(parse_ctx_t);
-static int parse_EXPAND(parse_ctx_t);
+static int parse_QUOTE(parse_ctx_t), parse_UNQUOTE(parse_ctx_t),
+           parse_EXPAND(parse_ctx_t);
+static int parse_IF(parse_ctx_t), parse_ELSE(parse_ctx_t), parse_FI(parse_ctx_t);
 
 #undef DODEF
 #define DODEFS \
@@ -53,8 +61,7 @@ static int parse_EXPAND(parse_ctx_t);
     DODEF(QUOTENAME) \
     DODEF(NULL) \
     DODEF(IDENTICAL) \
-    DODEF(ISSTRING) \
-    DODEF(IF)
+    DODEF(ISSTRING)
 /*
  DODEF(CTCE) \
  DODEF(DECLARED) \
@@ -77,9 +84,10 @@ static name_t parser_names[] = {
     LEXDEF("%QUOTE", parse_QUOTE, NAME_M_QFUNC),
     LEXDEF("%UNQUOTE", parse_UNQUOTE, NAME_M_QFUNC),
     LEXDEF("%EXPAND", parse_EXPAND, NAME_M_QFUNC),
-    LEXDEF("%THEN", LEXTYPE_DELIM_PTHEN, NAME_M_OPERATOR),
-    LEXDEF("%ELSE", LEXTYPE_DELIM_PELSE, NAME_M_OPERATOR),
-    LEXDEF("%FI", LEXTYPE_DELIM_PFI, NAME_M_OPERATOR)
+    LEXDEF("%IF", parse_IF, NAME_M_QFUNC|NAME_M_NOQUOTE|NAME_M_IS_PCTIF),
+    LEXDEF("%THEN", LEXTYPE_DELIM_PTHEN, NAME_M_OPERATOR|NAME_M_NOQUOTE),
+    LEXDEF("%ELSE", parse_ELSE, NAME_M_NOQUOTE),
+    LEXDEF("%FI", parse_FI, NAME_M_NOQUOTE)
 };
 #undef DODEFS
 #undef DODEF
@@ -187,8 +195,9 @@ parser_insert (parse_ctx_t pctx, lexeme_t *lex)
  * Retrieve the next lexeme from the parse stream.  This is
  * the main workhorse routine for the parser.  It handles
  * quoting levels and binding of compile-time names (literals,
- * COMPILETIME variables) to their values, expanding macros,
- * and dispatching to process keywords and lexical functions.
+ * COMPILETIME variables) to their values, the current lexical
+ * conditional state, expanding macros, and dispatching to
+ * process keywords and lexical functions.
  */
 lexeme_t *
 parser_next (parse_ctx_t pctx)
@@ -198,6 +207,7 @@ parser_next (parse_ctx_t pctx)
     int keepgoing = 1;
     int do_bind, do_expand;
     parser_dispatch_t doit;
+    int cond_skip;
 
     while (keepgoing) {
         lex = lexer_next(pctx->lexctx, pctx->curscope, pctx->no_eof);
@@ -205,9 +215,16 @@ parser_next (parse_ctx_t pctx)
         if (lex->type == LEXTYPE_NONE || lex->type == LEXTYPE_END) {
             break;
         }
+        cond_skip = (pctx->condstate[pctx->condlevel] == COND_AWC ||
+                     pctx->condstate[pctx->condlevel] == COND_CWA);
         np = lex->data.ptr;
         if (lex->type != LEXTYPE_IDENT || pctx->do_quote) {
             pctx->do_quote = pctx->do_unquote = 0;
+            if (cond_skip) {
+                lexeme_free(lex);
+                keepgoing = 1;
+                continue;
+            }
             break;
         }
 
@@ -239,6 +256,18 @@ parser_next (parse_ctx_t pctx)
         if (do_bind || do_expand) {
             if ((do_bind && np->nametype == NAMETYPE_KEYWORD) ||
                 (do_expand && np->nametype == NAMETYPE_LEXFUNC)) {
+                // Make sure we handle %ELSE and %FI (but not %IF) if
+                // we would otherwise be skipping over lexemes in a
+                // lexical conditional.
+                if (cond_skip &&
+                    ((np->nameflags & (NAME_M_NOQUOTE|NAME_M_IS_PCTIF)) ==NAME_M_NOQUOTE)) {
+                    cond_skip = 0;
+                }
+                if (cond_skip) {
+                    lexeme_free(lex);
+                    keepgoing = 1;
+                    continue;
+                }
                 if (np->nameflags & NAME_M_OPERATOR) {
                     lexeme_free(lex);
                     lex = lexeme_alloc((lextype_t) np->namedata.val_signed);
@@ -251,13 +280,15 @@ parser_next (parse_ctx_t pctx)
                 }
             } else if (do_bind && np->nametype == NAMETYPE_LEXNAME &&
                        np->name_lntype != LNTYPE_MACRO) {
-                lexer_insert(pctx->lexctx, lexeme_copy(np->namedata.ptr));
+                if (!cond_skip) {
+                    lexer_insert(pctx->lexctx, lexeme_copy(np->namedata.ptr));
+                }
                 keepgoing = 1;
                 lexeme_free(lex);
                 lex = 0;
             } else if (do_expand && np->nametype == NAMETYPE_LEXNAME &&
                        np->name_lntype == LNTYPE_MACRO) {
-                keepgoing = macro_expand(pctx, np);
+                keepgoing = (cond_skip ? 1 : macro_expand(pctx, np));
                 lexeme_free(lex);
                 lex = 0;
             } else {
@@ -270,6 +301,7 @@ parser_next (parse_ctx_t pctx)
     } /* while keepgoing */
 
     return lex;
+
 } /* parser_next */
 
 /*
@@ -288,7 +320,8 @@ parser_skip_to_delim (parse_ctx_t pctx, lextype_t delimtype)
          lex = parser_next(pctx)) {
         lexeme_free(lex);
     }
-    
+
+    lexeme_free(lex);
 }
 
 /*
@@ -329,7 +362,8 @@ parse_QUOTE (parse_ctx_t pctx)
         /* XXX error condition */
     } else if (lex->type == LEXTYPE_IDENT) {
         name_t *np = lex->data.ptr;
-        if (np->nametype == NAMETYPE_KEYWORD) {
+        if (np->nametype == NAMETYPE_KEYWORD ||
+            (np->nameflags & NAME_M_NOQUOTE) != 0) {
             /* XXX error condition */
         }
         pctx->do_quote = 1;
@@ -434,6 +468,7 @@ parse_string_literal (parse_ctx_t pctx, int whichtype)
         lexer_insert(pctx->lexctx, lex);
     }
     return 1;
+    
 } /* parse_string_literal */
 
 /*
@@ -490,6 +525,7 @@ parse_numeric_literal (parse_ctx_t pctx, int base)
         }
     }
     return 1;
+    
 } /* parse_numeric_literal */
 
 /*
@@ -522,6 +558,7 @@ parse_C (parse_ctx_t pctx) {
         lexer_insert(pctx->lexctx, lex);
     }
     return 1;
+
 } /* parse_C */
 
 /*
@@ -1093,7 +1130,12 @@ do_name_qname (parse_ctx_t pctx, int doquote)
     lexeme_free(lex);
 
     if (doquote) {
-        pctx->do_quote = 1;
+        name_t *np = result->data.ptr;
+        if (np->nameflags & NAME_M_NOQUOTE) {
+            /* XXX error condition */
+        } else {
+            pctx->do_quote = 1;
+        }
     }
 
     return 1;
@@ -1258,13 +1300,27 @@ parse_ISSTRING (parse_ctx_t pctx)
  *  - end-of-file not permitted in the middle of this sequence
  *  - must handle nested sequences!!
  *  - The test is TRUE only if the *** low-order bit *** is 1
+ *
+ * We use a stack of state variables to track our current lexical-conditional
+ * state.  State values are:
+ *
+ * COND_NORMAL - not in a lexical conditional
+ * COND_CWA    - in a consequent (%THEN sequence), but want alternative
+ * COND_CWC    - in a consequent, and want the consequent
+ * COND_AWA    - in an alternative (%ELSE sequence), and want it
+ * COND_AWC    - in an alternative, but want the consequent
+ *
+ * parser_next() ignores lexemes other than %ELSE and %FI while our
+ * current state is CWA or AWC.
+ *
+ * If we encounter a new %IF while in a state other than COND_NORMAL,
+ * the current state is stacked and we move to a new condlevel.
  */
 static int
 parse_IF (parse_ctx_t pctx)
 {
-    lexeme_t *lex, *cons, *alt;
+    lexeme_t *lex;
     int testval;
-    lextype_t terms[2] = {LEXTYPE_DELIM_PELSE, LEXTYPE_DELIM_PFI}, which;
 
     // Note the use of increment/decrement here -- this is to handle
     // nesting of instances in which hitting end-of-file is a no-no.
@@ -1273,7 +1329,6 @@ parse_IF (parse_ctx_t pctx)
     if (!parse_Expression(pctx)) {
         /* XXX error condition */
         pctx->no_eof -= 1;
-        parser_skip_to_delim(pctx, LEXTYPE_DELIM_PFI);
         return 1;
     }
 
@@ -1282,9 +1337,6 @@ parse_IF (parse_ctx_t pctx)
     lex = parser_next(pctx);
     if (lex->type != LEXTYPE_NUMERIC) {
         /* XXX error condition */
-        if (lex->type != LEXTYPE_DELIM_PFI) {
-            parser_skip_to_delim(pctx, LEXTYPE_DELIM_PFI);
-        }
         lexeme_free(lex);
         pctx->no_eof -= 1;
         return 1;
@@ -1295,33 +1347,65 @@ parse_IF (parse_ctx_t pctx)
     lex = parser_next(pctx);
     if (lex->type != LEXTYPE_DELIM_PTHEN) {
         /* XXX error condition */
-        if (lex->type != LEXTYPE_DELIM_PFI) {
-            parser_skip_to_delim(pctx, LEXTYPE_DELIM_PFI);
-        }
         lexeme_free(lex);
         pctx->no_eof -= 1;
         return 1;
     }
 
-    cons = alt = 0;
-    if (!parse_lexeme_seq(pctx, terms, 2, &cons, &which)) {
-        /* XXX error condition */
-        pctx->no_eof -= 1;
-        lexseq_free(cons);
-        return 1;
-    }
-    if (which == LEXTYPE_DELIM_PELSE) {
-        if (!parse_lexeme_seq(pctx, &terms[1], 1, &alt, 0)) {
+    if (pctx->condstate[pctx->condlevel] != COND_NORMAL) {
+        if (pctx->condlevel >= sizeof(pctx->condstate)/sizeof(pctx->condstate[0])) {
             /* XXX error condition */
             pctx->no_eof -= 1;
-            lexseq_free(cons);
-            lexseq_free(alt);
-            return 1;
+            return 0;
         }
+        pctx->condlevel += 1;
     }
+    pctx->condstate[pctx->condlevel] = (testval ? COND_CWC : COND_CWA);
+    return 1;
 
-    lexer_insert(pctx->lexctx, (testval ? cons : alt));
-    lexseq_free((testval ? alt : cons));
+} /* parse_IF */
+
+/*
+ * %ELSE
+ *
+ * If we're in a consequent (COND_CWx state), move to alternative
+ * state (COND_AWx state).  Otherwise, we have an error.
+ */
+static int
+parse_ELSE (parse_ctx_t pctx)
+{
+    condstate_t curstate = pctx->condstate[pctx->condlevel];
+    if (curstate != COND_CWA && curstate != COND_CWC) {
+        /* XXX error condition */
+        return 1;
+    }
+    pctx->condstate[pctx->condlevel] = (curstate == COND_CWA ? COND_AWA : COND_AWC);
+    return 1;
+
+} /* parse_ELSE */
+
+/*
+ * %FI
+ *
+ * Terminate a lexical-conditional expression.  If we aren't currently
+ * in a lexical conditional (state is COND_NORMAL), that's an error.
+ *
+ * If condlevel is non-zero, we're in a nested conditional, so we pop
+ * the condlevel stack.
+ */
+static int
+parse_FI (parse_ctx_t pctx)
+{
+    condstate_t curstate = pctx->condstate[pctx->condlevel];
+    if (curstate == COND_NORMAL) {
+        /* XXX error condition */
+        return 1;
+    }
+    pctx->condstate[pctx->condlevel] = COND_NORMAL;
+    if (pctx->condlevel > 0) {
+        pctx->condlevel -= 1;
+    }
     pctx->no_eof -= 1;
     return 1;
-}
+
+} /* parse_FI */

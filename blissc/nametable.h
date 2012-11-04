@@ -20,6 +20,8 @@ typedef struct scopectx_s *scopectx_t;
 #define NAME_M_RESERVED (1<<0) // error if the name is redefined
 #define NAME_M_QFUNC    (1<<1) // %QUOTE/%UNQUOTE/%EXPAND
 #define NAME_M_OPERATOR (1<<2)
+#define NAME_M_NOQUOTE  (1<<3) // not %QUOTEable (lexical conditional)
+#define NAME_M_IS_PCTIF (1<<4) // extra handling for %IF
 
 typedef enum {
     NAMETYPE_KEYWORD,
