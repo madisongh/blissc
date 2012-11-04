@@ -61,7 +61,8 @@ static int parse_IF(parse_ctx_t), parse_ELSE(parse_ctx_t), parse_FI(parse_ctx_t)
     DODEF(QUOTENAME) \
     DODEF(NULL) \
     DODEF(IDENTICAL) \
-    DODEF(ISSTRING)
+    DODEF(ISSTRING) \
+    DODEF(REQUIRE)
 /*
  DODEF(CTCE) \
  DODEF(DECLARED) \
@@ -69,7 +70,6 @@ static int parse_IF(parse_ctx_t), parse_ELSE(parse_ctx_t), parse_FI(parse_ctx_t)
  DODEF(MESSAGE) \
  DODEF(NUMBER) \
  DODEF(PRINT) \
- DODEF(REQUIRE) \
  DODEF(SBTTL) \
  DODEF(TITLE) \
  DODEF(WARN)
@@ -1409,3 +1409,29 @@ parse_FI (parse_ctx_t pctx)
     return 1;
 
 } /* parse_FI */
+
+/*
+ * %REQUIRE(#p,...)
+ *
+ * The parameters are treated as %STRING(...) parameters.  The
+ * resulting string is used as a file name, and that file is
+ * inserted into the lexeme stream.
+ */
+static int
+parse_REQUIRE (parse_ctx_t pctx)
+{
+    lexeme_t *lex = string_params(pctx, 0);
+
+    if (lex->type != LEXTYPE_STRING) {
+        /* XXX - error condition */
+        lexeme_free(lex);
+        return 1;
+    }
+
+    if (!lexer_newfile(pctx->lexctx, lex->data.val_string.ptr,
+                       lex->data.val_string.len)) {
+        /* XXX - error condition */
+    }
+    lexeme_free(lex);
+    return 1;
+}
