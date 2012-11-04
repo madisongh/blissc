@@ -54,3 +54,6 @@ NEQ NEQU NEQA LEQ LEQU LEQA LSS LSSU LSSA
 %IF 1 %ELSE 'what the heck' %FI 'recovered from error'
 %IF %FI 'another oddball, but recovered'
 %THEN %ELSE %FI
+'before %REQUIRE'
+%REQUIRE('test_req.req')
+'after %REQUIRE'

@@ -33,6 +33,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		7A548D681646E9E500A2A20F /* test_req.req */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_req.req; path = testfiles/test_req.req; sourceTree = SOURCE_ROOT; };
 		7A7FD5141636C29C00B2D7FC /* lexer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = lexer.c; sourceTree = "<group>"; };
 		7A7FD5171636C2A700B2D7FC /* lexer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lexer.h; sourceTree = "<group>"; };
 		7A7FD5181636C65200B2D7FC /* lexeme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lexeme.h; sourceTree = "<group>"; };
@@ -101,6 +102,7 @@
 				7A9E1C12163DA445009ACBD0 /* parser.c */,
 				7A9E1C14163DA45A009ACBD0 /* parser.h */,
 				7A8735071642CA6F006BFC30 /* parser_test_1.bli */,
+				7A548D681646E9E500A2A20F /* test_req.req */,
 				7A9D4CAA1635CEA30013AE09 /* scanner.c */,
 				7A9D4CA91635CE970013AE09 /* scanner.h */,
 				7A95BCEB1641CC2F002F851E /* strings.c */,
