@@ -81,7 +81,6 @@ name_alloc (const char *name, size_t namelen)
     np->nameflags = NAME_M_ALLOCATED;
     np->namelen = namelen;
     np->nametype = NAMETYPE_UNDECLARED;
-    np->name_lntype = LNTYPE_NONE;
     memset(&np->namedata, 0, sizeof(np->namedata));
     return np;
 

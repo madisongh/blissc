@@ -340,7 +340,7 @@ lexer_next (lexer_ctx_t ctx, scopectx_t scope, int erroneof)
 {
     lexeme_t *lex = 0;
     lextype_t lextype;
-    char tokbuf[65], *cp;
+    char tokbuf[256], *cp;
     size_t len;
 
     if (ctx == 0) {

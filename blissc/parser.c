@@ -37,57 +37,27 @@ struct parse_ctx_s {
 
 static int macro_expand(parse_ctx_t pctx, name_t *macroname);
 
-static int parse_QUOTE(parse_ctx_t), parse_UNQUOTE(parse_ctx_t),
-           parse_EXPAND(parse_ctx_t);
-static int parse_IF(parse_ctx_t), parse_ELSE(parse_ctx_t), parse_FI(parse_ctx_t);
-
 #undef DODEF
 #define DODEFS \
-    DODEF(ASCII) \
-    DODEF(ASCIC) \
-    DODEF(ASCIZ) \
-    DODEF(B) \
-    DODEF(O) \
-    DODEF(DECIMAL) \
-    DODEF(X) \
-    DODEF(C) \
-    DODEF(STRING) \
-    DODEF(EXACTSTRING) \
-    DODEF(CHARCOUNT) \
-    DODEF(CHAR) \
-    DODEF(EXPLODE) \
-    DODEF(REMOVE) \
-    DODEF(NAME) \
-    DODEF(QUOTENAME) \
-    DODEF(NULL) \
-    DODEF(IDENTICAL) \
-    DODEF(ISSTRING) \
-    DODEF(REQUIRE)
-/*
- DODEF(CTCE) \
- DODEF(DECLARED) \
- DODEF(INFORM) \
- DODEF(MESSAGE) \
- DODEF(NUMBER) \
- DODEF(PRINT) \
- DODEF(SBTTL) \
- DODEF(TITLE) \
- DODEF(WARN)
-*/
-#define DODEF(name_) static int parse_##name_ (parse_ctx_t);
+    DODEF(ASCII, 0) DODEF(ASCIC, 0) DODEF(ASCIZ, 0) \
+    DODEF(B, 0) DODEF(O, 0) DODEF(DECIMAL, 0) DODEF(X, 0) DODEF(C, 0) \
+    DODEF(STRING, 0) DODEF(EXACTSTRING, 0) DODEF(CHARCOUNT, 0) DODEF(CHAR, 0) \
+    DODEF(EXPLODE, 0) DODEF(REMOVE, 0) \
+    DODEF(NAME, 0) DODEF(QUOTENAME, 0) \
+    DODEF(NULL, 0) DODEF(IDENTICAL, 0) \
+    DODEF(ISSTRING, 0) DODEF(REQUIRE, 0) \
+    DODEF(QUOTE, NAME_M_QFUNC) DODEF(UNQUOTE, NAME_M_QFUNC) DODEF(EXPAND, NAME_M_QFUNC) \
+    DODEF(IF, NAME_M_NOQUOTE|NAME_M_IS_PCTIF) DODEF(ELSE, NAME_M_NOQUOTE) \
+    DODEF(FI, NAME_M_NOQUOTE)
+
+#define DODEF(name_, flags_) static int parse_##name_ (parse_ctx_t);
 DODEFS
 #undef DODEF
-#define DODEF(name_) LEXDEF("%" #name_, parse_##name_, 0),
+#define DODEF(name_, flags_) LEXDEF("%" #name_, parse_##name_, flags_),
 
 static name_t parser_names[] = {
     DODEFS
-    LEXDEF("%QUOTE", parse_QUOTE, NAME_M_QFUNC),
-    LEXDEF("%UNQUOTE", parse_UNQUOTE, NAME_M_QFUNC),
-    LEXDEF("%EXPAND", parse_EXPAND, NAME_M_QFUNC),
-    LEXDEF("%IF", parse_IF, NAME_M_QFUNC|NAME_M_NOQUOTE|NAME_M_IS_PCTIF),
     LEXDEF("%THEN", LEXTYPE_DELIM_PTHEN, NAME_M_OPERATOR|NAME_M_NOQUOTE),
-    LEXDEF("%ELSE", parse_ELSE, NAME_M_NOQUOTE),
-    LEXDEF("%FI", parse_FI, NAME_M_NOQUOTE)
 };
 #undef DODEFS
 #undef DODEF
@@ -231,21 +201,16 @@ parser_next (parse_ctx_t pctx)
         do_bind = do_expand = 0;
         switch (pctx->quotelevel) {
             case QL_MACRO:
-                do_bind = pctx->do_unquote ||
-                            (np->nametype == NAMETYPE_LEXNAME &&
-                             np->name_lntype == LNTYPE_MACPARAM);
+                do_bind = pctx->do_unquote || (np->nametype == NAMETYPE_MAC_PARAM);
                 do_expand = pctx->do_unquote == 2 ||
                             (np->nametype == NAMETYPE_LEXFUNC &&
                               (np->nameflags & NAME_M_QFUNC) != 0);
                 break;
             case QL_NAME:
-                do_bind = pctx->do_unquote ||
-                            (np->nametype == NAMETYPE_LEXNAME &&
-                             np->name_lntype == LNTYPE_MACRO);
+                do_bind = pctx->do_unquote || (np->nametype == NAMETYPE_MACRO);
                 do_expand = pctx->do_unquote == 2 ||
                             np->nametype == NAMETYPE_LEXFUNC ||
-                            (np->nametype == NAMETYPE_LEXNAME &&
-                             np->name_lntype == LNTYPE_MACRO);
+                            np->nametype == NAMETYPE_MACRO;
                 break;
             case QL_NORMAL:
                 do_bind = do_expand = 1;
@@ -260,7 +225,7 @@ parser_next (parse_ctx_t pctx)
                 // we would otherwise be skipping over lexemes in a
                 // lexical conditional.
                 if (cond_skip &&
-                    ((np->nameflags & (NAME_M_NOQUOTE|NAME_M_IS_PCTIF)) ==NAME_M_NOQUOTE)) {
+                    ((np->nameflags & (NAME_M_NOQUOTE|NAME_M_IS_PCTIF)) == NAME_M_NOQUOTE)) {
                     cond_skip = 0;
                 }
                 if (cond_skip) {
@@ -278,16 +243,14 @@ parser_next (parse_ctx_t pctx)
                     lexeme_free(lex);
                     lex = 0;
                 }
-            } else if (do_bind && np->nametype == NAMETYPE_LEXNAME &&
-                       np->name_lntype != LNTYPE_MACRO) {
+            } else if (do_bind && np->nametype == NAMETYPE_MACRO) {
                 if (!cond_skip) {
                     lexer_insert(pctx->lexctx, lexeme_copy(np->namedata.ptr));
                 }
                 keepgoing = 1;
                 lexeme_free(lex);
                 lex = 0;
-            } else if (do_expand && np->nametype == NAMETYPE_LEXNAME &&
-                       np->name_lntype == LNTYPE_MACRO) {
+            } else if (do_expand && np->nametype == NAMETYPE_MACRO) {
                 keepgoing = (cond_skip ? 1 : macro_expand(pctx, np));
                 lexeme_free(lex);
                 lex = 0;
@@ -400,8 +363,7 @@ parse_unquote_expand (parse_ctx_t pctx, int is_expand)
         if (np->nametype == NAMETYPE_KEYWORD ||
             np->nametype == NAMETYPE_UNDECLARED ||
             (is_expand && !((np->nametype == NAMETYPE_LEXFUNC) ||
-                            (np->nametype == NAMETYPE_LEXNAME &&
-                             np->name_lntype == LNTYPE_MACRO)))) {
+                            (np->nametype == NAMETYPE_MACRO)))) {
             /* XXX error condition */
         } else {
             pctx->do_unquote = 1 + is_expand;

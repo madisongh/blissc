@@ -24,10 +24,13 @@ typedef struct scopectx_s *scopectx_t;
 #define NAME_M_IS_PCTIF (1<<4) // extra handling for %IF
 
 typedef enum {
+    NAMETYPE_UNDECLARED = 0,
     NAMETYPE_KEYWORD,
     NAMETYPE_LEXFUNC,
-    NAMETYPE_LEXNAME,
-    NAMETYPE_UNDECLARED,
+    NAMETYPE_MACRO,
+    NAMETYPE_MAC_PARAM,
+    NAMETYPE_COMPILETIME,
+    NAMETYPE_LITERAL,
     NAMETYPE_DATA,
     NAMETYPE_STRUCTURE,
     NAMETYPE_LINKAGE,
@@ -41,18 +44,9 @@ typedef enum {
     NAMETYPE_PSECT
 } nametype_t;
 
-typedef enum {
-    LNTYPE_NONE = 0,
-    LNTYPE_MACRO,
-    LNTYPE_MACPARAM,
-    LNTYPE_COMPILETIME,
-    LNTYPE_LITERAL,
-} lntype_t;
-
 struct name_s {
     struct name_s       *next;
     nametype_t           nametype;
-    lntype_t             name_lntype;
     scopectx_t           namescope;
     unsigned int         nameflags;
     data_t               namedata;
@@ -65,16 +59,16 @@ struct name_s {
  * Macros for building static tables of reserved keywords
  * and predeclared names
  */
-#define KWDDEF(kwd, data) { 0, NAMETYPE_KEYWORD, 0, 0, \
+#define KWDDEF(kwd, data) { 0, NAMETYPE_KEYWORD, 0, \
                             NAME_M_RESERVED,  {(void *)(data)}, \
                             sizeof(kwd)-1, (kwd) }
-#define LEXDEF(kwd, data, f) { 0, NAMETYPE_LEXFUNC, 0, 0, \
+#define LEXDEF(kwd, data, f) { 0, NAMETYPE_LEXFUNC, 0, \
                             (NAME_M_RESERVED|(f)), {(void *)(data)}, \
                             sizeof(kwd)-1, (kwd) }
-#define PREDEF(kwd, data) { 0, NAMETYPE_KEYWORD, 0, 0,\
+#define PREDEF(kwd, data) { 0, NAMETYPE_KEYWORD, 0,\
                             0, {(void *)(data)}, \
                             sizeof(kwd)-1, (kwd) }
-#define OPRDEF(kwd, data) { 0, NAMETYPE_KEYWORD, 0, 0, \
+#define OPRDEF(kwd, data) { 0, NAMETYPE_KEYWORD, 0, \
                             NAME_M_RESERVED|NAME_M_OPERATOR, \
                             {(void *)(data)}, sizeof(kwd)-1, (kwd) }
 typedef struct name_s name_t;
