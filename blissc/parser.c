@@ -28,11 +28,12 @@ struct parse_ctx_s {
     void            *cctx;
     lexer_ctx_t     lexctx;
     int             lib_compile;
-    enum { QL_NORMAL, QL_NAME, QL_MACRO } quotelevel;
+    quotelevel_t    quotelevel;
     condstate_t     condstate[64];
     int             condlevel;
     int             no_eof;
     int             do_quote, do_unquote;
+    int             declarations_ok;
 };
 
 static int macro_expand(parse_ctx_t pctx, name_t *macroname);
@@ -100,6 +101,8 @@ parser_init (scopectx_t kwdscope, void *cctx)
         pctx->quotelevel = QL_NORMAL;
     }
 
+    pctx->declarations_ok = 1; /* XXX for now */
+
     return pctx;
 } /* parser_init */
 
@@ -157,6 +160,7 @@ void
 parser_insert (parse_ctx_t pctx, lexeme_t *lex)
 {
     lexer_insert(pctx->lexctx, lex);
+    
 } /* parser_insert */
 
 /*
@@ -286,6 +290,54 @@ parser_skip_to_delim (parse_ctx_t pctx, lextype_t delimtype)
 
     lexeme_free(lex);
 }
+
+/*
+ * parser_decl_ok
+ *
+ * Returns 1 if declarations are OK in the current
+ * parse context (between start of a block and any
+ * normal expressions).  Otherwise, 0.
+ */
+int
+parser_decl_ok (parse_ctx_t pctx)
+{
+    return pctx->declarations_ok;
+
+} /* parser_decl_ok */
+
+/*
+ * parser_get_quotelevel
+ *
+ * Return the current quotelevel.
+ */
+quotelevel_t
+parser_get_quotelevel (parse_ctx_t pctx)
+{
+    return pctx->quotelevel;
+
+} /* parser_get_quotelevel */
+
+/*
+ * parser_set_quotelevel
+ *
+ * Set the current quotelevel, returning the
+ * current value.
+ */
+quotelevel_t
+parser_set_quotelevel (parse_ctx_t pctx, quotelevel_t ql)
+{
+    quotelevel_t oldql = pctx->quotelevel;
+    pctx->quotelevel = ql;
+    return oldql;
+}
+
+/*
+ * parser_incr/decr_erroneof
+ *
+ * Bump up/down the erroneof setting.
+ */
+void parser_incr_erroneof (parse_ctx_t pctx) { pctx->no_eof += 1; }
+void parser_decr_erroneof (parse_ctx_t pctx) { pctx->no_eof -= 1; }
 
 /*
  * --- end of public API ---

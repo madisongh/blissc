@@ -206,11 +206,6 @@ void
 name_insert (scopectx_t scope, name_t *np)
 {
     int i;
-
-    // callers should ensure that this never happens
-    if (np->namelen >= NAME_SIZE)
-        np->namelen = NAME_SIZE-1;
-
     i = hash(np->name, np->namelen);
     np->next = scope->hashtable[i];
     scope->hashtable[i] = np;
@@ -219,3 +214,41 @@ name_insert (scopectx_t scope, name_t *np)
     np->namescope = scope;
 
 } /* name_insert */
+
+/*
+ * name_declare
+ *
+ * Adds a name to a name table, with the specified type and data.
+ */
+name_t *
+name_declare (scopectx_t scope, const char *id, size_t len,
+              nametype_t type, data_t *data)
+{
+    name_t *np;
+
+    if (len >= NAME_SIZE) {
+        len = NAME_SIZE-1;
+    }
+
+    np = name_search(scope, id, len, 0);
+    if (np != 0) {
+        if (np->namescope == scope && np->nametype != NAMETYPE_UNDECLARED) {
+            /* XXX error condition - redeclaration */
+            return 0;
+        }
+        if (np->nameflags & NAME_M_RESERVED) {
+            /* XXX error condition - reserved word */
+            return 0;
+        }
+    } else {
+        np = name_alloc(id, len);
+        name_insert(scope, np);
+    }
+
+    np->nametype = type;
+    if (data != 0) {
+        memcpy(&np->namedata, data, sizeof(data_t));
+    }
+    return np;
+
+} /* name_declare */

@@ -77,6 +77,8 @@ name_t *name_search(scopectx_t scope, const char *id,
                     size_t len, int do_create);
 void name_insert(scopectx_t scope, name_t *name);
 void name_free(name_t *name);
+name_t *name_declare(scopectx_t scope, const char *id,
+                     size_t len, nametype_t type, data_t *data);
 scopectx_t scope_begin (scopectx_t parent);
 scopectx_t scope_end (scopectx_t scope);
 
