@@ -17,6 +17,7 @@
 		7A9D4CAB1635CEA30013AE09 /* scanner.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A9D4CAA1635CEA30013AE09 /* scanner.c */; };
 		7A9E1C13163DA445009ACBD0 /* parser.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A9E1C12163DA445009ACBD0 /* parser.c */; };
 		7AB5ED821642A3AB0063EC94 /* expression.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AB5ED811642A3AB0063EC94 /* expression.c */; };
+		7AF573D9164936EE005C965F /* macros.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AF573D8164936EE005C965F /* macros.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -55,6 +56,7 @@
 		7A9E1C14163DA45A009ACBD0 /* parser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = parser.h; sourceTree = "<group>"; };
 		7AB5ED811642A3AB0063EC94 /* expression.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = expression.c; sourceTree = "<group>"; };
 		7AB5ED841642A3B80063EC94 /* expression.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = expression.h; sourceTree = "<group>"; };
+		7AF573D8164936EE005C965F /* macros.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = macros.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -95,6 +97,7 @@
 				7A995E0C163C2286003BEAC7 /* lexeme.c */,
 				7A7FD5181636C65200B2D7FC /* lexeme.h */,
 				7A7FD5141636C29C00B2D7FC /* lexer.c */,
+				7AF573D8164936EE005C965F /* macros.c */,
 				7A7FD5171636C2A700B2D7FC /* lexer.h */,
 				7A9D4C9D1635A88F0013AE09 /* main.c */,
 				7A995E0F163C2F82003BEAC7 /* nametable.c */,
@@ -172,6 +175,7 @@
 				7A9E1C13163DA445009ACBD0 /* parser.c in Sources */,
 				7A95BCEC1641CC2F002F851E /* strings.c in Sources */,
 				7AB5ED821642A3AB0063EC94 /* expression.c in Sources */,
+				7AF573D9164936EE005C965F /* macros.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
