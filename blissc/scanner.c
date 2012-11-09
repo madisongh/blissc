@@ -12,6 +12,7 @@
 #include <string.h>
 #include "fileio.h"
 #include "scanner.h"
+#include "strings.h"
 
 #define SCAN_MAXFILES 16
 #define SCAN_LINESIZE 1024
@@ -27,6 +28,7 @@ struct bufctx_s {
 struct scanctx_s {
     struct bufctx_s bufstack[SCAN_MAXFILES];
     int             curbuf;
+    char            tokbuf[SCAN_LINESIZE];
 };
 
 typedef enum {
@@ -100,15 +102,15 @@ scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen)
 }
 
 scantype_t
-scan_getnext (scanctx_t ctx, char *buf, size_t bufsiz, size_t *len,
-              unsigned int flags)
+scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok)
 {
     char *cp, *outp, ch;
-    size_t remain;
+    size_t remain, bufsiz, len;
     scanstate_t curstate = STATE_INIT;
     scantype_t rettype = SCANTYPE_END;
 
-    outp = buf;
+    outp = ctx->tokbuf;
+    bufsiz = sizeof(ctx->tokbuf);
     while (ctx->curbuf >= 0) {
         struct bufctx_s *curbuf = &ctx->bufstack[ctx->curbuf];
         while (curbuf->curpos >= curbuf->linelen) {
@@ -121,16 +123,19 @@ scan_getnext (scanctx_t ctx, char *buf, size_t bufsiz, size_t *len,
                 ctx->curbuf -= 1;
                 if (rc < 0) {
                     /* XXX error condition */
-                    *len = outp - buf;
+                    len = outp - ctx->tokbuf;
+                    *tok = string_from_chrs(0, ctx->tokbuf, len);
                     return SCANTYPE_ERR_FIO;
                 }
                 if (ctx->curbuf < 0) {
-                    *len = outp - buf;
+                    len = outp - ctx->tokbuf;
+                    *tok = string_from_chrs(0, ctx->tokbuf, len);
                     return SCANTYPE_END;
                 }
                 if ((flags & SCAN_M_ERRONEOF) != 0) {
                     /* XXX error condition */
-                    *len = outp - buf;
+                    len = outp - ctx->tokbuf;
+                    *tok = string_from_chrs(0, ctx->tokbuf, len);
                     return SCANTYPE_ERR_EOF;
                 }
                 curbuf = &ctx->bufstack[ctx->curbuf];
@@ -221,7 +226,9 @@ scan_getnext (scanctx_t ctx, char *buf, size_t bufsiz, size_t *len,
                         curstate = STATE_IN_QSTRING;
                         break;
                     }
-                    if (isdigit(*cp)) {
+                    if (isdigit(*cp) ||
+                        ((flags & SCAN_M_SIGNOK) &&
+                         (*cp == '+' || *cp == '-') && isdigit(*(cp+1)))) {
                         if (bufsiz > 0) {
                             *outp++ = *cp;
                             bufsiz -= 1;
@@ -274,13 +281,15 @@ scan_getnext (scanctx_t ctx, char *buf, size_t bufsiz, size_t *len,
                         remain--;
                     }
                     curbuf->curpos = cp - &curbuf->linebuf[0];
-                    *len = outp - buf;
+                    len = outp - ctx->tokbuf;
+                    *tok = string_from_chrs(0, ctx->tokbuf, len);
                     return rettype;
                 case STATE_EXIT:
                     // normal exit state, expects rettype to be
                     // set correctly before entry
                     curbuf->curpos = cp - &curbuf->linebuf[0];
-                    *len = outp - buf;
+                    len = outp - ctx->tokbuf;
+                    *tok = string_from_chrs(0, ctx->tokbuf, len);
                     return rettype;
             } /* switch */
 
@@ -294,15 +303,18 @@ scan_getnext (scanctx_t ctx, char *buf, size_t bufsiz, size_t *len,
         curbuf->curpos = cp - &curbuf->linebuf[0];
         switch (curstate) {
             case STATE_IN_DECLIT:
-                *len = outp - buf;
+                len = outp - ctx->tokbuf;
+                *tok = string_from_chrs(0, ctx->tokbuf, len);
                 return SCANTYPE_DECLITERAL;
             case STATE_IN_IDENTIFIER:
-                *len = outp - buf;
+                len = outp - ctx->tokbuf;
+                *tok = string_from_chrs(0, ctx->tokbuf, len);
                 return SCANTYPE_IDENTIFIER;
             case STATE_IN_QSTRING:
                 return SCANTYPE_ERR_QSTR;
             case STATE_EXIT:
-                *len = outp - buf;
+                len = outp - ctx->tokbuf;
+                *tok = string_from_chrs(0, ctx->tokbuf, len);
                 return rettype;
             default:
                 break;
@@ -311,6 +323,7 @@ scan_getnext (scanctx_t ctx, char *buf, size_t bufsiz, size_t *len,
 
     } /* while ctx->curbuf >= 0 */
 
-    *len = outp - buf;
+    len = outp - ctx->tokbuf;
+    *tok = string_from_chrs(0, ctx->tokbuf, len);
     return rettype;
 }

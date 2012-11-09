@@ -13,6 +13,7 @@
 #include "lexer.h"
 #include "nametable.h"
 #include "lexeme.h"
+#include "macros.h"
 
 int test_scanner(int argc, const char *argv[]);
 int test_parser(int argc, const char *argv[]);
@@ -50,9 +51,9 @@ int
 test_scanner (int argc, const char *argv[])
 {
     scanctx_t ctx;
-    char itembuf[256];
-    size_t len;
+    strdesc_t *tok;
     scantype_t toktype;
+    unsigned int sflags = SCAN_M_SIGNOK;
     int keepgoing = 1;
     ctx = scan_init();
 
@@ -64,24 +65,32 @@ test_scanner (int argc, const char *argv[])
         return 998;
     }
     while (keepgoing) {
-        toktype = scan_getnext(ctx, itembuf, sizeof(itembuf)-1, &len, 0);
-        itembuf[len] = '\0';
+        toktype = scan_getnext(ctx, sflags, &tok);
         if (scan_ok(toktype)) {
             switch (toktype) {
                 case SCANTYPE_DECLITERAL:
-                    printf("Decimal literal: %s\n", itembuf);
+                    printf("Decimal literal: %-*.*s\n", tok->len,tok->len,tok->ptr);
+                    sflags &= ~SCAN_M_SIGNOK;
                     break;
                 case SCANTYPE_IDENTIFIER:
-                    printf("Identifier:      %s\n", itembuf);
+                    printf("Identifier:      %-*.*s\n", tok->len,tok->len,tok->ptr);
+                    sflags &= ~SCAN_M_SIGNOK;
                     break;
                 case SCANTYPE_OPERATOR:
-                    printf("Operator:        %s\n", itembuf);
+                    printf("Operator:        %-*.*s\n", tok->len,tok->len,tok->ptr);
+                    sflags |= SCAN_M_SIGNOK;
                     break;
                 case SCANTYPE_PUNCTUATION:
-                    printf("Punctuation:     %s\n", itembuf);
+                    printf("Punctuation:     %-*.*s\n", tok->len,tok->len,tok->ptr);
+                    if (strchr("]>)", *tok->ptr) != 0) {
+                        sflags &= ~SCAN_M_SIGNOK;
+                    } else {
+                        sflags |= SCAN_M_SIGNOK;
+                    }
                     break;
                 case SCANTYPE_QUOTEDSTRING:
-                    printf("Quoted string:   %s\n", itembuf);
+                    printf("Quoted string:   %-*.*s\n", tok->len,tok->len,tok->ptr);
+                    sflags |= SCAN_M_SIGNOK;
                     break;
                 case SCANTYPE_END:
                     printf("<< end of input >>\n");
@@ -113,40 +122,23 @@ test_parser (int argc, const char *argv[])
     parse_ctx_t pctx;
     scopectx_t mainscope;
     lexeme_t *lex;
-    name_t *np;
+    lextype_t lt;
 
     mainscope = scope_begin(0);
     pctx = parser_init(mainscope, 0);
+    macros_init(mainscope);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
     }
-    for (lex = parser_next(pctx); lex != 0 && lex->type != LEXTYPE_END; lex = parser_next(pctx)) {
-        printf("%s", lextype_name(lex->type));
-        switch (lex->type) {
-            case LEXTYPE_NUMERIC:
-                printf(": %ld\n", lex->data.val_signed);
-                break;
-            case LEXTYPE_STRING:
-                printf(": '%-*.*s'\n", lex->data.val_string.len, lex->data.val_string.len,
-                       lex->data.val_string.ptr);
-                break;
-            case LEXTYPE_CSTRING:
-                printf(": '%-*.*s'\n", *lex->data.val_string.ptr, *lex->data.val_string.ptr,
-                       lex->data.val_string.ptr+1);
-                break;
-            case LEXTYPE_IDENT:
-                np = lex->data.ptr;
-                printf(": %s\n", np->name);
-                break;
-            default:
-                printf("\n");
-                break;
-        }
+    for (lt = parser_next(pctx, &lex); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
+         lt = parser_next(pctx, &lex)) {
+        printf("%s: %-*.*s\n", lextype_name(lt), lex->text.len, lex->text.len,
+               lex->text.ptr);
         lexeme_free(lex);
     }
-    if (lex == 0) {
-        fprintf(stderr, "parser_next returned NULL\n");
+    if (lt == LEXTYPE_NONE) {
+        fprintf(stderr, "parser_next returned error lexeme\n");
         return 997;
     } else {
         printf("<<end of input>>\n");

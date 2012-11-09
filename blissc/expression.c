@@ -12,10 +12,10 @@
 
 int parse_Expression (parse_ctx_t pctx)
 {
-    lexeme_t *lex = parser_next(pctx);
-    if (lex == 0) {
-        return 1;
-    }
+    lexeme_t *lex;
+
+    parser_next(pctx, &lex);
     parser_insert(pctx, lex);
+    
     return 1;
 }

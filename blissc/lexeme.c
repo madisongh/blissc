@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "lexeme.h"
+#include "strings.h"
 
 #define DOLEXTYPE(lt) "LEXTYPE_" #lt,
 static const char *ltnames[] = { DOLEXTYPES };
@@ -49,6 +50,7 @@ lexeme_alloc (lextype_t type)
     lex = freepool;
     freepool = lex->next;
     memset(lex, 0, sizeof(lexeme_t));
+    string_alloc(&lex->text, 0);
     lex->type = type;
     return lex;
 }
@@ -57,6 +59,7 @@ void
 lexeme___free (lexeme_t *lex)
 {
     if (lex != &errlex) {
+        string_free(&lex->text);
         lex->next = freepool;
         freepool = lex;
     }

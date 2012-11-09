@@ -56,6 +56,7 @@ typedef struct lexchain_s lexchain_t;
 struct lexer_ctx_s {
     lexchain_t   *chain;
     int          atend;
+    lextype_t    lastlt;
 };
 
 /*
@@ -82,8 +83,8 @@ static lextype_t delimtypes[] = {
  * These static lexemes are used to simplify the
  * logic in the parser.
  */
-static lexeme_t errlex = { 0, LEXTYPE_NONE };
-static lexeme_t endlex = { 0, LEXTYPE_END };
+static lexeme_t errlex = { 0, LEXTYPE_NONE, LEXTYPE_NONE };
+static lexeme_t endlex = { 0, LEXTYPE_END, LEXTYPE_END };
 
 /*
  * Operators that are keywords.
@@ -190,6 +191,7 @@ lexer_fopen (const char *fname, size_t fnlen)
             }
         }
     }
+    ctx->lastlt = LEXTYPE_NONE;
     return ctx;
 
 } /* lexer_fopen */
@@ -219,12 +221,9 @@ lexer_finish (lexer_ctx_t ctx)
  * and macros.
  */
 lexeme_t *
-lexeme_create (lexer_ctx_t ctx, scopectx_t scope,
-               lextype_t type, const char *tok, size_t len)
+lexeme_create (lextype_t type, strdesc_t *tok)
 {
     lexeme_t *lex;
-    name_t *np;
-    char *cp;
 
     if (type < LEXTYPE_MIN || type > LEXTYPE_MAX) {
         /* XXX error condition */
@@ -234,48 +233,136 @@ lexeme_create (lexer_ctx_t ctx, scopectx_t scope,
     if (lex->type == LEXTYPE_NONE) {
         return &errlex;
     }
-    switch (type) {
+    lex->type = LEXTYPE_TEXT;
+    lex->boundtype = type;
+    string_copy(&lex->text, tok);
+
+    return lex;
+
+} /* lexeme_create */
+
+lexeme_t *
+lexeme_bind (scopectx_t scope, lexeme_t *lex)
+{
+    name_t *np;
+    char *cp;
+    long val;
+    size_t len;
+
+    if (lex->type != LEXTYPE_TEXT) {
+        return lex;
+    }
+
+    if (lex->boundtype < LEXTYPE_MIN || lex->boundtype > LEXTYPE_MAX) {
+        /* XXX error condition */
+        return &errlex;
+    }
+    switch (lex->boundtype) {
         case LEXTYPE_NUMERIC:
             errno = 0;
-            lex->data.val_signed = strtol(tok, &cp, 10);
+            val = strtol(lex->text.ptr, &cp, 10);
             if (errno != 0) {
                 /* XXX error condition */
             }
-            break;
-        case LEXTYPE_STRING:
-            if (string_from_chrs(&lex->data.val_string, tok, len) == 0) {
-                /* XXX error condition */
-                lexeme_free(lex);
-                return 0;
-            }
+            lex->data.val_signed = val;
             break;
         case LEXTYPE_CSTRING:
+            len = lex->text.len;
             if (len > 255) {
                 len = 255;
             }
-            if (ascic_string_from_chrs(&lex->data.val_string, tok, len) == 0) {
+            if (ascic_string_from_chrs(&lex->data.val_string, lex->text.ptr, len) == 0) {
                 /* XXX error condition */
-                lexeme_free(lex);
-                return 0;
             }
             break;
         case LEXTYPE_IDENT:
-            np = name_search(scope, tok, len, 1);
+            np = name_search(scope, lex->text.ptr, lex->text.len, 1);
             if (np->nametype == NAMETYPE_KEYWORD &&
                 (np->nameflags & NAME_M_OPERATOR)) {
-                type = (lextype_t) np->namedata.val_signed;
+                lex->boundtype = (lextype_t) np->namedata.val_signed;
             } else {
                 lex->data.ptr = np;
             }
+            break;
+        case LEXTYPE_STRING:
             break;
         default:
             break;
     }
 
-    lex->type = type;
+    lex->type = lex->boundtype;
     return lex;
 
-} /* lexeme_create */
+} /* lexeme_bind */
+
+lexeme_t *
+lexeme_unbind (lexeme_t *lex)
+{
+    if (lex->type == LEXTYPE_TEXT) {
+        return lex;
+    }
+    if (lex->boundtype == LEXTYPE_CSTRING) {
+        string_free(&lex->data.val_string);
+    }
+    memset(&lex->data, 0, sizeof(lex->data));
+    lex->type = LEXTYPE_TEXT;
+    return lex;
+}
+
+name_t *
+lexeme_nameval (lexeme_t *lex, scopectx_t scope)
+{
+    if (lex->boundtype != LEXTYPE_IDENT) {
+        return 0;
+    }
+    if (lex->type == LEXTYPE_IDENT) {
+        return lex->data.ptr;
+    }
+    return name_search(scope, lex->text.ptr, lex->text.len, 1);
+}
+
+strdesc_t *
+lexeme_stringval (lexeme_t *lex)
+{
+
+    if (lex->boundtype == LEXTYPE_STRING) {
+        return &lex->text;
+    }
+    if (lex->boundtype == LEXTYPE_CSTRING) {
+        if (lex->type != LEXTYPE_CSTRING) {
+            return ascic_string_from_chrs(0, lex->text.ptr,
+                                          (lex->text.len > 255 ? 255 : lex->text.len));
+        }
+        return string_copy(0, &lex->data.val_string);
+    }
+    return 0;
+}
+
+long
+lexeme_signedval (lexeme_t *lex)
+{
+    char *cp;
+    if (lex->boundtype != LEXTYPE_NUMERIC) {
+        return 0;
+    }
+    if (lex->type == LEXTYPE_NUMERIC) {
+        return lex->data.val_signed;
+    }
+    return strtol(lex->text.ptr, &cp, 10);
+}
+
+unsigned long
+lexeme_unsignedval (lexeme_t *lex)
+{
+    char *cp;
+    if (lex->boundtype != LEXTYPE_NUMERIC) {
+        return 0;
+    }
+    if (lex->type == LEXTYPE_NUMERIC) {
+        return lex->data.val_unsigned;
+    }
+    return strtoul(lex->text.ptr, &cp, 10);
+}
 
 /*
  * lexeme_free
@@ -297,7 +384,6 @@ lexeme_free (lexeme_t *lex)
     switch (lex->type) {
         case LEXTYPE_STRING:
         case LEXTYPE_CSTRING:
-            string_free(&lex->data.val_string);
             break;
         case LEXTYPE_IDENT:
             name_free(lex->data.ptr);
@@ -340,8 +426,8 @@ lexer_next (lexer_ctx_t ctx, scopectx_t scope, int erroneof)
 {
     lexeme_t *lex = 0;
     lextype_t lextype;
-    char tokbuf[256], *cp;
-    size_t len;
+    strdesc_t *tok;
+    char *cp;
 
     if (ctx == 0) {
         return &errlex;
@@ -361,12 +447,26 @@ lexer_next (lexer_ctx_t ctx, scopectx_t scope, int erroneof)
         }
         if (chain->sctx != 0) {
             scantype_t type;
-            type = scan_getnext(chain->sctx, tokbuf,
-                                sizeof(tokbuf)-1, &len,
-                                (erroneof ? SCAN_M_ERRONEOF : 0));
+            unsigned int sflags = (erroneof ? SCAN_M_ERRONEOF : 0);
+            // Treat +/- as sign for decimal literal, except
+            // when we've just seen a name, a closing delimiter, a +/-, or
+            // a numeric literal.
+            switch (ctx->lastlt) {
+                case LEXTYPE_NUMERIC:
+                case LEXTYPE_IDENT:
+                case LEXTYPE_DELIM_RANGLE:
+                case LEXTYPE_DELIM_RBRACK:
+                case LEXTYPE_DELIM_RPAR:
+                    break;
+                default:
+                    sflags |= SCAN_M_SIGNOK;
+                    break;
+            }
+            type = scan_getnext(chain->sctx, sflags, &tok);
             if (!scan_ok(type)) {
                 /* XXX error condition */
                 lex = &errlex;
+                string_free(tok);
                 break;
             }
             if (type == SCANTYPE_END) {
@@ -377,11 +477,12 @@ lexer_next (lexer_ctx_t ctx, scopectx_t scope, int erroneof)
                 if (ctx->chain == 0) {
                     lex = lexeme_alloc(LEXTYPE_END);
                     ctx->atend = 1;
+                    string_free(tok);
                     break;
                 }
+                string_free(tok);
                 continue;
             }
-            tokbuf[len] = '\0';
             switch (type) {
                 case SCANTYPE_DECLITERAL:
                     lextype = LEXTYPE_NUMERIC;
@@ -390,11 +491,11 @@ lexer_next (lexer_ctx_t ctx, scopectx_t scope, int erroneof)
                     lextype = LEXTYPE_STRING;
                     break;
                 case SCANTYPE_OPERATOR:
-                    cp = strchr(operators, tokbuf[0]);
+                    cp = strchr(operators, *tok->ptr);
                     lextype = opertypes[cp-operators];
                     break;
                 case SCANTYPE_PUNCTUATION:
-                    cp = strchr(delimiters, tokbuf[0]);
+                    cp = strchr(delimiters, *tok->ptr);
                     lextype = delimtypes[cp-delimiters];
                     break;
                 case SCANTYPE_IDENTIFIER:
@@ -403,11 +504,20 @@ lexer_next (lexer_ctx_t ctx, scopectx_t scope, int erroneof)
                 default:
                     break;
             }
-            lex = (lextype == 0 ? &errlex
-                   : lexeme_create(ctx, scope, lextype, tokbuf, len));
+            lex = (lextype == 0 ? &errlex : lexeme_create(lextype, tok));
+            string_free(tok);
             break;
+        } else {
+            ctx->chain = chain->nextchain;
+            lexchain_free(chain);
+            if (ctx->chain == 0) {
+                lex = lexeme_alloc(LEXTYPE_END);
+                ctx->atend = 1;
+                break;
+            }
         }
     }
+    ctx->lastlt = lexeme_boundtype(lex);
     return lex;
 
 } /* lexer_next */
@@ -482,45 +592,13 @@ lexer_newfile (lexer_ctx_t ctx, const char *fname, size_t fnlen)
  * equivalent (e.g., for %IDENTICAL).  That is, the
  * lextypes match, and for lextypes for which there
  * is data, that data matches.
- *
- * NB: name-style operators should already have been
- *     resolved to their LEXTYPE_OP_xxx codes (which
- *     lexeme_create() does).
- *
  */
 int
 lexemes_match (lexeme_t *a, lexeme_t *b)
 {
-    name_t *an, *bn;
-
     while (a != 0 && b != 0) {
-        if (a->type != b->type) {
+        if (!strings_eql(&a->text, &b->text)) {
             return 0;
-        }
-        switch (a->type) {
-            case LEXTYPE_IDENT:
-                an = a->data.ptr;
-                bn = b->data.ptr;
-                if (an->namelen != bn->namelen) {
-                    return 0;
-                }
-                if (memcmp(an->name, bn->name, an->namelen) != 0) {
-                    return 0;
-                }
-                break;
-            case LEXTYPE_STRING:
-            case LEXTYPE_CSTRING:
-                if (!strings_eql(&a->data.val_string, &b->data.val_string)) {
-                    return 0;
-                }
-                break;
-            case LEXTYPE_NUMERIC:
-                if (a->data.val_signed != b->data.val_signed) {
-                    return 0;
-                }
-                break;
-            default:
-                break;
         }
         a = a->next;
         b = b->next;

@@ -70,6 +70,9 @@ static lextype_t opener[3] = {
 static lextype_t closer[3] = {
     LEXTYPE_DELIM_RPAR, LEXTYPE_DELIM_RANGLE, LEXTYPE_DELIM_RBRACK };
 
+static strdesc_t nullstr = STRDEF(""), one = STRDEF("1"), zero = STRDEF("0");
+
+
 /*
  *  --- Public API for this module ---
  */
@@ -173,10 +176,11 @@ parser_insert (parse_ctx_t pctx, lexeme_t *lex)
  * conditional state, expanding macros, and dispatching to
  * process keywords and lexical functions.
  */
-lexeme_t *
-parser_next (parse_ctx_t pctx)
+lextype_t
+parser_next (parse_ctx_t pctx, lexeme_t **lexp)
 {
     lexeme_t *lex;
+    lextype_t lt;
     name_t *np;
     int keepgoing = 1;
     int do_bind, do_expand;
@@ -185,36 +189,43 @@ parser_next (parse_ctx_t pctx)
 
     while (keepgoing) {
         lex = lexer_next(pctx->lexctx, pctx->curscope, pctx->no_eof);
+        lt = lexeme_boundtype(lex);
         keepgoing = 0;
         if (lex->type == LEXTYPE_NONE || lex->type == LEXTYPE_END) {
             break;
         }
         cond_skip = (pctx->condstate[pctx->condlevel] == COND_AWC ||
                      pctx->condstate[pctx->condlevel] == COND_CWA);
-        np = lex->data.ptr;
-        if (lex->type != LEXTYPE_IDENT || pctx->do_quote) {
+        if (pctx->do_quote) {
             pctx->do_quote = pctx->do_unquote = 0;
             if (cond_skip) {
                 lexeme_free(lex);
                 keepgoing = 1;
                 continue;
             }
+            lt = LEXTYPE_TEXT;
             break;
         }
 
+        if (lt == LEXTYPE_IDENT) {
+            np = lexeme_nameval(lex, pctx->curscope);
+        }
         do_bind = do_expand = 0;
         switch (pctx->quotelevel) {
             case QL_MACRO:
-                do_bind = pctx->do_unquote || (np->nametype == NAMETYPE_MAC_PARAM);
-                do_expand = pctx->do_unquote == 2 ||
+                do_bind = pctx->do_unquote ||
+                    (lt == LEXTYPE_IDENT && np->nametype == NAMETYPE_MAC_PARAM);
+                do_expand = pctx->do_unquote == 2 || (lt == LEXTYPE_IDENT &&
                             (np->nametype == NAMETYPE_LEXFUNC &&
-                              (np->nameflags & NAME_M_QFUNC) != 0);
+                              (np->nameflags & NAME_M_QFUNC) != 0));
                 break;
             case QL_NAME:
-                do_bind = pctx->do_unquote || (np->nametype == NAMETYPE_MACRO);
+                do_bind = pctx->do_unquote || lt != LEXTYPE_IDENT ||
+                    (lt == LEXTYPE_IDENT && np->nametype == NAMETYPE_MACRO);
                 do_expand = pctx->do_unquote == 2 ||
-                            np->nametype == NAMETYPE_LEXFUNC ||
-                            np->nametype == NAMETYPE_MACRO;
+                    (lt == LEXTYPE_IDENT &&
+                            (np->nametype == NAMETYPE_LEXFUNC ||
+                             np->nametype == NAMETYPE_MACRO));
                 break;
             case QL_NORMAL:
                 do_bind = do_expand = 1;
@@ -222,52 +233,66 @@ parser_next (parse_ctx_t pctx)
         }
 
         pctx->do_quote = pctx->do_unquote = 0;
-        if (do_bind || do_expand) {
-            if ((do_bind && np->nametype == NAMETYPE_KEYWORD) ||
-                (do_expand && np->nametype == NAMETYPE_LEXFUNC)) {
-                // Make sure we handle %ELSE and %FI (but not %IF) if
-                // we would otherwise be skipping over lexemes in a
-                // lexical conditional.
-                if (cond_skip &&
-                    ((np->nameflags & (NAME_M_NOQUOTE|NAME_M_IS_PCTIF)) == NAME_M_NOQUOTE)) {
-                    cond_skip = 0;
-                }
-                if (cond_skip) {
-                    lexeme_free(lex);
-                    keepgoing = 1;
-                    continue;
-                }
-                if (np->nameflags & NAME_M_OPERATOR) {
-                    lexeme_free(lex);
-                    lex = lexeme_alloc((lextype_t) np->namedata.val_signed);
-                    keepgoing = 0;
-                } else {
-                    doit = np->namedata.ptr;
-                    keepgoing = doit(pctx);
-                    lexeme_free(lex);
-                    lex = 0;
-                }
-            } else if (do_bind && np->nametype == NAMETYPE_MACRO) {
-                if (!cond_skip) {
-                    lexer_insert(pctx->lexctx, lexeme_copy(np->namedata.ptr));
-                }
+        if (!do_bind && !do_expand) {
+            if (cond_skip) {
+                lexeme_free(lex);
                 keepgoing = 1;
-                lexeme_free(lex);
-                lex = 0;
-            } else if (do_expand && np->nametype == NAMETYPE_MACRO) {
-                keepgoing = (cond_skip ? 1 : macro_expand(pctx, np));
-                lexeme_free(lex);
-                lex = 0;
-            } else {
-                break;
+                continue;
             }
-        } else {
+            lt = LEXTYPE_TEXT;
             break;
         }
 
+        if (lt == LEXTYPE_IDENT) {
+            // Make sure we handle %ELSE and %FI (but not %IF) if
+            // we would otherwise be skipping over lexemes in a
+            // lexical conditional.
+            if (cond_skip &&
+                ((np->nameflags & (NAME_M_NOQUOTE|NAME_M_IS_PCTIF)) == NAME_M_NOQUOTE)) {
+                cond_skip = 0;
+            }
+        }
+        if (cond_skip) {
+            lexeme_free(lex);
+            keepgoing = 1;
+            continue;
+        }
+        lex = lexeme_bind(pctx->curscope, lex);
+        lt = lexeme_boundtype(lex);
+        if (lt == LEXTYPE_IDENT) {
+            np = lexeme_nameval(lex, pctx->curscope);
+            if ((do_bind && np->nametype == NAMETYPE_KEYWORD) ||
+                (do_expand && np->nametype == NAMETYPE_LEXFUNC)) {
+                if (np->nameflags & NAME_M_OPERATOR) {
+                    strdesc_t dsc;
+                    lexeme_free(lex);
+                    strdesc_init(&dsc, np->name, np->namelen);
+                    lt = (lextype_t) np->namedata.val_signed;
+                    lex = lexeme_create(lt, &dsc);
+                    keepgoing = 0;
+                    break;
+                }
+                doit = np->namedata.ptr;
+                keepgoing = doit(pctx);
+                lexeme_free(lex);
+                lex = &errlex;
+                continue;
+            }
+            if (np->nametype == NAMETYPE_MACRO) {
+                if (do_expand) {
+                    keepgoing = macro_expand(pctx, np);
+                    lexeme_free(lex);
+                    lex = &errlex;
+                    continue;
+                }
+            }
+        }
+        break;
+
     } /* while keepgoing */
 
-    return lex;
+    *lexp = lex;
+    return lt;
 
 } /* parser_next */
 
@@ -281,10 +306,11 @@ void
 parser_skip_to_delim (parse_ctx_t pctx, lextype_t delimtype)
 {
     lexeme_t *lex;
+    lextype_t lt;
 
-    for (lex = parser_next(pctx); lex->type != LEXTYPE_END &&
-         lex->type != LEXTYPE_NONE && lex->type != delimtype;
-         lex = parser_next(pctx)) {
+    for (lt = parser_next(pctx, &lex); lt != LEXTYPE_END &&
+         lt != LEXTYPE_NONE && lt != delimtype;
+         lt = parser_next(pctx, &lex)) {
         lexeme_free(lex);
     }
 
@@ -299,8 +325,11 @@ parser_skip_to_delim (parse_ctx_t pctx, lextype_t delimtype)
  * normal expressions).  Otherwise, 0.
  */
 int
-parser_decl_ok (parse_ctx_t pctx)
+parser_decl_ok (parse_ctx_t pctx, scopectx_t *curscope)
 {
+    if (pctx->declarations_ok && curscope != 0) {
+        *curscope = pctx->curscope;
+    }
     return pctx->declarations_ok;
 
 } /* parser_decl_ok */
@@ -363,20 +392,22 @@ static int
 parse_QUOTE (parse_ctx_t pctx)
 {
     lexeme_t *lex;
+    lextype_t lt;
 
     if (pctx->quotelevel < QL_NAME) {
         /* XXX error condition */
         return 1;
     }
     lex = lexer_next(pctx->lexctx, pctx->curscope, 0);
+    lt = lexeme_boundtype(lex);
     // %QUOTE only applies to names, lexical function names,
     // commas, and percent signs.
-    if (lex->type != LEXTYPE_IDENT &&
-        lex->type != LEXTYPE_DELIM_COMMA &&
-        lex->type != LEXTYPE_DELIM_PERCENT) {
+    if (lt != LEXTYPE_IDENT &&
+        lt != LEXTYPE_DELIM_COMMA &&
+        lt != LEXTYPE_DELIM_PERCENT) {
         /* XXX error condition */
-    } else if (lex->type == LEXTYPE_IDENT) {
-        name_t *np = lex->data.ptr;
+    } else if (lt == LEXTYPE_IDENT) {
+        name_t *np = lexeme_nameval(lex, pctx->curscope);
         if (np->nametype == NAMETYPE_KEYWORD ||
             (np->nameflags & NAME_M_NOQUOTE) != 0) {
             /* XXX error condition */
@@ -402,16 +433,18 @@ static int
 parse_unquote_expand (parse_ctx_t pctx, int is_expand)
 {
     lexeme_t *lex;
+    lextype_t lt;
 
     if (pctx->quotelevel < (is_expand ? QL_MACRO : QL_NAME)) {
         /* XXX error condition */
         return 1;
     }
     lex = lexer_next(pctx->lexctx, pctx->curscope, 0);
-    if (lex->type != LEXTYPE_IDENT) {
+    lt = lexeme_boundtype(lex);
+    if (lt != LEXTYPE_IDENT) {
         /* XXX error condition */
     } else {
-        name_t *np = lex->data.ptr;
+        name_t *np = lexeme_nameval(lex, pctx->curscope);
         if (np->nametype == NAMETYPE_KEYWORD ||
             np->nametype == NAMETYPE_UNDECLARED ||
             (is_expand && !((np->nametype == NAMETYPE_LEXFUNC) ||
@@ -462,24 +495,25 @@ parse_EXPAND (parse_ctx_t pctx)
 static int
 parse_string_literal (parse_ctx_t pctx, int whichtype)
 {
-    lexeme_t *lex = parser_next(pctx);
-    if (lex->type != LEXTYPE_STRING || (whichtype == 2 && lex->data.val_string.len > 255)) {
+    lexeme_t *lex;
+    lextype_t lt = parser_next(pctx, &lex);
+    strdesc_t *str = lexeme_stringval(lex);
+
+    if (lt != LEXTYPE_STRING || (whichtype == 2 && str->len > 255)) {
         /* XXX error condition */
+        string_free(str);
         lexeme_free(lex);
     } else {
+        lexeme_t *newlex;
         if (whichtype == 1) {
             static strdesc_t nullchr = STRZDEF("");
-            string_append(&lex->data.val_string, &nullchr);
+            str = string_append(str, &nullchr);
         } else if (whichtype == 2) {
-            strdesc_t *acstr = ascic_string_from_chrs(0, lex->data.val_string.ptr,
-                                                      lex->data.val_string.len);
-            if (acstr != 0) {
-                string_free(&lex->data.val_string);
-                memcpy(&lex->data.val_string, acstr, sizeof(strdesc_t));
-                lex->type = LEXTYPE_CSTRING;
-            }
+            lt = LEXTYPE_CSTRING;
         }
-        lexer_insert(pctx->lexctx, lex);
+        newlex = lexeme_create(lt, str);
+        lexer_insert(pctx->lexctx, newlex);
+        lexeme_free(lex);
     }
     return 1;
     
@@ -508,36 +542,37 @@ static int parse_ASCIC (parse_ctx_t pctx) { return parse_string_literal(pctx, 2)
 static int
 parse_numeric_literal (parse_ctx_t pctx, int base)
 {
-    lexeme_t *lex = parser_next(pctx);
+    lexeme_t *lex;
+    lextype_t lt = parser_next(pctx, &lex);
+    strdesc_t *str;
+    char buf[32], *cp;
     long numval;
 
-    if (lex->type != LEXTYPE_STRING) {
+    if (lt != LEXTYPE_STRING) {
         /* XXX error condition */
         lexer_insert(pctx->lexctx, lex);
-    } else {
-        char *cp, buf[32];
-        lex->type = LEXTYPE_NUMERIC;
-        errno = 0;
-        // XXX probably need to do this ourselves, rather than rely on C lib
-        if (lex->data.val_string.len >= sizeof(buf)) {
-            cp = buf + sizeof(buf)-1;
-        } else {
-            cp = buf+lex->data.val_string.len;
-        }
-        memcpy(buf, lex->data.val_string.ptr, cp-buf);
-        *cp = '\0';
-        numval = strtol(buf, &cp, base);
-        if (errno != 0 || (cp-buf) != lex->data.val_string.len) {
-            /* XXX error condition */
-            lexeme_free(lex);
-        } else {
-            // XXX need to validate that the value fits into the
-            // target machine's word length
-            string_free(&lex->data.val_string);
-            lex->data.val_signed = numval;
-            lexer_insert(pctx->lexctx, lex);
-        }
+        return 1;
     }
+    str = lexeme_stringval(lex);
+    cp = buf + (str->len >= sizeof(buf) ? sizeof(buf)-1 : str->len);
+    // XXX probably need to do this ourselves, rather than rely on C lib
+    memcpy(buf, str->ptr, cp-buf);
+    *cp = '\0';
+    errno = 0;
+    numval = strtol(buf, &cp, base);
+    if (errno != 0 || (cp-buf) != str->len) {
+        /* XXX error condition */
+    } else {
+        // XXX need to validate that the value fits into the
+        // target machine's word length
+        strdesc_t dsc;
+        int len = snprintf(buf, sizeof(buf), "%ld", numval);
+        strdesc_init(&dsc, buf, len);
+        lexer_insert(pctx->lexctx, lexeme_create(LEXTYPE_NUMERIC, &dsc));
+    }
+    string_free(str);
+    lexeme_free(lex);
+
     return 1;
     
 } /* parse_numeric_literal */
@@ -560,17 +595,21 @@ static int parse_DECIMAL (parse_ctx_t pctx) { return parse_numeric_literal(pctx,
  */
 static int
 parse_C (parse_ctx_t pctx) {
-    lexeme_t *lex = parser_next(pctx);
-    if (lex->type != LEXTYPE_STRING || lex->data.val_string.len != 1) {
+    lexeme_t *lex;
+    lextype_t lt = parser_next(pctx, &lex);
+    strdesc_t *str = lexeme_stringval(lex);
+    if (lt != LEXTYPE_STRING || str->len != 1) {
         /* XXX error condition */
-        lexeme_free(lex);
     } else {
-        char ch = *lex->data.val_string.ptr & 0x7f;
-        string_free(&lex->data.val_string);
-        lex->type = LEXTYPE_NUMERIC;
-        lex->data.val_signed = ch;
-        lexer_insert(pctx->lexctx, lex);
+        char buf[8];
+        int len = snprintf(buf, sizeof(buf), "%ld", (long)(*str->ptr & 0x7f));
+        strdesc_t dsc;
+        strdesc_init(&dsc, buf, len);
+        lexer_insert(pctx->lexctx, lexeme_create(LEXTYPE_NUMERIC, &dsc));
     }
+    string_free(str);
+    lexeme_free(lex);
+
     return 1;
 
 } /* parse_C */
@@ -588,13 +627,13 @@ static lexeme_t *
 string_params (parse_ctx_t pctx, int already_have_open_paren)
 {
     lexeme_t *lex;
-    char      stringresult[1024];
-    size_t    resultlen = 0;
+    lextype_t lt;
     int       ql_was_normal = 0;
+    strdesc_t *result = string_alloc(0,0);
 
     if (!already_have_open_paren) {
-        lex = parser_next(pctx);
-        if (lex->type != LEXTYPE_DELIM_LPAR) {
+        lt = parser_next(pctx, &lex);
+        if (lt != LEXTYPE_DELIM_LPAR) {
             // put back the lexeme before returning? right?
             lexer_insert(pctx->lexctx, lex);
             /* XXX error condition */
@@ -611,62 +650,38 @@ string_params (parse_ctx_t pctx, int already_have_open_paren)
     }
 
     while (1) {
-        lex = parser_next(pctx);
-        if (lex->type == LEXTYPE_DELIM_RPAR) {
+        lt = parser_next(pctx, &lex);
+        if (lt == LEXTYPE_DELIM_RPAR) {
             lexeme_free(lex);
             break;
         }
         // It's OK to have a null argument
-        if (lex->type == LEXTYPE_DELIM_COMMA) {
+        if (lt == LEXTYPE_DELIM_COMMA) {
             lexeme_free(lex);
             continue;
         }
-        if (lex->type == LEXTYPE_NUMERIC) {
-            size_t len;
-            len = snprintf(stringresult+resultlen,
-                           sizeof(stringresult)-resultlen,
-                           "%ld", lex->data.val_signed);
-            resultlen += len;
-            lexeme_free(lex);
-        } else if (lex->type == LEXTYPE_STRING ||
-                   lex->type == LEXTYPE_CSTRING) {
-            char *strp = lex->data.val_string.ptr;
-            size_t len = lex->data.val_string.len;
-            if (lex->type == LEXTYPE_CSTRING) {
-                len -= 1;
-                strp += 1;
-            }
-            if (len > sizeof(stringresult)-resultlen) {
-                len = sizeof(stringresult)-resultlen;
-            }
-            memcpy(stringresult+resultlen, strp, len);
-            resultlen += len;
-            lexeme_free(lex);
-        } else if (lex->type == LEXTYPE_IDENT) {
-            name_t *np = lex->data.ptr;
-            size_t len = np->namelen;
-            if (len > sizeof(stringresult)-resultlen) {
-                len = sizeof(stringresult)-resultlen;
-            }
-            memcpy(stringresult+resultlen, np->name, len);
-            resultlen += len;
-            lexeme_free(lex);
-        } else {
-            /* XXX error condition */
-            lexeme_free(lex);
-            if (ql_was_normal) {
-                pctx->quotelevel = QL_NORMAL;
-            }
-            parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
-            return &errlex;
+        switch (lt) {
+            case LEXTYPE_NUMERIC:
+            case LEXTYPE_CSTRING:
+            case LEXTYPE_STRING:
+            case LEXTYPE_IDENT:
+                result = string_append(result, &lex->text);
+                break;
+            default:
+                lexeme_free(lex);
+                if (ql_was_normal) {
+                    pctx->quotelevel = QL_NORMAL;
+                }
+                parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
+                return &errlex;
         }
         // OK, now we expect a comma or closing paren
-        lex = parser_next(pctx);
-        if (lex->type == LEXTYPE_DELIM_RPAR) {
+        lt = parser_next(pctx, &lex);
+        if (lt == LEXTYPE_DELIM_RPAR) {
             lexeme_free(lex);
             break;
         }
-        if (lex->type != LEXTYPE_DELIM_COMMA) {
+        if (lt != LEXTYPE_DELIM_COMMA) {
             /* XXX error condition */
             lexeme_free(lex);
             if (ql_was_normal) {
@@ -681,8 +696,10 @@ string_params (parse_ctx_t pctx, int already_have_open_paren)
     if (ql_was_normal) {
         pctx->quotelevel = QL_NORMAL;
     }
-    return lexeme_create(pctx->lexctx, pctx->curscope, LEXTYPE_STRING,
-                        stringresult, resultlen);
+    lex = lexeme_create(LEXTYPE_STRING, result);
+    string_free(result);
+    return lex;
+
 } /* string_params */
 
 /*
@@ -712,97 +729,101 @@ static int
 parse_EXACTSTRING (parse_ctx_t pctx)
 {
     lexeme_t *lex;
+    lextype_t lt;
     char fillchr = 0;
     size_t len = 0;
+    strdesc_t *str;
 
-    lex = parser_next(pctx);
-    if (lex->type != LEXTYPE_DELIM_LPAR) {
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_DELIM_LPAR) {
         /* XXX error condition */
         lexer_insert(pctx->lexctx, lex);
         return 1;
     }
     lexeme_free(lex);
     if (parse_Expression(pctx)) {
-        lex = lexer_next(pctx->lexctx, pctx->curscope, 0);
+        lt = parser_next(pctx, &lex);
     } else {
         /* XXX error condition */
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
-    if (lex->type != LEXTYPE_NUMERIC) {
+    if (lt != LEXTYPE_NUMERIC) {
         /* XXX error condition */
         lexeme_free(lex);
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
-    len = lex->data.val_signed;
+    len = lexeme_unsignedval(lex);
     lexeme_free(lex);
     if (len > 1024) {
         /* XXX error condition - string too long */
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
-    lex = parser_next(pctx);
-    if (lex->type != LEXTYPE_DELIM_COMMA) {
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_DELIM_COMMA) {
         lexeme_free(lex);
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
     if (parse_Expression(pctx)) {
-        lex = lexer_next(pctx->lexctx, pctx->curscope, 0);
+        lt = parser_next(pctx, &lex);
     } else {
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
-    if (lex->type != LEXTYPE_NUMERIC) {
+    if (lt != LEXTYPE_NUMERIC) {
         /* XXX error condition */
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
-    fillchr = lex->data.val_signed & 0xff;
-    if (lex->data.val_signed > 255) {
+    fillchr = lexeme_unsignedval(lex) & 0xff;
+    if (lexeme_signedval(lex) > 255) {
         /* XXX error condition - invalid char */
         lexeme_free(lex);
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
 
-    lex = parser_next(pctx);
-    if (lex->type == LEXTYPE_DELIM_RPAR) {
-        lex->type = LEXTYPE_STRING;
-        INITSTR(lex->data.val_string, "", 0);
-        lexer_insert(pctx->lexctx, lex);
+    lexeme_free(lex);
+    lt = parser_next(pctx, &lex);
+    lexeme_free(lex);
+    if (lt == LEXTYPE_DELIM_RPAR) {
+        lexer_insert(pctx->lexctx, lexeme_create(LEXTYPE_STRING, &nullstr));
         return 1;
-    } else if (lex->type != LEXTYPE_DELIM_COMMA) {
-        lexeme_free(lex);
+    } else if (lt != LEXTYPE_DELIM_COMMA) {
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
 
     lex = string_params(pctx, 1);
-    if (lex->type != LEXTYPE_STRING) {
+    if (lexeme_boundtype(lex) != LEXTYPE_STRING) {
         /* XXX error condition */
         lexeme_free(lex);
         return 1;
     }
-
-    if (lex->data.val_string.len < len) {
+    str = lexeme_stringval(lex);
+    if (str->len < len) {
         strdesc_t *filldsc;
         filldsc = string_alloc(0, len - lex->data.val_string.len);
         if (filldsc == 0) {
             /* XXX error condition */
         } else {
             memset(filldsc->ptr, fillchr, filldsc->len);
-            if (string_append(&lex->data.val_string, filldsc) == 0) {
+            str = string_append(str, filldsc);
+            if (str == 0) {
                 /* XXX error condition */
             }
             string_free(filldsc);
         }
-    } else if (lex->data.val_string.len > len) {
-        lex->data.val_string.len = len;
+    } else if (str->len > len) {
+        str->len = len;
     }
 
-    lexer_insert(pctx->lexctx, lex);
+    lexeme_free(lex);
+    lexer_insert(pctx->lexctx, lexeme_create(LEXTYPE_STRING, str));
+    string_free(str);
 
     return 1;
 
@@ -818,17 +839,21 @@ static int
 parse_CHARCOUNT (parse_ctx_t pctx)
 {
     lexeme_t *lex = string_params(pctx, 0);
+    strdesc_t *str, dsc;
+    char buf[8];
+    int len;
 
-    if (lex->type != LEXTYPE_STRING) {
+    if (lexeme_boundtype(lex) != LEXTYPE_STRING) {
         /* XXX error condition */
         lexer_insert(pctx->lexctx, lex);
-    } else {
-        size_t len = lex->data.val_string.len;
-        lex->type = LEXTYPE_NUMERIC;
-        string_free(&lex->data.val_string);
-        lex->data.val_signed = len;
-        lexer_insert(pctx->lexctx, lex);
+        return 1;
     }
+    str = lexeme_stringval(lex);
+    len = snprintf(buf, sizeof(buf), "%d", str->len);
+    strdesc_init(&dsc, buf, len);
+    lexer_insert(pctx->lexctx, lexeme_create(LEXTYPE_NUMERIC, &dsc));
+    lexeme_free(lex);
+    string_free(str);
     return 1;
 
 } /* parse_CHARCOUNT */
@@ -844,14 +869,16 @@ static int
 parse_CHAR (parse_ctx_t pctx)
 {
     lexeme_t *lex;
+    lextype_t lt;
     int skip_to_paren = 0;
     int hit_error = 0;
     strdesc_t chdsc;
     strdesc_t *result;
     char ch;
+    long val;
 
-    lex = parser_next(pctx);
-    if (lex->type != LEXTYPE_DELIM_LPAR) {
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_DELIM_LPAR) {
         /* XXX error condition */
         lexer_insert(pctx->lexctx, lex);
         return 1;
@@ -865,48 +892,45 @@ parse_CHAR (parse_ctx_t pctx)
             hit_error = 1;
             break;
         }
-        lex = lexer_next(pctx->lexctx, pctx->curscope, 0);
-        if (lex->type != LEXTYPE_NUMERIC) {
+        lt = parser_next(pctx, &lex);
+        if (lt != LEXTYPE_NUMERIC) {
             /* XXX error condition */
             skip_to_paren = 1;
             hit_error = 1;
             break;
         }
-        if (lex->data.val_signed > 255) {
+        val = lexeme_signedval(lex);
+        if (val > 255) {
             /* XXX error condition */
             skip_to_paren = 1;
             hit_error = 1;
             break;
         }
-        ch = lex->data.val_signed & 0xff;
+        ch = val & 0xff;
         result = string_append(result, &chdsc);
         lexeme_free(lex);
-        lex = parser_next(pctx);
-        if (lex == 0 || (lex->type != LEXTYPE_DELIM_COMMA
-                         && lex->type != LEXTYPE_DELIM_RPAR)) {
+        lt = parser_next(pctx, &lex);
+        lexeme_free(lex);
+        if (lt == LEXTYPE_DELIM_RPAR) {
+            break;
+        }
+        if (lt != LEXTYPE_DELIM_COMMA) {
             /* XXX error condition */
             skip_to_paren = 1;
             hit_error = 1;
-            break;
-        }
-        if (lex->type == LEXTYPE_DELIM_RPAR) {
-            lexeme_free(lex);
-            lex = 0;
             break;
         }
     }
 
     if (hit_error) {
-        string_free(result);
         if (skip_to_paren) {
             parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         }
     } else {
-        lex = lexeme_alloc(LEXTYPE_STRING);
-        memcpy(&lex->data.val_string, result, sizeof(strdesc_t));
-        lexer_insert(pctx->lexctx, lex);
+        lexer_insert(pctx->lexctx, lexeme_create(LEXTYPE_STRING, result));
     }
-    
+    string_free(result);
+
     return 1;
 
 } /* parse_CHAR */
@@ -922,27 +946,27 @@ static int
 parse_EXPLODE (parse_ctx_t pctx)
 {
     lexeme_t *lex = string_params(pctx, 0);
-    char *cp;
+    strdesc_t *str, dsc;
     size_t remain;
     lexeme_t *result = 0, *last = 0;
+    static strdesc_t comma = STRDEF(",");
 
-    if (lex->type != LEXTYPE_STRING) {
+    if (lexeme_boundtype(lex) != LEXTYPE_STRING) {
         /* XXX error condition */
         lexer_insert(pctx->lexctx, lex);
         return 1;
     }
 
-    if (lex->data.val_string.len == 0) {
-        result = lexeme_alloc(LEXTYPE_STRING);
-        INITSTR(result->data.val_string, "", 0);
-        lexer_insert(pctx->lexctx, result);
+    str = lexeme_stringval(lex);
+    if (str->len == 0) {
+        lexer_insert(pctx->lexctx, lexeme_create(LEXTYPE_STRING, str));
+        string_free(str);
+        lexeme_free(lex);
         return 1;
     }
-
-    for (cp = lex->data.val_string.ptr, remain = lex->data.val_string.len;
-         remain > 0; cp += 1, remain -= 1) {
-        lexeme_t *clex = lexeme_alloc(LEXTYPE_STRING);
-        string_from_chrs(&clex->data.val_string, cp, 1);
+    INITSTR(dsc, str->ptr, 1);
+    for (remain = str->len; remain > 0; dsc.ptr += 1, remain -= 1) {
+        lexeme_t *clex = lexeme_create(LEXTYPE_STRING, &dsc);
         if (result == 0) {
             result = last = clex;
         } else {
@@ -950,7 +974,7 @@ parse_EXPLODE (parse_ctx_t pctx)
             last = clex;
         }
         if (remain > 1) {
-            clex = lexeme_alloc(LEXTYPE_DELIM_COMMA);
+            lexeme_t *clex = lexeme_create(LEXTYPE_DELIM_COMMA, &comma);
             last->next = clex;
             last = clex;
         }
@@ -974,6 +998,7 @@ parse_lexeme_seq (parse_ctx_t pctx, lextype_t terms[],
                   int nterms, lexeme_t **chain, lextype_t *term)
 {
     lexeme_t *lex;
+    lextype_t lt;
     lexeme_t *result, *last;
     int i;
     int depth[3], status, hit_term;
@@ -985,29 +1010,29 @@ parse_lexeme_seq (parse_ctx_t pctx, lextype_t terms[],
     hit_term = 0;
 
     while (status) {
-        lex = parser_next(pctx);
-        if (lex->type == LEXTYPE_END) {
+        lt = parser_next(pctx, &lex);
+        if (lt == LEXTYPE_END) {
             lexer_insert(pctx->lexctx, lex);
             status = 0;
             break;
         }
         for (i = 0; i < nterms; i++) {
-            if (lex->type == terms[i] && depth[0] == 0 &&
+            if (lt == terms[i] && depth[0] == 0 &&
                 depth[1] == 0 && depth[2] == 0) {
                 hit_term = 1;
                 break;
             }
         }
         if (hit_term) {
-            if (term != 0) *term = lex->type;
+            if (term != 0) *term = lt;
             lexeme_free(lex);
             break;
         }
         for (i = 0; i < 3; i++) {
-            if (lex->type == opener[i]) {
+            if (lt == opener[i]) {
                 depth[i]+= 1;
                 break;
-            } else if (lex->type == closer[i]) {
+            } else if (lt == closer[i]) {
                 if (depth[i] > 0) {
                     depth[i] -= 1;
                 } else {
@@ -1041,13 +1066,14 @@ parse_REMOVE (parse_ctx_t pctx)
 {
     lexeme_t *lex;
     lexeme_t *result, *last;
+    lextype_t lt;
     int return_to_normal = 0;
     int i;
     int depth[3];
     lextype_t rpar[1] = {LEXTYPE_DELIM_RPAR};
 
-    lex = parser_next(pctx);
-    if (lex->type != LEXTYPE_DELIM_LPAR) {
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_DELIM_LPAR) {
         /* XXX error condition */
         lexer_insert(pctx->lexctx, lex);
         return 1;
@@ -1061,7 +1087,14 @@ parse_REMOVE (parse_ctx_t pctx)
     if (!parse_lexeme_seq(pctx, rpar, 1, &result, 0)) {
         /* XXX error condition */
         lexseq_free(result);
+        if (return_to_normal) {
+            pctx->quotelevel = QL_NORMAL;
+        }
         return 1;
+    }
+
+    if (return_to_normal) {
+        pctx->quotelevel = QL_NORMAL;
     }
 
     if (result == 0) {
@@ -1109,9 +1142,6 @@ parse_REMOVE (parse_ctx_t pctx)
     }
 
     lexer_insert(pctx->lexctx, result);
-    if (return_to_normal) {
-        pctx->quotelevel = QL_NORMAL;
-    }
 
     return 1;
 
@@ -1133,18 +1163,16 @@ do_name_qname (parse_ctx_t pctx, int doquote)
     lexeme_t *lex = string_params(pctx, 0);
     lexeme_t *result;
 
-    if (lex->type != LEXTYPE_STRING) {
+    if (lexeme_boundtype(lex) != LEXTYPE_STRING) {
         lexer_insert(pctx->lexctx, lex);
         return 1;
     }
-    result = lexeme_alloc(LEXTYPE_IDENT);
-    result->data.ptr = name_search(pctx->curscope, lex->data.val_string.ptr,
-                                   lex->data.val_string.len, 1);
+    result = lexeme_create(LEXTYPE_IDENT, lexeme_stringval(lex));
     lexer_insert(pctx->lexctx, result);
     lexeme_free(lex);
 
     if (doquote) {
-        name_t *np = result->data.ptr;
+        name_t *np = lexeme_nameval(lex, pctx->curscope);
         if (np->nameflags & NAME_M_NOQUOTE) {
             /* XXX error condition */
         } else {
@@ -1168,13 +1196,14 @@ static int
 parse_NULL (parse_ctx_t pctx)
 {
     lexeme_t *lex;
+    lextype_t lt;
     int allnull = 1;
     int return_to_normal = pctx->quotelevel == QL_NORMAL;
     lextype_t terms[2] = { LEXTYPE_DELIM_COMMA, LEXTYPE_DELIM_RPAR };
     lextype_t which;
 
-    lex = parser_next(pctx);
-    if (lex->type != LEXTYPE_DELIM_LPAR) {
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_DELIM_LPAR) {
         /* XXX error condition */
         lexer_insert(pctx->lexctx, lex);
         return 1;
@@ -1185,7 +1214,6 @@ parse_NULL (parse_ctx_t pctx)
         pctx->quotelevel = QL_NAME;
     }
 
-    lex = 0;
     while (1) {
         if (!parse_lexeme_seq(pctx, terms, 2, &lex, &which)) {
             /* XXX error condition */
@@ -1204,9 +1232,7 @@ parse_NULL (parse_ctx_t pctx)
         }
     }
 
-    lex = lexeme_alloc(LEXTYPE_NUMERIC);
-    lex->data.val_signed = allnull;
-    lexer_insert(pctx->lexctx, lex);
+    lexer_insert(pctx->lexctx, lexeme_create(LEXTYPE_NUMERIC, (allnull ? &one : &zero)));
 
     if (return_to_normal) {
         pctx->quotelevel = QL_NORMAL;
@@ -1226,12 +1252,13 @@ static int
 parse_IDENTICAL (parse_ctx_t pctx)
 {
     lexeme_t *lex;
+    lextype_t lt;
     int return_to_normal = pctx->quotelevel == QL_NORMAL;
     lexeme_t *chain[2];
     lextype_t terms[2] = { LEXTYPE_DELIM_COMMA, LEXTYPE_DELIM_RPAR };
 
-    lex = parser_next(pctx);
-    if (lex->type != LEXTYPE_DELIM_LPAR) {
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_DELIM_LPAR) {
         /* XXX error condition */
         lexer_insert(pctx->lexctx, lex);
         return 1;
@@ -1244,9 +1271,9 @@ parse_IDENTICAL (parse_ctx_t pctx)
     chain[0] = chain[1] = 0;
     if (parse_lexeme_seq(pctx, &terms[0], 1, &chain[0], 0) &&
         parse_lexeme_seq(pctx, &terms[1], 1, &chain[1], 0)) {
-        lex = lexeme_alloc(LEXTYPE_NUMERIC);
-        lex->data.val_signed = lexemes_match(chain[0], chain[1]);
-        lexer_insert(pctx->lexctx, lex);
+        lexer_insert(pctx->lexctx,
+                     lexeme_create(LEXTYPE_NUMERIC,
+                        (lexemes_match(chain[0], chain[1]) ? &one : &zero)));
     } else {
         /* XXX error condition */
     }
@@ -1271,37 +1298,52 @@ static int
 parse_ISSTRING (parse_ctx_t pctx)
 {
     lexeme_t *lex;
-    lextype_t terms[2] = { LEXTYPE_DELIM_COMMA, LEXTYPE_DELIM_RPAR };
-    lextype_t which;
+    lextype_t lt;
     int allstr = 1;
+    int hit_error = 0;
 
-    lex = parser_next(pctx);
-    if (lex->type != LEXTYPE_DELIM_LPAR) {
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_DELIM_LPAR) {
         /* XXX error condition */
         lexer_insert(pctx->lexctx, lex);
         return 1;
     }
     lexeme_free(lex);
-    lex = 0;
 
     while (1) {
-        if (!parse_lexeme_seq(pctx, terms, 2, &lex, &which)) {
+        if (!parse_Expression(pctx)) {
             /* XXX error condition */
-            lexseq_free(lex);
-            return 1;
+            hit_error = 1;
+            break;
         }
-        if (lex == 0 || (lex->type != LEXTYPE_STRING &&
-                         lex->type != LEXTYPE_CSTRING) || lex->next != 0) {
+        lt = parser_next(pctx, &lex);
+        lexeme_free(lex);
+        if (lt == LEXTYPE_END || lt == LEXTYPE_NONE) {
+            /* XXX error condition */
+            hit_error = 1;
+            break;
+        }
+        if (lt != LEXTYPE_STRING && lt != LEXTYPE_CSTRING) {
             allstr = 0;
         }
-        lexseq_free(lex);
-        if (which == LEXTYPE_DELIM_RPAR) {
+        if (lt != LEXTYPE_DELIM_RPAR && lt != LEXTYPE_DELIM_COMMA) {
+            lt = parser_next(pctx, &lex);
+            lexeme_free(lex);
+        }
+        if (lt == LEXTYPE_DELIM_RPAR) {
+            break;
+        }
+        if (lt != LEXTYPE_DELIM_COMMA) {
+            /* XXX error condition */
+            hit_error = 1;
             break;
         }
     }
-    lex = lexeme_alloc(LEXTYPE_NUMERIC);
-    lex->data.val_signed = allstr;
-    lexer_insert(pctx->lexctx, lex);
+
+    if (!hit_error) {
+        lexer_insert(pctx->lexctx, lexeme_create(LEXTYPE_NUMERIC,
+                                                 (allstr ? &one : &zero)));
+    }
 
     return 1;
 }
@@ -1334,6 +1376,7 @@ static int
 parse_IF (parse_ctx_t pctx)
 {
     lexeme_t *lex;
+    lextype_t lt;
     int testval;
 
     // Note the use of increment/decrement here -- this is to handle
@@ -1348,23 +1391,25 @@ parse_IF (parse_ctx_t pctx)
 
     // if the expression is compile-time constant,
     // we will have a numeric literal next in the stream.
-    lex = parser_next(pctx);
-    if (lex->type != LEXTYPE_NUMERIC) {
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_NUMERIC) {
         /* XXX error condition */
         lexeme_free(lex);
         pctx->no_eof -= 1;
         return 1;
     }
 
-    testval = lex->data.val_unsigned & 1;
+    testval = lexeme_signedval(lex) & 1;
+    lexeme_free(lex);
 
-    lex = parser_next(pctx);
-    if (lex->type != LEXTYPE_DELIM_PTHEN) {
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_DELIM_PTHEN) {
         /* XXX error condition */
-        lexeme_free(lex);
+        lexer_insert(pctx->lexctx, lex);
         pctx->no_eof -= 1;
         return 1;
     }
+    lexeme_free(lex);
 
     if (pctx->condstate[pctx->condlevel] != COND_NORMAL) {
         if (pctx->condlevel >= sizeof(pctx->condstate)/sizeof(pctx->condstate[0])) {
@@ -1435,17 +1480,18 @@ static int
 parse_REQUIRE (parse_ctx_t pctx)
 {
     lexeme_t *lex = string_params(pctx, 0);
+    strdesc_t *str;
 
-    if (lex->type != LEXTYPE_STRING) {
+    if (lexeme_boundtype(lex) != LEXTYPE_STRING) {
         /* XXX - error condition */
         lexeme_free(lex);
         return 1;
     }
-
-    if (!lexer_newfile(pctx->lexctx, lex->data.val_string.ptr,
-                       lex->data.val_string.len)) {
+    str = lexeme_stringval(lex);
+    if (!lexer_newfile(pctx->lexctx, str->ptr, str->len)) {
         /* XXX - error condition */
     }
     lexeme_free(lex);
+    string_free(str);
     return 1;
 }

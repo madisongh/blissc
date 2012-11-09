@@ -15,11 +15,12 @@
 #undef DOLEXTYPE
 #define DOLEXTYPES \
     DOLEXTYPE(NONE) \
+    DOLEXTYPE(END) \
+    DOLEXTYPE(TEXT) \
     DOLEXTYPE(IDENT) \
     DOLEXTYPE(NUMERIC) \
     DOLEXTYPE(STRING) \
     DOLEXTYPE(CSTRING) \
-    DOLEXTYPE(END) \
     DOLEXTYPE(OP_ADD) DOLEXTYPE(OP_SUB) DOLEXTYPE(OP_MUL) DOLEXTYPE(OP_DIV) \
     DOLEXTYPE(OP_MOD) \
     DOLEXTYPE(OP_ASSIGN) DOLEXTYPE(OP_FETCH) \
@@ -51,7 +52,7 @@ typedef enum {
 } lextype_t;
 #undef DOLEXTYPE
 
-#define LEXTYPE_MIN LEXTYPE_IDENT
+#define LEXTYPE_MIN LEXTYPE_END
 #define LEXTYPE_MAX (LEXTYPE_COUNT-1)
 
 static inline int __unused
@@ -70,6 +71,8 @@ lex_is_delimiter (lextype_t lt)
 struct lexeme_s {
     struct lexeme_s *next;
     lextype_t        type;
+    lextype_t        boundtype;
+    strdesc_t        text;
     data_t           data;
 };
 typedef struct lexeme_s lexeme_t;
@@ -78,5 +81,11 @@ lexeme_t *lexeme_alloc(lextype_t type);
 lexeme_t *lexeme_copy(lexeme_t *orig);
 void lexeme___free(lexeme_t *lex);
 const char *lextype_name(lextype_t lt);
+static inline __unused lextype_t lexeme_boundtype (lexeme_t *lex) {
+    return (lex->type == LEXTYPE_TEXT ? lex->boundtype : lex->type);
+}
+static inline __unused int lexeme_isbound (lexeme_t *lex) {
+    return lex->type != LEXTYPE_TEXT;
+}
 
 #endif
