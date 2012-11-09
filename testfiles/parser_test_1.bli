@@ -52,7 +52,7 @@ NEQ NEQU NEQA LEQ LEQU LEQA LSS LSSU LSSA
 %IF 3 %THEN %ASCII' --> True' %ELSE %ASCII' --> False' %FI
 %IF 1 %THEN %IF 2 %THEN 'inner true' %ELSE 'inner false' %FI %FI
 %IF 1 %ELSE 'what the heck' %FI 'recovered from error'
-%IF %FI 'another oddball, but recovered'
+%IF 0 %FI 'another oddball, but recovered'
 %THEN %ELSE %FI
 'before %REQUIRE'
 %REQUIRE('test_req.req')
