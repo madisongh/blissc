@@ -27,6 +27,7 @@ lexeme_t *lexeme_bind(scopectx_t scope, lexeme_t *lex);
 lexeme_t *lexeme_unbind(lexeme_t *lex);
 void lexeme_free(lexeme_t *lex);
 void lexseq_free(lexeme_t *seq);
+lexeme_t *lexseq_copy(lexeme_t *seq);
 int lexemes_match(lexeme_t *a, lexeme_t *b);
 name_t *lexeme_nameval(lexeme_t *lex, scopectx_t scope);
 strdesc_t *lexeme_stringval(lexeme_t *lex);

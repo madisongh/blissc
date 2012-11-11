@@ -184,14 +184,15 @@ lexer_fopen (const char *fname, size_t fnlen)
         } else {
             if (!scan_fopen(ctx->chain->sctx,
                            fname, fnlen)) {
-                scan_finish(ctx->chain->sctx);
                 lexchain_free(ctx->chain);
                 free(ctx);
                 ctx = 0;
             }
         }
     }
-    ctx->lastlt = LEXTYPE_NONE;
+    if (ctx != 0) {
+        ctx->lastlt = LEXTYPE_NONE;
+    }
     return ctx;
 
 } /* lexer_fopen */
@@ -410,6 +411,30 @@ lexseq_free (lexeme_t *seq)
         lexeme_free(lex);
     }
 } /* lexseq_free */
+
+/*
+ * lexseq_copy
+ *
+ * Returns a duplicate of a lexeme sequence.
+ */
+lexeme_t *
+lexseq_copy (lexeme_t *seq)
+{
+    lexeme_t *result, *last, *lex;
+    result = last = 0;
+    for (lex = seq; lex != 0; lex = lex->next)
+    {
+        if (result == 0) {
+            result = last = lexeme_copy(lex);
+        } else {
+            last->next = lexeme_copy(lex);
+            last = last->next;
+        }
+    }
+
+    return result;
+
+} /* lexseq_copy */
 
 /*
  * lexer_next

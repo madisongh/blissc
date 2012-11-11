@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include "utils.h"
 #include "strings.h"
 
@@ -256,3 +257,17 @@ strings_eql (strdesc_t *a, strdesc_t *b)
     }
     return memcmp(a->ptr, b->ptr, a->len) == 0;
 }
+
+strdesc_t *
+string_printf (strdesc_t *dst, const char *fmt, ...)
+{
+    va_list ap;
+    char buf[256];
+    int len;
+
+    va_start(ap, fmt);
+    len = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    return string_from_chrs(dst, buf, (len < 0 ? 0 : len));
+
+} /* string_printf */

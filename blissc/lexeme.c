@@ -60,6 +60,7 @@ lexeme___free (lexeme_t *lex)
 {
     if (lex != &errlex) {
         string_free(&lex->text);
+        memset(lex, 0xdd, sizeof(lexeme_t));
         lex->next = freepool;
         freepool = lex;
     }
@@ -68,7 +69,12 @@ lexeme___free (lexeme_t *lex)
 lexeme_t *
 lexeme_copy (lexeme_t *orig)
 {
-    lexeme_t *lex = lexeme_alloc(0);
+    lexeme_t *lex;
+
+    if (orig == 0) {
+        return 0;
+    }
+    lex = lexeme_alloc(0);
     if (lex == 0) {
         /* XXX error condition */
         return &errlex;

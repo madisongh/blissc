@@ -10,10 +10,15 @@
 #include "nametable.h"
 
 /*
- * Internal flag for distinguishing dynamically-allocated
- * name blocks from others
+ * Internal flags.
+ * ALLOCATED: for distinguishing dynamically-allocated
+ *            name blocks from others
+ * NODCLCHK:  for overriding the normal check for
+ *            redeclaration (used for macro parameter
+ *            tables)
  */
 #define NAME_M_ALLOCATED (1<<16)
+#define NAME_M_NODCLCHK  (1<<17)
 
 /*
  * Hash table size.
@@ -87,6 +92,28 @@ name_alloc (const char *name, size_t namelen)
 } /* name_alloc */
 
 /*
+ *
+ * name_copy
+ *
+ * Copy a name_t structure.
+ */
+static name_t *
+name_copy (name_t *src, scopectx_t dstscope)
+{
+    name_t *dst = name_alloc(src->name, src->namelen);
+
+    if (dst == 0) {
+        return dst;
+    }
+    dst->nametype = src->nametype;
+    dst->namescope = dstscope;
+    dst->nameflags = NAME_M_ALLOCATED | src->nameflags;
+    memcpy(&dst->namedata, &src->namedata, sizeof(dst->namedata));
+    return dst;
+    
+} /* name_copy */
+
+/*
  * name_free
  *
  * Frees a name_t structure, if it's owned by this module,
@@ -97,6 +124,7 @@ name_free (name_t *np)
 {
     if (np->namescope == 0 &&
         (np->nameflags & NAME_M_ALLOCATED)) {
+        memset(np, 0xcc, sizeof(name_t));
         np->next = freenames;
         freenames = np;
     }
@@ -125,6 +153,7 @@ scope_begin (scopectx_t parent)
     }
     scope = freescopes;
     freescopes = scope->parent;
+    memset(scope, 0, sizeof(struct scopectx_s));
     scope->parent = parent;
     return scope;
 
@@ -139,8 +168,12 @@ scopectx_t
 scope_end (scopectx_t scope)
 {
     int i;
-    scopectx_t parent = scope->parent;
+    scopectx_t parent;
 
+    if (scope == 0) {
+        return 0;
+    }
+    parent = scope->parent;
     if (scope->namecount > 0) {
         for (i = 0; i < HT_BUCKETS; i++) {
             struct name_s *name, *next;
@@ -158,6 +191,78 @@ scope_end (scopectx_t scope)
     return parent;
 
 } /* scope_end */
+
+/*
+ * scope_copy
+ *
+ * Duplicates a name table.  Sets the NODCLCHK flag
+ * on each of the copied names, which will allow them
+ * to be redeclared, exactly once, in the new table.
+ * This is for handling the instantation of macro
+ * actual parameters.
+ */
+scopectx_t
+scope_copy (scopectx_t src, scopectx_t newparent)
+{
+    int i;
+    scopectx_t dst = scope_begin(newparent);
+
+    if (dst == 0) {
+        return 0;
+    }
+    if (src->namecount > 0) {
+        for (i = 0; i < HT_BUCKETS; i++) {
+            name_t *sname, *dname, *dlast;
+            sname = src->hashtable[i];
+            dlast = 0;
+            while (sname != 0) {
+                dname = name_copy(sname, dst);
+                dname->nameflags |= NAME_M_NODCLCHK;
+                if (dlast == 0) {
+                    dst->hashtable[i] = dlast = dname;
+                } else {
+                    dlast->next = dname;
+                    dlast = dname;
+                }
+                sname = sname->next;
+            }
+        }
+    }
+    dst->namecount = src->namecount;
+    return dst;
+
+} /* scope_copy */
+
+/*
+ * scope_getparent
+ *
+ * Return the parent scope of a name table.
+ */
+scopectx_t
+scope_getparent (scopectx_t scope) {
+
+    if (scope == 0) {
+        return 0;
+    }
+    return scope->parent;
+
+} /* scope_getparent */
+
+/*
+ * scope_setparent
+ *
+ * Sets the parent scope for a name table.
+ */
+void
+scope_setparent (scopectx_t scope, scopectx_t newparent)
+{
+    if (scope == 0) {
+        return;
+    }
+
+    scope->parent = newparent;
+
+} /* scope_setparent */
 
 /*
  * name_search
@@ -232,7 +337,8 @@ name_declare (scopectx_t scope, const char *id, size_t len,
 
     np = name_search(scope, id, len, 0);
     if (np != 0) {
-        if (np->namescope == scope && np->nametype != NAMETYPE_UNDECLARED) {
+        if (np->namescope == scope && np->nametype != NAMETYPE_UNDECLARED &&
+            !(np->nameflags & NAME_M_NODCLCHK)) {
             /* XXX error condition - redeclaration */
             return 0;
         }
@@ -246,6 +352,7 @@ name_declare (scopectx_t scope, const char *id, size_t len,
     }
 
     np->nametype = type;
+    np->nameflags &= ~NAME_M_NODCLCHK;
     if (data != 0) {
         memcpy(&np->namedata, data, sizeof(data_t));
     }

@@ -111,6 +111,33 @@ test_scanner (int argc, const char *argv[])
     return 0;
 }
 
+static int linewidth = 0;
+static char *delim = "";
+
+void PRINTCR (void)
+{
+    printf("\n");
+    linewidth = 0;
+    delim = "";
+}
+
+void PRINTLEX(lexeme_t *lex)
+{
+    if (lex->text.len == 0) {
+        const char *cp = lextype_name(lexeme_boundtype(lex));//+sizeof("LEXTYPE");
+        printf("%s%s", delim, cp);
+        linewidth += strlen(cp);
+    } else {
+        printf("%s%-*.*s", delim, lex->text.len, lex->text.len, lex->text.ptr);
+        linewidth += lex->text.len;
+    }
+    if (linewidth > 60) {
+        delim = "\n";
+        linewidth = 0;
+    } else {
+        delim = " ";
+    }
+}
 /*
  * test_parser
  *
@@ -123,6 +150,8 @@ test_parser (int argc, const char *argv[])
     scopectx_t mainscope;
     lexeme_t *lex;
     lextype_t lt;
+    int linewidth;
+    char *delim;
 
     mainscope = scope_begin(0);
     pctx = parser_init(mainscope, 0);
@@ -131,10 +160,11 @@ test_parser (int argc, const char *argv[])
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
     }
+    linewidth = 0;
+    delim = "";
     for (lt = parser_next(pctx, &lex); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
          lt = parser_next(pctx, &lex)) {
-        printf("%s: %-*.*s\n", lextype_name(lt), lex->text.len, lex->text.len,
-               lex->text.ptr);
+        PRINTLEX(lex);
         lexeme_free(lex);
     }
     if (lt == LEXTYPE_NONE) {

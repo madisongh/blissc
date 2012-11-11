@@ -16,6 +16,7 @@
 #include "nametable.h"
 #include "strings.h"
 #include "expression.h"
+#include "macros.h"
 
 typedef enum {
     COND_NORMAL = 0,
@@ -35,8 +36,6 @@ struct parse_ctx_s {
     int             do_quote, do_unquote;
     int             declarations_ok;
 };
-
-static int macro_expand(parse_ctx_t pctx, name_t *macroname);
 
 #undef DODEF
 #define DODEFS \
@@ -213,7 +212,7 @@ parser_next (parse_ctx_t pctx, lexeme_t **lexp)
         do_bind = do_expand = 0;
         switch (pctx->quotelevel) {
             case QL_MACRO:
-                do_bind = pctx->do_unquote ||
+                do_bind = pctx->do_unquote || lt != LEXTYPE_IDENT ||
                     (lt == LEXTYPE_IDENT && np->nametype == NAMETYPE_MAC_PARAM);
                 do_expand = pctx->do_unquote == 2 || (lt == LEXTYPE_IDENT &&
                             (np->nametype == NAMETYPE_LEXFUNC &&
@@ -280,7 +279,7 @@ parser_next (parse_ctx_t pctx, lexeme_t **lexp)
             }
             if (np->nametype == NAMETYPE_MACRO) {
                 if (do_expand) {
-                    keepgoing = macro_expand(pctx, np);
+                    keepgoing = macro_expand(pctx, pctx->curscope, np);
                     lexeme_free(lex);
                     lex = &errlex;
                     continue;
@@ -369,17 +368,93 @@ void parser_incr_erroneof (parse_ctx_t pctx) { pctx->no_eof += 1; }
 void parser_decr_erroneof (parse_ctx_t pctx) { pctx->no_eof -= 1; }
 
 /*
+ * parse_lexeme_seq
+ *
+ * Parses an arbitrary sequence of lexemes until hitting
+ * a specified delimiter, returning the sequence as a chain.
+ * Handles parentheses, brackets, etc.
+ *
+ * Can take the input lexemes from a chain (seq), or from the
+ * parser.
+ */
+int
+parse_lexeme_seq (parse_ctx_t pctx, lexeme_t **seq, lextype_t terms[],
+                  int nterms, lexeme_t **chain, lextype_t *term)
+{
+    lexeme_t *lex;
+    lextype_t lt;
+    lexeme_t *result, *last;
+    int i;
+    int depth[3], status, hit_term, private_seq;
+
+    *chain = 0;
+    result = last = 0;
+    depth[0] = depth[1] = depth[2] = 0;
+    status = 1;
+    hit_term = 0;
+    private_seq = (seq != 0 && *seq != 0);
+
+    while (status) {
+        if (private_seq) {
+            if (*seq == 0) {
+                lt = LEXTYPE_NONE;
+                break;
+            }
+            lex = lexeme_copy(*seq);
+            *seq = (*seq)->next;
+            lt = lexeme_boundtype(lex);
+        } else {
+            lt = parser_next(pctx, &lex);
+        }
+        if (lt == LEXTYPE_END) {
+            lexer_insert(pctx->lexctx, lex);
+            status = 0;
+            break;
+        }
+        for (i = 0; i < nterms; i++) {
+            if (lt == terms[i] && depth[0] == 0 &&
+                depth[1] == 0 && depth[2] == 0) {
+                hit_term = 1;
+                break;
+            }
+        }
+        if (hit_term) {
+            if (term != 0) *term = lt;
+            lexeme_free(lex);
+            break;
+        }
+        for (i = 0; i < 3; i++) {
+            if (lt == opener[i]) {
+                depth[i]+= 1;
+                break;
+            } else if (lt == closer[i]) {
+                if (depth[i] > 0) {
+                    depth[i] -= 1;
+                } else {
+                    status = 0;
+                }
+                break;
+            }
+        }
+        if (result == 0) {
+            result = last = lex;
+        } else {
+            last->next = lex;
+            last = lex;
+        }
+    }
+
+    *chain = result;
+    return status;
+
+} /* parse_lexeme_seq */
+
+/*
  * --- end of public API ---
  *
  * All of the following routines are internal only.
  *
  */
-static int
-macro_expand (parse_ctx_t pctx, name_t *macroname)
-{
-    /* XXX - placeholder */
-    return 1;
-}
 
 /*
  * %QUOTE
@@ -986,73 +1061,6 @@ parse_EXPLODE (parse_ctx_t pctx)
 
 } /* parse_EXPLODE */
 
-/*
- * parse_lexeme_seq
- *
- * Parses an arbitrary sequence of lexemes until hitting
- * a specified delimiter, returning the sequence as a chain.
- * Handles parentheses, brackets, etc.
- */
-static int
-parse_lexeme_seq (parse_ctx_t pctx, lextype_t terms[],
-                  int nterms, lexeme_t **chain, lextype_t *term)
-{
-    lexeme_t *lex;
-    lextype_t lt;
-    lexeme_t *result, *last;
-    int i;
-    int depth[3], status, hit_term;
-
-    *chain = 0;
-    result = last = 0;
-    depth[0] = depth[1] = depth[2] = 0;
-    status = 1;
-    hit_term = 0;
-
-    while (status) {
-        lt = parser_next(pctx, &lex);
-        if (lt == LEXTYPE_END) {
-            lexer_insert(pctx->lexctx, lex);
-            status = 0;
-            break;
-        }
-        for (i = 0; i < nterms; i++) {
-            if (lt == terms[i] && depth[0] == 0 &&
-                depth[1] == 0 && depth[2] == 0) {
-                hit_term = 1;
-                break;
-            }
-        }
-        if (hit_term) {
-            if (term != 0) *term = lt;
-            lexeme_free(lex);
-            break;
-        }
-        for (i = 0; i < 3; i++) {
-            if (lt == opener[i]) {
-                depth[i]+= 1;
-                break;
-            } else if (lt == closer[i]) {
-                if (depth[i] > 0) {
-                    depth[i] -= 1;
-                } else {
-                    status = 0;
-                }
-                break;
-            }
-        }
-        if (result == 0) {
-            result = last = lex;
-        } else {
-            last->next = lex;
-            last = lex;
-        }
-    }
-
-    *chain = result;
-    return status;
-
-} /* parse_lexeme_seq */
 
 /*
  * %REMOVE(#p)
@@ -1084,7 +1092,7 @@ parse_REMOVE (parse_ctx_t pctx)
         pctx->quotelevel = QL_NAME;
     }
 
-    if (!parse_lexeme_seq(pctx, rpar, 1, &result, 0)) {
+    if (!parse_lexeme_seq(pctx, 0, rpar, 1, &result, 0)) {
         /* XXX error condition */
         lexseq_free(result);
         if (return_to_normal) {
@@ -1215,7 +1223,7 @@ parse_NULL (parse_ctx_t pctx)
     }
 
     while (1) {
-        if (!parse_lexeme_seq(pctx, terms, 2, &lex, &which)) {
+        if (!parse_lexeme_seq(pctx, 0, terms, 2, &lex, &which)) {
             /* XXX error condition */
             lexseq_free(lex);
             if (return_to_normal) {
@@ -1269,8 +1277,8 @@ parse_IDENTICAL (parse_ctx_t pctx)
     }
 
     chain[0] = chain[1] = 0;
-    if (parse_lexeme_seq(pctx, &terms[0], 1, &chain[0], 0) &&
-        parse_lexeme_seq(pctx, &terms[1], 1, &chain[1], 0)) {
+    if (parse_lexeme_seq(pctx, 0, &terms[0], 1, &chain[0], 0) &&
+        parse_lexeme_seq(pctx, 0, &terms[1], 1, &chain[1], 0)) {
         lexer_insert(pctx->lexctx,
                      lexeme_create(LEXTYPE_NUMERIC,
                         (lexemes_match(chain[0], chain[1]) ? &one : &zero)));

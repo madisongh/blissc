@@ -33,4 +33,7 @@ quotelevel_t parser_get_quotelevel(parse_ctx_t pctx);
 quotelevel_t parser_set_quotelevel(parse_ctx_t pctx, quotelevel_t ql);
 void parser_incr_erroneof(parse_ctx_t pctx);
 void parser_decr_erroneof(parse_ctx_t pctx);
+int parse_lexeme_seq(parse_ctx_t pctx, lexeme_t **seq,
+                     lextype_t terms[], int nterms,
+                     lexeme_t **chain, lextype_t *term);
 #endif
