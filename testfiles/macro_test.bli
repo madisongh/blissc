@@ -20,20 +20,20 @@ MACRO
     HOHOHO = (A,B)%,
     SPTEST1(x) = %ASCII'Length' %LENGTH %ASCII'Remaining' %REMAINING %,
     SPTEST2(x)[] = %ASCII'Count' %COUNT SPTEST2(%REMAINING)%,
-    SPTEST3(x)[y] = %STRING('X=',x) %STRING(',Y=',y) %ASCII'hello'%;
-!        %ASCII'X=' x %ASCII'Y=' y %;
-!        %ASCII'Count' %COUNT %ASCII'Remaining' %REMAINING %;
+    SPTEST3(x)[y] =
+        %ASCII'X=' x %ASCII'Y=' y
+        %ASCII'Count' %COUNT %ASCII'Remaining' %REMAINING %;
     
 %Ascii'...all macros defined...'
-!a b
-!copyvector(dest=eatme,source=biteme,n=10);
-!farfel(x,y)
-!cmacro(xxx,yyy,zzz)
-!cmnoparams
-!imacro((a,b),HOHOHO,(a,b))
-!SPTEST1(a)
-!SPTEST1((a+b),(c+d),(e-f))
-!SPTEST2(a)
-!SPTEST2(a,b,c,d,e,f,g)
-!SPTEST3(a,b)
+a b
+copyvector(dest=eatme,source=biteme,n=10);
+farfel(x,y)
+cmacro(xxx,yyy,zzz)
+cmnoparams
+imacro((a,b),HOHOHO,(a,b))
+SPTEST1(a)
+SPTEST1((a+b),(c+d),(e-f))
+SPTEST2(a)
+SPTEST2(a,b,c,d,e,f,g)
+SPTEST3(a,b)
 SPTEST3('a','b','c','d','e','f','g')

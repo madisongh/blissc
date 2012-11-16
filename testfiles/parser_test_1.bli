@@ -10,15 +10,18 @@
 %C''''
 %DECIMAL'1234'
 %DECIMAL'-37'
-2345
-+789
--654
+2345;
++789;
+-654;
 %O'-177'
 %B'1101'
 %ASCII'--- %CHARCOUNT and %CHAR ---'
 %CHARCOUNT('ABCD')
 %CHARCOUNT(%STRING('hello'),%ASCIZ' there')
 %CHAR(65)
+
+
+%CHAR(%x'0d', %x'0a')
 %CHAR(65, 66, 67, %x'0d', %x'0a', 68, 69, 70)
 %ASCII'--- %REMOVE ---'
 %REMOVE((A,B,C))

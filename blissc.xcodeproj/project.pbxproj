@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7A2DD25B165009F1002CD078 /* declarations.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A2DD25A165009F1002CD078 /* declarations.c */; };
 		7A7FD5151636C29C00B2D7FC /* lexer.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A7FD5141636C29C00B2D7FC /* lexer.c */; };
 		7A95BCEC1641CC2F002F851E /* strings.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A95BCEB1641CC2F002F851E /* strings.c */; };
 		7A995E0D163C2286003BEAC7 /* lexeme.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A995E0C163C2286003BEAC7 /* lexeme.c */; };
@@ -34,6 +35,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		7A2DD25A165009F1002CD078 /* declarations.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = declarations.c; sourceTree = "<group>"; };
 		7A548D681646E9E500A2A20F /* test_req.req */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_req.req; path = testfiles/test_req.req; sourceTree = SOURCE_ROOT; };
 		7A7FD5141636C29C00B2D7FC /* lexer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = lexer.c; sourceTree = "<group>"; };
 		7A7FD5171636C2A700B2D7FC /* lexer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lexer.h; sourceTree = "<group>"; };
@@ -92,6 +94,7 @@
 			isa = PBXGroup;
 			children = (
 				7A9D4C9F1635A88F0013AE09 /* blissc.1 */,
+				7A2DD25A165009F1002CD078 /* declarations.c */,
 				7AB5ED811642A3AB0063EC94 /* expression.c */,
 				7AB5ED841642A3B80063EC94 /* expression.h */,
 				7A9D4CA61635A93A0013AE09 /* fileio.c */,
@@ -100,6 +103,7 @@
 				7A7FD5181636C65200B2D7FC /* lexeme.h */,
 				7A7FD5141636C29C00B2D7FC /* lexer.c */,
 				7A7FD5171636C2A700B2D7FC /* lexer.h */,
+				7ABF5680164DA2B10053480F /* macro_test.bli */,
 				7AF573D8164936EE005C965F /* macros.c */,
 				7ADC81891649CD660056600E /* macros.h */,
 				7A9D4C9D1635A88F0013AE09 /* main.c */,
@@ -108,7 +112,6 @@
 				7A9E1C12163DA445009ACBD0 /* parser.c */,
 				7A9E1C14163DA45A009ACBD0 /* parser.h */,
 				7A8735071642CA6F006BFC30 /* parser_test_1.bli */,
-				7ABF5680164DA2B10053480F /* macro_test.bli */,
 				7A9D4CAA1635CEA30013AE09 /* scanner.c */,
 				7A9D4CA91635CE970013AE09 /* scanner.h */,
 				7A95BCEB1641CC2F002F851E /* strings.c */,
@@ -180,6 +183,7 @@
 				7A95BCEC1641CC2F002F851E /* strings.c in Sources */,
 				7AB5ED821642A3AB0063EC94 /* expression.c in Sources */,
 				7AF573D9164936EE005C965F /* macros.c in Sources */,
+				7A2DD25B165009F1002CD078 /* declarations.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
