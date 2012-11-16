@@ -8,6 +8,8 @@
 
 #include <stdlib.h>
 #include "nametable.h"
+#include "strings.h"
+#include "lexeme.h"
 
 /*
  * Internal flags.
@@ -85,7 +87,7 @@ name_alloc (const char *name, size_t namelen)
     np->name[namelen] = '\0';
     np->nameflags = NAME_M_ALLOCATED;
     np->namelen = namelen;
-    np->nametype = NAMETYPE_UNDECLARED;
+    np->nametype = LEXTYPE_NAME;
     memset(&np->namedata, 0, sizeof(np->namedata));
     return np;
 
@@ -285,7 +287,7 @@ name_search (scopectx_t curscope, const char *id, size_t len, int do_create)
             i = hash(id, len);
             for (np = scope->hashtable[i]; np != 0;
                  np = np->next) {
-                if (np->nametype != NAMETYPE_UNDECLARED &&
+                if (np->nametype != LEXTYPE_NAME &&
                     len == np->namelen &&
                     memcmp(id, np->name, len) == 0) {
                     return np;
@@ -327,7 +329,7 @@ name_insert (scopectx_t scope, name_t *np)
  */
 name_t *
 name_declare (scopectx_t scope, const char *id, size_t len,
-              nametype_t type, data_t *data)
+              lextype_t type, data_t *data)
 {
     name_t *np;
 
@@ -337,7 +339,7 @@ name_declare (scopectx_t scope, const char *id, size_t len,
 
     np = name_search(scope, id, len, 0);
     if (np != 0) {
-        if (np->namescope == scope && np->nametype != NAMETYPE_UNDECLARED &&
+        if (np->namescope == scope && np->nametype != LEXTYPE_NAME &&
             !(np->nameflags & NAME_M_NODCLCHK)) {
             /* XXX error condition - redeclaration */
             return 0;

@@ -12,6 +12,8 @@
 #include <string.h>
 #include "utils.h"
 
+#define STRING_MAXLEN 1024
+
 int stringpool_init(void);
 strdesc_t *string_from_chrs(strdesc_t *dest,
                             const char *cp, size_t len);

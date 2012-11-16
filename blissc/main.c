@@ -114,6 +114,8 @@ test_scanner (int argc, const char *argv[])
 static int linewidth = 0;
 static char *delim = "";
 
+void macro_test(parse_ctx_t pctx, lextype_t lt);
+
 void PRINTCR (void)
 {
     printf("\n");
@@ -165,6 +167,9 @@ test_parser (int argc, const char *argv[])
     for (lt = parser_next(pctx, &lex); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
          lt = parser_next(pctx, &lex)) {
         PRINTLEX(lex);
+        if (lt == LEXTYPE_DCL_MACRO || lt == LEXTYPE_DCL_KEYWORDMACRO) {
+            macro_test(pctx, lt);
+        }
         lexeme_free(lex);
     }
     if (lt == LEXTYPE_NONE) {

@@ -21,7 +21,7 @@
 
 #define SMALLSZ     16
 #define MEDSZ       64
-#define LRGSZ       1024
+#define LRGSZ       STRING_MAXLEN
 
 #define ALLOCOUNT   256
 

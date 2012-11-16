@@ -38,7 +38,7 @@
  */
 struct lexchain_s {
     struct lexchain_s   *nextchain;
-    lexeme_t            *head;
+    lexseq_t             seq;
     scanctx_t            sctx;
 };
 typedef struct lexchain_s lexchain_t;
@@ -56,7 +56,7 @@ typedef struct lexchain_s lexchain_t;
 struct lexer_ctx_s {
     lexchain_t   *chain;
     int          atend;
-    lextype_t    lastlt;
+    int          signok;
 };
 
 /*
@@ -76,7 +76,7 @@ static lextype_t delimtypes[] = {
     LEXTYPE_DELIM_LPAR, LEXTYPE_DELIM_RPAR,
     LEXTYPE_DELIM_LBRACK, LEXTYPE_DELIM_RBRACK,
     LEXTYPE_DELIM_LANGLE, LEXTYPE_DELIM_RANGLE,
-    LEXTYPE_DELIM_PERCENT
+    LEXTYPE_LXF_DELIM_PERCENT
 };
 
 /*
@@ -87,7 +87,8 @@ static lexeme_t errlex = { 0, LEXTYPE_NONE, LEXTYPE_NONE };
 static lexeme_t endlex = { 0, LEXTYPE_END, LEXTYPE_END };
 
 /*
- * Operators that are keywords.
+ * Operators that are keywords.  These are common enough to put down
+ * at this level. XXX - revisit
  */
 #define DODEFS \
 DODEF(AND) DODEF(EQV) DODEF(OR) \
@@ -98,7 +99,7 @@ DODEF(GTR) DODEF(GTRU) DODEF(GTRA) \
 DODEF(LSS) DODEF(LSSU) DODEF(LSSA) \
 DODEF(LEQ) DODEF(LEQU) DODEF(LEQA) \
 DODEF(NEQ) DODEF(NEQU) DODEF(NEQA)
-#define DODEF(name_) OPRDEF(#name_, LEXTYPE_OP_##name_),
+#define DODEF(name_) NAMEDEF(#name_, LEXTYPE_OP_##name_, 0, NAME_M_RESERVED),
 
 static name_t operator_names[] = {
     DODEFS
@@ -122,6 +123,7 @@ lexchain_alloc (void)
     lexchain_t *chain = malloc(sizeof(struct lexchain_s));
     if (chain != 0) {
         memset(chain, 0, sizeof(struct lexchain_s));
+        lexseq_init(&chain->seq);
     }
     return chain;
 
@@ -137,9 +139,7 @@ static void
 lexchain_free (lexchain_t *chain)
 {
     if (chain != 0) {
-        if (chain->head != 0) {
-            lexseq_free(chain->head);
-        }
+        lexseq_free(&chain->seq);
         if (chain->sctx != 0) {
             scan_finish(chain->sctx);
         }
@@ -161,6 +161,7 @@ lexer_init (scopectx_t kwdscope)
     for (i = 0; i < sizeof(operator_names)/sizeof(operator_names[0]); i++) {
         name_insert(kwdscope, &operator_names[i]);
     }
+    
 } /* lexer_init */
 
 /*
@@ -191,7 +192,7 @@ lexer_fopen (const char *fname, size_t fnlen)
         }
     }
     if (ctx != 0) {
-        ctx->lastlt = LEXTYPE_NONE;
+        ctx->signok = 1;
     }
     return ctx;
 
@@ -215,199 +216,16 @@ lexer_finish (lexer_ctx_t ctx)
 } /* lexer_finish */
 
 /*
- * lexeme_create
- *
- * Public API for creating a lexeme from some value, used
- * by the lexical analyzer when expanding lexical functions
- * and macros.
- */
-lexeme_t *
-lexeme_create (lextype_t type, strdesc_t *tok)
-{
-    lexeme_t *lex;
-
-    if (type < LEXTYPE_MIN || type > LEXTYPE_MAX) {
-        /* XXX error condition */
-        return &errlex;
-    }
-    lex  = lexeme_alloc(type);
-    if (lex->type == LEXTYPE_NONE) {
-        return &errlex;
-    }
-    lex->type = LEXTYPE_TEXT;
-    lex->boundtype = type;
-    string_copy(&lex->text, tok);
-
-    return lex;
-
-} /* lexeme_create */
-
-lexeme_t *
-lexeme_bind (scopectx_t scope, lexeme_t *lex)
-{
-    name_t *np;
-    char *cp;
-    long val;
-    size_t len;
-
-    if (lex->type != LEXTYPE_TEXT) {
-        return lex;
-    }
-
-    if (lex->boundtype < LEXTYPE_MIN || lex->boundtype > LEXTYPE_MAX) {
-        /* XXX error condition */
-        return &errlex;
-    }
-    switch (lex->boundtype) {
-        case LEXTYPE_NUMERIC:
-            errno = 0;
-            val = strtol(lex->text.ptr, &cp, 10);
-            if (errno != 0) {
-                /* XXX error condition */
-            }
-            lex->data.val_signed = val;
-            break;
-        case LEXTYPE_CSTRING:
-            len = lex->text.len;
-            if (len > 255) {
-                len = 255;
-            }
-            if (ascic_string_from_chrs(&lex->data.val_string, lex->text.ptr, len) == 0) {
-                /* XXX error condition */
-            }
-            break;
-        case LEXTYPE_IDENT:
-            np = name_search(scope, lex->text.ptr, lex->text.len, 1);
-            if (np->nametype == NAMETYPE_KEYWORD &&
-                (np->nameflags & NAME_M_OPERATOR)) {
-                lex->boundtype = (lextype_t) np->namedata.val_signed;
-            } else {
-                lex->data.ptr = np;
-            }
-            break;
-        case LEXTYPE_STRING:
-            break;
-        default:
-            break;
-    }
-
-    lex->type = lex->boundtype;
-    return lex;
-
-} /* lexeme_bind */
-
-lexeme_t *
-lexeme_unbind (lexeme_t *lex)
-{
-    if (lex->type == LEXTYPE_TEXT) {
-        return lex;
-    }
-    if (lex->boundtype == LEXTYPE_CSTRING) {
-        string_free(&lex->data.val_string);
-    }
-    memset(&lex->data, 0, sizeof(lex->data));
-    lex->type = LEXTYPE_TEXT;
-    return lex;
-}
-
-name_t *
-lexeme_nameval (lexeme_t *lex, scopectx_t scope)
-{
-    if (lex->boundtype != LEXTYPE_IDENT) {
-        return 0;
-    }
-    if (lex->type == LEXTYPE_IDENT) {
-        return lex->data.ptr;
-    }
-    return name_search(scope, lex->text.ptr, lex->text.len, 1);
-}
-
-strdesc_t *
-lexeme_stringval (lexeme_t *lex)
-{
-
-    if (lex->boundtype == LEXTYPE_STRING) {
-        return &lex->text;
-    }
-    if (lex->boundtype == LEXTYPE_CSTRING) {
-        if (lex->type != LEXTYPE_CSTRING) {
-            return ascic_string_from_chrs(0, lex->text.ptr,
-                                          (lex->text.len > 255 ? 255 : lex->text.len));
-        }
-        return string_copy(0, &lex->data.val_string);
-    }
-    return 0;
-}
-
-long
-lexeme_signedval (lexeme_t *lex)
-{
-    char *cp;
-    if (lex->boundtype != LEXTYPE_NUMERIC) {
-        return 0;
-    }
-    if (lex->type == LEXTYPE_NUMERIC) {
-        return lex->data.val_signed;
-    }
-    return strtol(lex->text.ptr, &cp, 10);
-}
-
-unsigned long
-lexeme_unsignedval (lexeme_t *lex)
-{
-    char *cp;
-    if (lex->boundtype != LEXTYPE_NUMERIC) {
-        return 0;
-    }
-    if (lex->type == LEXTYPE_NUMERIC) {
-        return lex->data.val_unsigned;
-    }
-    return strtoul(lex->text.ptr, &cp, 10);
-}
-
-/*
- * lexeme_free
- *
- * Frees a lexeme.  For lexeme types that have
- * dynamically allocated data, frees that data
- * as well.
- *
- * NOTE that the 'next' field is NOT checked here;
- * it is assumed that the caller has unlinked the
- * lexeme from any linked lists before calling.
- */
-void
-lexeme_free (lexeme_t *lex)
-{
-    if (lex == &errlex || lex == &endlex) {
-        return;
-    }
-    switch (lex->type) {
-        case LEXTYPE_STRING:
-        case LEXTYPE_CSTRING:
-            break;
-        case LEXTYPE_IDENT:
-            name_free(lex->data.ptr);
-            break;
-        default:
-            break;
-    }
-    lexeme___free(lex);
-
-} /* lexeme_free */
-
-/*
  * lexseq_free
  *
  * Frees the linked list of lexemes (the 'sequence')
  * ponted to by 'seq'.
  */
 void
-lexseq_free (lexeme_t *seq)
+lexseq_free (lexseq_t *seq)
 {
-    lexeme_t *lex, *next;
-    for (lex = seq; lex != 0; lex = next) {
-        next = lex->next;
+    lexeme_t *lex;
+    for (lex = lexseq_remhead(seq); lex != 0; lex = lexseq_remhead(seq)) {
         lexeme_free(lex);
     }
 } /* lexseq_free */
@@ -417,22 +235,16 @@ lexseq_free (lexeme_t *seq)
  *
  * Returns a duplicate of a lexeme sequence.
  */
-lexeme_t *
-lexseq_copy (lexeme_t *seq)
+int
+lexseq_copy (lexseq_t *dst, lexseq_t *src)
 {
-    lexeme_t *result, *last, *lex;
-    result = last = 0;
-    for (lex = seq; lex != 0; lex = lex->next)
-    {
-        if (result == 0) {
-            result = last = lexeme_copy(lex);
-        } else {
-            last->next = lexeme_copy(lex);
-            last = last->next;
-        }
+    lexeme_t *lex;
+
+    for (lex = lexseq_head(src); lex != 0; lex = lexeme_next(lex)) {
+        lexseq_instail(dst, lexeme_copy(lex));
     }
 
-    return result;
+    return 1;
 
 } /* lexseq_copy */
 
@@ -446,8 +258,8 @@ lexseq_copy (lexeme_t *seq)
  * conditional or a macro definition; they must be wholly contained
  * within a single file.
  */
-lexeme_t *
-lexer_next (lexer_ctx_t ctx, scopectx_t scope, int erroneof)
+static lexeme_t *
+lexer___next (lexer_ctx_t ctx, int erroneof, int peek)
 {
     lexeme_t *lex = 0;
     lextype_t lextype;
@@ -464,29 +276,17 @@ lexer_next (lexer_ctx_t ctx, scopectx_t scope, int erroneof)
 
     while (ctx->chain != 0) {
         lexchain_t *chain = ctx->chain;
-        if (chain->head != 0) {
-            lex = chain->head;
-            chain->head = lex->next;
-            lex->next = 0;
+        lex = (peek ? lexseq_head(&chain->seq) :lexseq_remhead(&chain->seq));
+        if (lex != 0) {
             break;
         }
         if (chain->sctx != 0) {
             scantype_t type;
-            unsigned int sflags = (erroneof ? SCAN_M_ERRONEOF : 0);
-            // Treat +/- as sign for decimal literal, except
-            // when we've just seen a name, a closing delimiter, a +/-, or
-            // a numeric literal.
-            switch (ctx->lastlt) {
-                case LEXTYPE_NUMERIC:
-                case LEXTYPE_IDENT:
-                case LEXTYPE_DELIM_RANGLE:
-                case LEXTYPE_DELIM_RBRACK:
-                case LEXTYPE_DELIM_RPAR:
-                    break;
-                default:
-                    sflags |= SCAN_M_SIGNOK;
-                    break;
-            }
+            unsigned int sflags;
+
+            sflags = (erroneof ? SCAN_M_ERRONEOF : 0) |
+                     (ctx->signok ? SCAN_M_SIGNOK : 0);
+
             type = scan_getnext(chain->sctx, sflags, &tok);
             if (!scan_ok(type)) {
                 /* XXX error condition */
@@ -500,7 +300,7 @@ lexer_next (lexer_ctx_t ctx, scopectx_t scope, int erroneof)
                 ctx->chain = chain->nextchain;
                 lexchain_free(chain);
                 if (ctx->chain == 0) {
-                    lex = lexeme_alloc(LEXTYPE_END);
+                    lex = lexeme_alloc(LEXTYPE_END, 0, 0);
                     ctx->atend = 1;
                     string_free(tok);
                     break;
@@ -511,63 +311,78 @@ lexer_next (lexer_ctx_t ctx, scopectx_t scope, int erroneof)
             switch (type) {
                 case SCANTYPE_DECLITERAL:
                     lextype = LEXTYPE_NUMERIC;
+                    ctx->signok = 0;
                     break;
                 case SCANTYPE_QUOTEDSTRING:
                     lextype = LEXTYPE_STRING;
+                    ctx->signok = 1;
                     break;
                 case SCANTYPE_OPERATOR:
                     cp = strchr(operators, *tok->ptr);
                     lextype = opertypes[cp-operators];
+                    ctx->signok = 1;
                     break;
                 case SCANTYPE_PUNCTUATION:
                     cp = strchr(delimiters, *tok->ptr);
                     lextype = delimtypes[cp-delimiters];
+                    ctx->signok = (strchr(")>]", *tok->ptr) != 0);
                     break;
                 case SCANTYPE_IDENTIFIER:
-                    lextype = LEXTYPE_IDENT;
+                    lextype = LEXTYPE_NAME;
+                    ctx->signok = 0;
                     break;
                 default:
                     break;
             }
-            lex = (lextype == 0 ? &errlex : lexeme_create(lextype, tok));
+            if (lextype == 0) {
+                lex = &errlex;
+            } else {
+                lex = lexeme_create(lextype, tok);
+                if (peek) {
+                    lexseq_inshead(&chain->seq, lex);
+                }
+            }
             string_free(tok);
             break;
         } else {
             ctx->chain = chain->nextchain;
             lexchain_free(chain);
             if (ctx->chain == 0) {
-                lex = lexeme_alloc(LEXTYPE_END);
+                lex = lexeme_alloc(LEXTYPE_END, 0, 0);
                 ctx->atend = 1;
                 break;
             }
         }
     }
-    ctx->lastlt = lexeme_boundtype(lex);
     return lex;
 
-} /* lexer_next */
+} /* lexer___next */
+
+lexeme_t *lexer_next (lexer_ctx_t ctx, int erroneof) {
+    return lexer___next(ctx, erroneof, 0);
+}
+
+lexeme_t *lexer_peek (lexer_ctx_t ctx, int erroneof) {
+    return lexer___next(ctx, erroneof, 1);
+}
 
 /*
  * lexer_insert
  *
- * Insert a chain of lexemes at the front of the
- * current stream.  If the current stream has no
- * chain (file context only), just stick it there.
- * Otherwise, allocate a new chain and push it on
- * top, so we don't have to walk the list of lexemes.
+ * Insert a single lexeme to the front of the stream.
  */
 void
-lexer_insert (lexer_ctx_t ctx, lexeme_t *lexchain)
+lexer_insert (lexer_ctx_t ctx, lexeme_t *lex)
 {
     lexchain_t *chain = ctx->chain;
 
     // The static ones should never be inserted, and
     // just ignore nulls.
-    if (lexchain == &errlex || lexchain == &endlex || lexchain == 0) {
+    if (lex == &errlex || lex == &endlex || lex == 0) {
         return;
     }
     
-    if (chain == 0 || chain->head != 0) {
+    if (chain == 0) {
         chain = lexchain_alloc();
         if (chain == 0) {
             /* XXX error condition */
@@ -576,9 +391,30 @@ lexer_insert (lexer_ctx_t ctx, lexeme_t *lexchain)
         chain->nextchain = ctx->chain;
         ctx->chain = chain;
     }
-    chain->head = lexchain;
+    lexseq_inshead(&chain->seq, lex);
 
 } /* lexer_insert */
+
+void
+lexer_insert_seq (lexer_ctx_t ctx, lexseq_t *seq)
+{
+    lexchain_t *chain = ctx->chain;
+
+
+    if (seq == 0 || lexseq_length(seq) == 0) {
+        return;
+    }
+    if (chain == 0) {
+        chain = lexchain_alloc();
+        if (chain == 0) {
+            /* XXX error condition */
+            return;
+        }
+        chain->nextchain = ctx->chain;
+        ctx->chain = chain;
+    }
+    lexseq_prepend(&chain->seq, seq);
+}
 
 /*
  * lexer_newfile
@@ -619,16 +455,17 @@ lexer_newfile (lexer_ctx_t ctx, const char *fname, size_t fnlen)
  * is data, that data matches.
  */
 int
-lexemes_match (lexeme_t *a, lexeme_t *b)
-{
-    while (a != 0 && b != 0) {
-        if (!strings_eql(&a->text, &b->text)) {
+lexemes_match (lexseq_t *a, lexseq_t *b)
+{   lexeme_t *la, *lb;
+    if (lexseq_length(a) != lexseq_length(b)) {
+        return 0;
+    }
+    for (la = lexseq_head(a), lb = lexseq_head(b); la != 0; la = la->next, lb = lb->next) {
+        if (!strings_eql(&la->text, &lb->text)) {
             return 0;
         }
-        a = a->next;
-        b = b->next;
     }
 
-    return (a == 0 && b == 0);
+    return 1;
 
 } /* lexemes_match */

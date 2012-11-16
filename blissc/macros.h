@@ -12,6 +12,5 @@
 #include "nametable.h"
 
 void macros_init(scopectx_t kwdscope);
-int macro_expand(parse_ctx_t pctx, scopectx_t curscope, name_t *macroname);
 
 #endif
