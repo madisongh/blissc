@@ -51,10 +51,12 @@ typedef int (*lexfunc_t)(parse_ctx_t pctx, lextype_t curlt);
     DODEF(NULL, parse_NULL) DODEF(IDENTICAL, parse_IDENTICAL) \
     DODEF(ISSTRING, parse_ISSTRING) DODEF(REQUIRE, parse_REQUIRE) \
     DODEF(QUOTE, parse_QUOTE) \
-    DODEF(UNQUOTE, parse_unquote_expand) DODEF(EXPAND, parse_unquote_expand) \
-    DODEF(IF, parse_IF) DODEF(ELSE, parse_ELSE) DODEF(FI, parse_FI)
+    DODEF(UNQUOTE, parse_unquote_expand) \
+    DODEF(EXPAND, parse_unquote_expand) \
+    DODEF(IF, parse_IF) DODEF(ELSE, parse_ELSE) DODEF(FI, parse_FI) \
+    DODEF(ASSIGN, parse_ASSIGN)
 
-#define DODEF(name_, rtn_) static int rtn_ (parse_ctx_t pctx, lextype_t curlt);
+#define DODEF(name_, rtn_) static int rtn_ (parse_ctx_t, lextype_t);
 DODEFS
 #undef DODEF
 #define DODEF(name_, rtn_) [LEXTYPE_LXF_##name_-LEXTYPE_LXF_MIN] = rtn_,
@@ -1502,5 +1504,63 @@ parse_REQUIRE (parse_ctx_t pctx, lextype_t curlt)
     }
     lexeme_free(lex);
     string_free(str);
+    return 1;
+
+} /* parse_REQUIRE */
+
+/*
+ * %ASSIGN(#name, n)
+ *
+ * Assign a value to a compiletime constant.
+ */
+static int
+parse_ASSIGN (parse_ctx_t pctx, lextype_t curlt)
+{
+    quotelevel_t oldql;
+    lextype_t lt;
+    name_t *np;
+    lexeme_t *lex;
+
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_DELIM_LPAR) {
+        /* XXX error condition */
+        lexeme_free(lex);
+        return 1;
+    }
+    oldql = pctx->quotelevel;
+    pctx->quotelevel = QL_NAME;
+    lt = parser_next(pctx, &lex);
+    if (lexeme_boundtype(lex) != LEXTYPE_NAME_COMPILETIME) {
+        /* XXX error condition */
+        lexeme_free(lex);
+        parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
+        return 1;
+    }
+    np = lexeme_ctx_get(lex);
+    lexeme_free(lex);
+    pctx->quotelevel = oldql;
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_DELIM_COMMA) {
+        /* XXX error condition */
+        lexeme_free(lex);
+        parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
+        return 1;
+    }
+    if (!parse_Expression(pctx)) {
+        /* XXX error condition */
+    } else {
+        lt = parser_next(pctx, &lex);
+        if (lt != LEXTYPE_NUMERIC) {
+            /* XXX error condition */
+        } else {
+            *(long *)name_data(np) = lexeme_signedval(lex);
+        }
+        lexeme_free(lex);
+    }
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_DELIM_RPAR) {
+        /* XXX error condition */
+    }
+    lexeme_free(lex);
     return 1;
 }

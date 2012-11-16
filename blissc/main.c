@@ -13,10 +13,12 @@
 #include "lexer.h"
 #include "nametable.h"
 #include "lexeme.h"
-#include "macros.h"
 
 int test_scanner(int argc, const char *argv[]);
 int test_parser(int argc, const char *argv[]);
+
+void declarations_init(scopectx_t scope);
+int parse_declaration(parse_ctx_t pctx, lextype_t lt);
 
 int main(int argc, const char * argv[])
 {
@@ -116,7 +118,6 @@ test_scanner (int argc, const char *argv[])
 static int linewidth = 0;
 static char *delim = "";
 
-void macro_test(parse_ctx_t pctx, lextype_t lt);
 
 void PRINTCR (void)
 {
@@ -159,7 +160,7 @@ test_parser (int argc, const char *argv[])
 
     mainscope = scope_begin(0);
     pctx = parser_init(mainscope, 0);
-    macros_init(mainscope);
+    declarations_init(mainscope);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
@@ -169,8 +170,8 @@ test_parser (int argc, const char *argv[])
     for (lt = parser_next(pctx, &lex); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
          lt = parser_next(pctx, &lex)) {
         PRINTLEX(lex);
-        if (lt == LEXTYPE_DCL_MACRO || lt == LEXTYPE_DCL_KEYWORDMACRO) {
-            macro_test(pctx, lt);
+        if (lt >= LEXTYPE_DCL_MIN || lt <= LEXTYPE_DCL_MAX) {
+            parse_declaration(pctx, lt);
         }
         lexeme_free(lex);
     }

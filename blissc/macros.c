@@ -302,15 +302,15 @@ parse_paramlist (parse_ctx_t pctx, scopectx_t curscope,
 } /* parse_paramlist */
 
 /*
- * define_macro
+ * declare_macro
  *
  * Common logic for macro declarations.
  *
  * MACRO macro-name { (param,...) } { [param,...] } = {stuff} % {,...}
  * KEYWORDMACRO macro-name { (param{=defval},...) } = {stuff} % {,...}
  */
-static int
-define_macro (parse_ctx_t pctx, int is_kwdmacro)
+int
+declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
 {
     int skip_to_end = 0;
     quotelevel_t oldql;
@@ -319,15 +319,11 @@ define_macro (parse_ctx_t pctx, int is_kwdmacro)
     lextype_t lt;
     strdesc_t *ltext;
     name_t *np;
-    scopectx_t scope, ntbl;
+    scopectx_t ntbl;
     struct macparam_s *nlst, *clst;
     int normcount, condcount;
+    int is_kwdmacro = (curlt == LEXTYPE_DCL_KEYWORDMACRO);
     macrotype_t mtype;
-    
-    if (!parser_decl_ok(pctx, &scope)) {
-        /* XXX error condition */
-        skip_to_end = 1;
-    }
 
     oldql = parser_set_quotelevel(pctx, QL_NAME);
 
@@ -437,15 +433,6 @@ define_macro (parse_ctx_t pctx, int is_kwdmacro)
                 macro->iparamcount = condcount;
                 name_declare(scope, np->name, np->namelen,
                              LEXTYPE_NAME_MACRO, &macro, sizeof(macro));
-                {
-                    extern void PRINTLEX(lexeme_t *lex), PRINTCR(void);
-                    lexeme_t *l;
-                    printf("\n---Definition of %*.*s", (int)np->namelen,
-                           (int)np->namelen, np->name); PRINTCR();
-                    for (l = lexseq_head(&macro->body); l != 0; l = l->next)
-                        { PRINTLEX(l); }
-                    printf("\n---end of definition---"); PRINTCR();
-                }
             }
         } else {
             lexseq_free(&body);
@@ -891,15 +878,6 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
     ok = prepare_body(pctx, expscope, macro, 0, nactuals,
                       &extras, result, 0);
 
-    {
-        extern void PRINTLEX(lexeme_t *lex), PRINTCR(void);
-        lexeme_t *l;
-        printf("\n---Expansion of %*.*s", (int)macroname->namelen,
-               (int)macroname->namelen, macroname->name); PRINTCR();
-        for (l = lexseq_head(result); l != 0; l = lexeme_next(l)) { PRINTLEX(l); }
-        printf("\n---end of expansion---"); PRINTCR();
-    }
-
     if (!ok) {
         lexseq_free(result);
     }
@@ -908,15 +886,3 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
     return 1;
 
 } /* macro_expand */
-
-void
-macro_test (parse_ctx_t pctx, lextype_t lt)
-{
-    if (lt == LEXTYPE_DCL_MACRO) {
-        define_macro(pctx, 0);
-    } else if (lt == LEXTYPE_DCL_KEYWORDMACRO) {
-        define_macro(pctx, 1);
-    } else {
-        fprintf(stderr, "macro_test called for %s\n", lextype_name(lt));
-    }
-}

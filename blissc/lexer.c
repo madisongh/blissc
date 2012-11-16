@@ -253,8 +253,10 @@ lexer_fopen (const char *fname, size_t fnlen)
                 lexchain_free(ctx->chain);
                 free(ctx);
                 ctx = 0;
+            } else {
+                ctx->chain->filename_index =
+                    filename_lookup(fname, fnlen, 0);
             }
-            ctx->chain->filename_index = filename_lookup(fname, fnlen, 0);
         }
     }
     if (ctx != 0) {

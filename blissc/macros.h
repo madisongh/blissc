@@ -10,7 +10,10 @@
 #define blissc_macros_h
 
 #include "nametable.h"
+#include "parser.h"
+#include "lexeme.h"
 
-void macros_init(scopectx_t kwdscope);
+void macros_init(scopectx_t scope);
+int declare_macro(parse_ctx_t pctx, scopectx_t scope, lextype_t curlt);
 
 #endif
