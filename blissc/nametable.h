@@ -13,7 +13,6 @@
 #include <stdint.h>
 #include "lexeme.h"
 #include "strings.h"
-#include "utils.h"
 
 struct scopectx_s;
 typedef struct scopectx_s *scopectx_t;

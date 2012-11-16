@@ -54,6 +54,7 @@ test_scanner (int argc, const char *argv[])
     strdesc_t *tok;
     scantype_t toktype;
     unsigned int sflags = SCAN_M_SIGNOK;
+    unsigned int lno, cno;
     int keepgoing = 1;
     ctx = scan_init();
 
@@ -65,8 +66,9 @@ test_scanner (int argc, const char *argv[])
         return 998;
     }
     while (keepgoing) {
-        toktype = scan_getnext(ctx, sflags, &tok);
+        toktype = scan_getnext(ctx, sflags, &tok, &lno, &cno);
         if (scan_ok(toktype)) {
+            printf("<%u:%u> ", lno, cno);
             switch (toktype) {
                 case SCANTYPE_DECLITERAL:
                     printf("Decimal literal: %-*.*s\n", tok->len,tok->len,tok->ptr);

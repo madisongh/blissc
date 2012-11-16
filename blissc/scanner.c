@@ -102,7 +102,8 @@ scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen)
 }
 
 scantype_t
-scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok)
+scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
+              unsigned int *lineno, unsigned int *column)
 {
     char *cp, *outp, ch;
     size_t remain, bufsiz, len;
@@ -116,6 +117,8 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok)
         while (curbuf->curpos >= curbuf->linelen) {
             int rc;
             curbuf->curpos = 0;
+            *lineno = curbuf->curline;
+            *column = 0;
             rc = file_readline(curbuf->fctx, curbuf->linebuf,
                                    sizeof(curbuf->linebuf), &curbuf->linelen);
             if (rc <= 0) {
@@ -141,6 +144,7 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok)
                 curbuf = &ctx->bufstack[ctx->curbuf];
             } else {
                 curbuf->curline += 1;
+                *lineno += 1;
             }
         }
 
@@ -222,6 +226,10 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok)
                         curstate = STATE_IN_EMBEDDED_COMMENT;
                         break;
                     }
+                    // If we get here, we know we're staring a
+                    // real token, so record its starting position
+                    *lineno = curbuf->curline;
+                    *column = (unsigned int)(cp - &curbuf->linebuf[0]);
                     if (*cp == '\'') {
                         curstate = STATE_IN_QSTRING;
                         break;

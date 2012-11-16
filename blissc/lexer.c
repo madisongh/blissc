@@ -28,6 +28,14 @@
 #include "scanner.h"
 #include "strings.h"
 
+struct saved_filename_s {
+    struct saved_filename_s *next;
+    strdesc_t *filename;
+    int filename_index;
+};
+static struct saved_filename_s *saved_filenames;
+static int filename_count;
+
 /*
  * This structure is for inserting a new chain of lexemes
  * into the parsing stream.  When lexical processing adds
@@ -40,6 +48,7 @@ struct lexchain_s {
     struct lexchain_s   *nextchain;
     lexseq_t             seq;
     scanctx_t            sctx;
+    int                  filename_index;
 };
 typedef struct lexchain_s lexchain_t;
 
@@ -147,6 +156,41 @@ lexchain_free (lexchain_t *chain)
     }
 } /* lexchain_free */
 
+/*
+ * Filename tracking for lexeme position records
+ */
+static int
+filename_lookup (const char *name, size_t len, strdesc_t **fdsc) {
+
+    struct saved_filename_s *sf, *lastsf;
+    strdesc_t namedsc;
+
+    strdesc_init(&namedsc, (char *)name, len);
+    for (sf = saved_filenames, lastsf = 0; sf != 0; lastsf = sf, sf = sf->next) {
+        if (strings_eql(sf->filename, &namedsc)) {
+            break;
+        }
+    }
+
+    if (sf == 0) {
+        sf = malloc(sizeof(struct saved_filename_s));
+        if (lastsf == 0) {
+            saved_filenames = sf;
+        } else {
+            lastsf->next = sf;
+        }
+        sf->next = 0;
+        sf->filename = string_from_chrs(0, name, len);
+        sf->filename_index = filename_count;
+        filename_count += 1;
+    }
+
+    if (fdsc != 0) {
+        *fdsc = sf->filename;
+    }
+    return sf->filename_index;
+} /* filename_lookup */
+
 /* --- Public API --- */
 
 /*
@@ -161,8 +205,29 @@ lexer_init (scopectx_t kwdscope)
     for (i = 0; i < sizeof(operator_names)/sizeof(operator_names[0]); i++) {
         name_insert(kwdscope, &operator_names[i]);
     }
+    filename_count = 0;
+    saved_filenames = 0;
     
 } /* lexer_init */
+
+/*
+ * lexer_filename
+ *
+ * Given a filename index (from a lexeme's position),
+ * return the relevant filename.
+ */
+strdesc_t *
+lexer_filename (int filename_index)
+{
+    struct saved_filename_s *sf;
+    for (sf = saved_filenames; sf != 0; sf = sf->next) {
+        if (sf->filename_index == filename_index) {
+            return sf->filename;
+        }
+    }
+    return 0;
+
+} /* filename_by_index */
 
 /*
  * lexer_fopen
@@ -189,6 +254,7 @@ lexer_fopen (const char *fname, size_t fnlen)
                 free(ctx);
                 ctx = 0;
             }
+            ctx->chain->filename_index = filename_lookup(fname, fnlen, 0);
         }
     }
     if (ctx != 0) {
@@ -216,39 +282,6 @@ lexer_finish (lexer_ctx_t ctx)
 } /* lexer_finish */
 
 /*
- * lexseq_free
- *
- * Frees the linked list of lexemes (the 'sequence')
- * ponted to by 'seq'.
- */
-void
-lexseq_free (lexseq_t *seq)
-{
-    lexeme_t *lex;
-    for (lex = lexseq_remhead(seq); lex != 0; lex = lexseq_remhead(seq)) {
-        lexeme_free(lex);
-    }
-} /* lexseq_free */
-
-/*
- * lexseq_copy
- *
- * Returns a duplicate of a lexeme sequence.
- */
-int
-lexseq_copy (lexseq_t *dst, lexseq_t *src)
-{
-    lexeme_t *lex;
-
-    for (lex = lexseq_head(src); lex != 0; lex = lexeme_next(lex)) {
-        lexseq_instail(dst, lexeme_copy(lex));
-    }
-
-    return 1;
-
-} /* lexseq_copy */
-
-/*
  * lexer_next
  *
  * Returns the next lexeme in the stream.
@@ -264,6 +297,7 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek)
     lexeme_t *lex = 0;
     lextype_t lextype;
     strdesc_t *tok;
+    unsigned int lineno, column;
     char *cp;
 
     if (ctx == 0) {
@@ -287,7 +321,8 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek)
             sflags = (erroneof ? SCAN_M_ERRONEOF : 0) |
                      (ctx->signok ? SCAN_M_SIGNOK : 0);
 
-            type = scan_getnext(chain->sctx, sflags, &tok);
+            type = scan_getnext(chain->sctx, sflags, &tok,
+                                &lineno, &column);
             if (!scan_ok(type)) {
                 /* XXX error condition */
                 lex = &errlex;
@@ -338,6 +373,7 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek)
                 lex = &errlex;
             } else {
                 lex = lexeme_create(lextype, tok);
+                lexeme_setpos(lex, chain->filename_index, lineno, column);
                 if (peek) {
                     lexseq_inshead(&chain->seq, lex);
                 }
@@ -445,27 +481,3 @@ lexer_newfile (lexer_ctx_t ctx, const char *fname, size_t fnlen)
     return 1;
 
 } /* lexer_newfile */
-
-/*
- * lexemes_match
- *
- * Compares two sequences of lexemes to see if they are
- * equivalent (e.g., for %IDENTICAL).  That is, the
- * lextypes match, and for lextypes for which there
- * is data, that data matches.
- */
-int
-lexemes_match (lexseq_t *a, lexseq_t *b)
-{   lexeme_t *la, *lb;
-    if (lexseq_length(a) != lexseq_length(b)) {
-        return 0;
-    }
-    for (la = lexseq_head(a), lb = lexseq_head(b); la != 0; la = la->next, lb = lb->next) {
-        if (!strings_eql(&la->text, &lb->text)) {
-            return 0;
-        }
-    }
-
-    return 1;
-
-} /* lexemes_match */

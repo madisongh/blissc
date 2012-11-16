@@ -105,6 +105,8 @@ struct lexeme_s {
     unsigned long    flags;
     unsigned long    numval;
     void            *extra;
+    int              fileno;
+    unsigned int     lineno, colno;
 };
 typedef struct lexeme_s lexeme_t;
 
@@ -128,6 +130,10 @@ const char *lextype_name(lextype_t lt);
 int lextype_register(lextype_t lt, lextype_bind_fn bindfn);
 int lexeme_bind(void *ctx, quotelevel_t ql, quotemodifier_t qm,
                 condstate_t cs, lexeme_t *lex, lexseq_t *result);
+
+void lexseq_free(lexseq_t *seq);
+int lexseq_copy(lexseq_t *dst, lexseq_t *src);
+int lexemes_match(lexseq_t *a, lexseq_t *b);
 
 static inline __unused lexeme_t *lexeme_next (lexeme_t *lex) {
     return lex->next;
@@ -159,6 +165,19 @@ static inline __unused void *lexeme_ctx_get (lexeme_t *lex) {
 static inline __unused void lexeme_ctx_set (lexeme_t *lex, void *p) {
     lex->extra = p;
 }
+static inline __unused void lexeme_setpos (lexeme_t *lex, int f,
+                                           unsigned int l, unsigned int c) {
+    lex->fileno = f; lex->lineno = l; lex->colno = c;
+}
+static inline __unused void lexeme_getpos (lexeme_t *lex, int *f,
+                                           unsigned int *l, unsigned int *c) {
+    *f = lex->fileno; *l = lex->lineno; *c = lex->colno;
+}
+
+static inline __unused void lexeme_copypos (lexeme_t *dst, lexeme_t *src) {
+    dst->fileno = src->fileno; dst->lineno = src->lineno; dst->colno = src->colno;
+}
+
 static inline __unused void lexseq_init (lexseq_t *seq) {
     seq->head = seq->tail = 0; seq->count = 0;
 }

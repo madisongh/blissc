@@ -38,7 +38,9 @@ static inline int __unused scan_ok (scantype_t typ) {
 
 scanctx_t scan_init(void);
 int scan_fopen(scanctx_t ctx, const char *fname, size_t fnlen);
-scantype_t scan_getnext(scanctx_t ctx, unsigned int flags, strdesc_t **tok);
+scantype_t scan_getnext(scanctx_t ctx, unsigned int flags,
+                        strdesc_t **tok, unsigned int *lineno,
+                        unsigned int *column);
 void scan_finish(scanctx_t ctx);
 
 #endif

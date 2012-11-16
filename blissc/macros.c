@@ -64,6 +64,7 @@ macro_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
 {
     parse_ctx_t pctx = ctx;
     name_t *np = lexeme_ctx_get(lex);
+    lexeme_t *rlex;
     strdesc_t namedsc;
 
     if (cs == COND_CWA || cs == COND_AWC) {
@@ -75,12 +76,19 @@ macro_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
 
     switch (qm) {
         case QM_QUOTE:
-            lexseq_instail(result, lexeme_create(LEXTYPE_NAME, &namedsc));
+            rlex = lexeme_create(LEXTYPE_NAME, &namedsc);
+            lexeme_copypos(rlex, lex);
+            lexseq_instail(result, rlex);
+            lexeme_free(lex);
             return 1;
         case QM_EXPAND:
+            lexeme_free(lex);
             return macro_expand(pctx, np, result);
         case QM_UNQUOTE:
-            lexseq_instail(result, lexeme_create(lt, &namedsc));
+            rlex = lexeme_create(lt, &namedsc);
+            lexeme_copypos(rlex, lex);
+            lexeme_free(lex);
+            lexseq_instail(result, rlex);
             return 1;
         default:
             break;
@@ -93,6 +101,7 @@ macro_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
         return 0;
     }
 
+    lexeme_free(lex);
     return macro_expand(pctx, np, result);
 
 } /* macro_bind */
@@ -713,7 +722,8 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
  * Expands a macro.
  */
 static int
-macro_expand (parse_ctx_t pctx, name_t *macroname, lexseq_t *result)
+macro_expand (parse_ctx_t pctx, name_t *macroname,
+              lexseq_t *result)
 {
     struct macrodecl_s *macro = *(struct macrodecl_s **)name_data(macroname);
     lextype_t lt;

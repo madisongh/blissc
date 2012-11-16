@@ -98,7 +98,9 @@ lexeme_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
         len = ltext->len > 255 ? 255 : ltext->len;
         cstr = ascic_string_from_chrs(0, ltext->ptr, ltext->len);
         nlex = lexeme_alloc(lt, cstr->ptr, cstr->len);
+        lexeme_copypos(nlex, lex);
         lexseq_instail(result, nlex);
+        lexeme_free(lex);
         return 1;
     }
     lex->type = lt;
@@ -193,6 +195,65 @@ lexeme_copy (lexeme_t *orig)
     lex->boundtype = orig->boundtype;
     lex->extra = orig->extra;
     lex->numval = orig->numval;
+    lexeme_copypos(lex, orig);
     lex->next = 0;
     return lex;
 }
+
+/*
+ * lexseq_free
+ *
+ * Frees the linked list of lexemes (the 'sequence')
+ * ponted to by 'seq'.
+ */
+void
+lexseq_free (lexseq_t *seq)
+{
+    lexeme_t *lex;
+    for (lex = lexseq_remhead(seq); lex != 0; lex = lexseq_remhead(seq)) {
+        lexeme_free(lex);
+    }
+} /* lexseq_free */
+
+/*
+ * lexseq_copy
+ *
+ * Returns a duplicate of a lexeme sequence.
+ */
+int
+lexseq_copy (lexseq_t *dst, lexseq_t *src)
+{
+    lexeme_t *lex;
+
+    for (lex = lexseq_head(src); lex != 0; lex = lexeme_next(lex)) {
+        lexseq_instail(dst, lexeme_copy(lex));
+    }
+
+    return 1;
+
+} /* lexseq_copy */
+
+/*
+ * lexemes_match
+ *
+ * Compares two sequences of lexemes to see if they are
+ * equivalent (e.g., for %IDENTICAL).  That is, the
+ * lextypes match, and for lextypes for which there
+ * is data, that data matches.
+ */
+int
+lexemes_match (lexseq_t *a, lexseq_t *b)
+{   lexeme_t *la, *lb;
+    if (lexseq_length(a) != lexseq_length(b)) {
+        return 0;
+    }
+    for (la = lexseq_head(a), lb = lexseq_head(b); la != 0;
+         la = la->next, lb = lb->next) {
+        if (!strings_eql(&la->text, &lb->text)) {
+            return 0;
+        }
+    }
+
+    return 1;
+
+} /* lexemes_match */
