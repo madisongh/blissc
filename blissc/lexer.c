@@ -99,7 +99,7 @@ DODEF(GTR) DODEF(GTRU) DODEF(GTRA) \
 DODEF(LSS) DODEF(LSSU) DODEF(LSSA) \
 DODEF(LEQ) DODEF(LEQU) DODEF(LEQA) \
 DODEF(NEQ) DODEF(NEQU) DODEF(NEQA)
-#define DODEF(name_) NAMEDEF(#name_, LEXTYPE_OP_##name_, 0, NAME_M_RESERVED),
+#define DODEF(name_) NAMEDEF(#name_, LEXTYPE_OP_##name_, NAME_M_RESERVED),
 
 static name_t operator_names[] = {
     DODEFS

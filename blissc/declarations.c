@@ -23,8 +23,8 @@ static int parse_LITERAL(parse_ctx_t pctx);
 static int parse_GLOBAL(parse_ctx_t pctx);
 
 static name_t decl_names[] = {
-    NAMEDEF("LITERAL", LEXTYPE_DCL_LITERAL, parse_LITERAL, NAME_M_RESERVED),
-    NAMEDEF("GLOBAL", LEXTYPE_DCL_GLOBAL, parse_GLOBAL, NAME_M_RESERVED)
+    NAMEDEF("LITERAL", LEXTYPE_DCL_LITERAL, NAME_M_RESERVED),
+    NAMEDEF("GLOBAL", LEXTYPE_DCL_GLOBAL, NAME_M_RESERVED)
 };
 
 /*

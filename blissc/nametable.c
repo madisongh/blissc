@@ -88,7 +88,7 @@ name_alloc (const char *name, size_t namelen)
     np->nameflags = NAME_M_ALLOCATED;
     np->namelen = namelen;
     np->nametype = LEXTYPE_NAME;
-    memset(&np->namedata, 0, sizeof(np->namedata));
+    memset(name_data(np), 0, NAME_DATA_SIZE);
     return np;
 
 } /* name_alloc */
@@ -110,7 +110,7 @@ name_copy (name_t *src, scopectx_t dstscope)
     dst->nametype = src->nametype;
     dst->namescope = dstscope;
     dst->nameflags = NAME_M_ALLOCATED | src->nameflags;
-    memcpy(&dst->namedata, &src->namedata, sizeof(dst->namedata));
+    memcpy(name_data(dst), name_data(src), NAME_DATA_SIZE);
     return dst;
     
 } /* name_copy */
@@ -329,7 +329,7 @@ name_insert (scopectx_t scope, name_t *np)
  */
 name_t *
 name_declare (scopectx_t scope, const char *id, size_t len,
-              lextype_t type, data_t *data)
+              lextype_t type, void *value, size_t valsize)
 {
     name_t *np;
 
@@ -355,9 +355,14 @@ name_declare (scopectx_t scope, const char *id, size_t len,
 
     np->nametype = type;
     np->nameflags &= ~NAME_M_NODCLCHK;
-    if (data != 0) {
-        memcpy(&np->namedata, data, sizeof(data_t));
+    if (valsize > NAME_DATA_SIZE) {
+        /* XXX error condition */
+        valsize = NAME_DATA_SIZE;
     }
+    if (value != 0) {
+        memcpy(np->namedata, value, valsize);
+    }
+
     return np;
 
 } /* name_declare */

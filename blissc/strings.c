@@ -10,7 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
-#include "utils.h"
 #include "strings.h"
 
 #define POOL_NONE   (-1)

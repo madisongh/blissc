@@ -62,11 +62,11 @@ static lexfunc_t lexfuncs[LEXTYPE_LXF_MAX-LEXTYPE_LXF_MIN+1] = {
 };
 #undef DODEF
 
-#define DODEF(name_, rtn_) NAMEDEF("%" #name_, LEXTYPE_LXF_##name_, 0, NAME_M_RESERVED),
+#define DODEF(name_, rtn_) NAMEDEF("%" #name_, LEXTYPE_LXF_##name_, NAME_M_RESERVED),
 
 static name_t parser_names[] = {
     DODEFS
-    NAMEDEF("%THEN", LEXTYPE_LXF_THEN, 0, NAME_M_RESERVED),
+    NAMEDEF("%THEN", LEXTYPE_LXF_THEN, NAME_M_RESERVED),
 };
 #undef DODEF
 
@@ -86,6 +86,9 @@ static int is_lexfunc (lextype_t lt, int exclude_qfuncs) {
 }
 static int is_operator(lextype_t lt) {
     return (lt >= LEXTYPE_OP_MIN && lt <= LEXTYPE_OP_MAX);
+}
+static int is_name(lextype_t lt) {
+    return (lt >= LEXTYPE_NAME_MIN && lt <= LEXTYPE_NAME_MAX);
 }
 
 /*
@@ -494,7 +497,7 @@ parse_QUOTE (parse_ctx_t pctx, lextype_t curlt)
     lt = lexeme_boundtype(lex);
     // %QUOTE only applies to names, lexical function names,
     // commas, and percent signs.
-    if (lt != LEXTYPE_NAME &&
+    if (!is_name(lt) &&
         lt != LEXTYPE_DELIM_COMMA &&
         lt != LEXTYPE_LXF_DELIM_PERCENT) {
         /* XXX error condition */
@@ -506,6 +509,7 @@ parse_QUOTE (parse_ctx_t pctx, lextype_t curlt)
                                  lex->text.len, 0);
         if (np != 0) {
             lt = name_type(np);
+            // The lexical conditional functions are not %QUOTE-able
             if (lt >= LEXTYPE_LXF_IF && lt <= LEXTYPE_LXF_FI) {
                 /* XXX error condition */
                 return 1;
@@ -540,23 +544,20 @@ parse_unquote_expand (parse_ctx_t pctx, lextype_t curlt)
     }
     lex = lexer_peek(pctx->lexctx, pctx->no_eof);
     lt = lexeme_boundtype(lex);
-    if (lt != LEXTYPE_NAME) {
+    if (!is_name(lt) && !is_lexfunc(lt, 0)) {
         /* XXX error condition */
         return 1;
     }
-    np = name_search(pctx->curscope, lex->text.ptr, lex->text.len, 0);
-    if (np == 0) {
-        /* XXX error condition */
-        return 1;
+    if (lt == LEXTYPE_NAME) {
+        np = name_search(pctx->curscope, lex->text.ptr, lex->text.len, 0);
+        if (np == 0) {
+            /* XXX error condition */
+            return 1;
+        }
+        lt = name_type(np);
     }
-    lt = name_type(np);
     if ((curlt == LEXTYPE_LXF_EXPAND) &&
         !(is_lexfunc(lt, 0) || lt == LEXTYPE_NAME_MACRO)) {
-        /* XXX error condition */
-        return 1;
-    }
-    if (lt < LEXTYPE_NAME_MIN || lt > LEXTYPE_NAME_MAX ||
-        lt == LEXTYPE_NAME_UNDECLARED) {
         /* XXX error condition */
         return 1;
     }
@@ -720,14 +721,18 @@ string_params (parse_ctx_t pctx, int already_have_open_paren)
             lexeme_free(lex);
             continue;
         }
-        switch (lexeme_boundtype(lex)) {
+        lt = lexeme_boundtype(lex);
+        switch (lt) {
             case LEXTYPE_NUMERIC:
             case LEXTYPE_CSTRING:
             case LEXTYPE_STRING:
-            case LEXTYPE_NAME:
                 result = string_append(result, lexeme_text(lex));
                 break;
             default:
+                if (is_name(lt)) {
+                    result = string_append(result, lexeme_text(lex));
+                    break;
+                }
                 lexeme_free(lex);
                 if (ql_was_normal) {
                     pctx->quotelevel = QL_NORMAL;
