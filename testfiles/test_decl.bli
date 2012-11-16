@@ -1,0 +1,10 @@
+COMPILETIME
+    hello = 37, goodbye = -15;
+    
+%ASCII'-- declarations done--'
+hello, goodbye
+%ASSIGN(hello,55)
+%ASCII'hello is now:' hello
+%ASSIGN(hello, goodbye)
+%ASCII'hello is now:' hello
+

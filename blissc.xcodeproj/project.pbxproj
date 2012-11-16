@@ -36,11 +36,12 @@
 
 /* Begin PBXFileReference section */
 		7A2DD25A165009F1002CD078 /* declarations.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = declarations.c; sourceTree = "<group>"; };
+		7A5351E91656FE7B00BE4B99 /* test_decl.bli */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_decl.bli; path = testfiles/test_decl.bli; sourceTree = SOURCE_ROOT; };
 		7A548D681646E9E500A2A20F /* test_req.req */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_req.req; path = testfiles/test_req.req; sourceTree = SOURCE_ROOT; };
 		7A7FD5141636C29C00B2D7FC /* lexer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = lexer.c; sourceTree = "<group>"; };
 		7A7FD5171636C2A700B2D7FC /* lexer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lexer.h; sourceTree = "<group>"; };
 		7A7FD5181636C65200B2D7FC /* lexeme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lexeme.h; sourceTree = "<group>"; };
-		7A8735071642CA6F006BFC30 /* parser_test_1.bli */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = parser_test_1.bli; path = testfiles/parser_test_1.bli; sourceTree = SOURCE_ROOT; };
+		7A8735071642CA6F006BFC30 /* test_parser.bli */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_parser.bli; path = testfiles/test_parser.bli; sourceTree = SOURCE_ROOT; };
 		7A95BCEB1641CC2F002F851E /* strings.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = strings.c; sourceTree = "<group>"; };
 		7A95BCEE1641E17C002F851E /* strings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = strings.h; sourceTree = "<group>"; };
 		7A995E0C163C2286003BEAC7 /* lexeme.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = lexeme.c; sourceTree = "<group>"; };
@@ -57,7 +58,7 @@
 		7A9E1C14163DA45A009ACBD0 /* parser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = parser.h; sourceTree = "<group>"; };
 		7AB5ED811642A3AB0063EC94 /* expression.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = expression.c; sourceTree = "<group>"; };
 		7AB5ED841642A3B80063EC94 /* expression.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = expression.h; sourceTree = "<group>"; };
-		7ABF5680164DA2B10053480F /* macro_test.bli */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = macro_test.bli; path = ../testfiles/macro_test.bli; sourceTree = "<group>"; };
+		7ABF5680164DA2B10053480F /* test_macro.bli */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_macro.bli; path = ../testfiles/test_macro.bli; sourceTree = "<group>"; };
 		7ADC81891649CD660056600E /* macros.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = macros.h; sourceTree = "<group>"; };
 		7AF573D8164936EE005C965F /* macros.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = macros.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -102,7 +103,6 @@
 				7A7FD5181636C65200B2D7FC /* lexeme.h */,
 				7A7FD5141636C29C00B2D7FC /* lexer.c */,
 				7A7FD5171636C2A700B2D7FC /* lexer.h */,
-				7ABF5680164DA2B10053480F /* macro_test.bli */,
 				7AF573D8164936EE005C965F /* macros.c */,
 				7ADC81891649CD660056600E /* macros.h */,
 				7A9D4C9D1635A88F0013AE09 /* main.c */,
@@ -110,11 +110,13 @@
 				7A995E11163C2F8F003BEAC7 /* nametable.h */,
 				7A9E1C12163DA445009ACBD0 /* parser.c */,
 				7A9E1C14163DA45A009ACBD0 /* parser.h */,
-				7A8735071642CA6F006BFC30 /* parser_test_1.bli */,
 				7A9D4CAA1635CEA30013AE09 /* scanner.c */,
 				7A9D4CA91635CE970013AE09 /* scanner.h */,
 				7A95BCEB1641CC2F002F851E /* strings.c */,
 				7A95BCEE1641E17C002F851E /* strings.h */,
+				7ABF5680164DA2B10053480F /* test_macro.bli */,
+				7A8735071642CA6F006BFC30 /* test_parser.bli */,
+				7A5351E91656FE7B00BE4B99 /* test_decl.bli */,
 				7A548D681646E9E500A2A20F /* test_req.req */,
 			);
 			path = blissc;
