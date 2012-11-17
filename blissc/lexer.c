@@ -362,7 +362,7 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek)
                 case SCANTYPE_PUNCTUATION:
                     cp = strchr(delimiters, *tok->ptr);
                     lextype = delimtypes[cp-delimiters];
-                    ctx->signok = (strchr(")>]", *tok->ptr) != 0);
+                    ctx->signok = (strchr(")>]", *tok->ptr) == 0);
                     break;
                 case SCANTYPE_IDENTIFIER:
                     lextype = LEXTYPE_NAME;

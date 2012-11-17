@@ -54,7 +54,9 @@ typedef int (*lexfunc_t)(parse_ctx_t pctx, lextype_t curlt);
     DODEF(UNQUOTE, parse_unquote_expand) \
     DODEF(EXPAND, parse_unquote_expand) \
     DODEF(IF, parse_IF) DODEF(ELSE, parse_ELSE) DODEF(FI, parse_FI) \
-    DODEF(ASSIGN, parse_ASSIGN)
+    DODEF(ASSIGN, parse_ASSIGN) DODEF(DECLARED, parse_DECLARED) \
+    DODEF(NUMBER, parse_NUMBER) DODEF(NBITS, parse_nbits_func) \
+    DODEF(NBITSU, parse_nbits_func)
 
 #define DODEF(name_, rtn_) static int rtn_ (parse_ctx_t, lextype_t);
 DODEFS
@@ -628,8 +630,7 @@ parse_numeric_literal (parse_ctx_t pctx, lextype_t curlt)
     lexeme_t *lex;
     lextype_t lt = parser_next(pctx, &lex);
     strdesc_t *str;
-    char buf[32], *cp;
-    long numval;
+    long val;
     int base[] = { 2, 8, 10, 16 };
 
     if (lt != LEXTYPE_STRING) {
@@ -637,23 +638,14 @@ parse_numeric_literal (parse_ctx_t pctx, lextype_t curlt)
         lexeme_free(lex);
         return 1;
     }
-    str = lexeme_text(lex);
-    cp = buf + (str->len >= sizeof(buf) ? sizeof(buf)-1 : str->len);
-    // XXX probably need to do this ourselves, rather than rely on C lib
-    memcpy(buf, str->ptr, cp-buf);
-    *cp = '\0';
-    errno = 0;
-    numval = strtol(buf, &cp, base[curlt-LEXTYPE_LXF_B]);
-    if (errno != 0 || (cp-buf) != str->len) {
+    if (!string_numval(lexeme_text(lex),
+                       base[curlt-LEXTYPE_LXF_B], &val)) {
         /* XXX error condition */
-    } else {
-        // XXX need to validate that the value fits into the
-        // target machine's word length
-        strdesc_t dsc;
-        int len = snprintf(buf, sizeof(buf), "%ld", numval);
-        strdesc_init(&dsc, buf, len);
-        lexer_insert(pctx->lexctx, parser_lexeme_create(pctx, LEXTYPE_NUMERIC, &dsc));
+        lexeme_free(lex);
+        return 1;
     }
+    str = string_printf(0, "%ld", val);
+    lexer_insert(pctx->lexctx, lexeme_create(LEXTYPE_NUMERIC, str));
     string_free(str);
     lexeme_free(lex);
 
@@ -1352,8 +1344,9 @@ parse_ISSTRING (parse_ctx_t pctx, lextype_t curlt)
     }
 
     if (!hit_error) {
-        lexer_insert(pctx->lexctx, parser_lexeme_create(pctx, LEXTYPE_NUMERIC,
-                                                 (allstr ? &one : &zero)));
+        lexer_insert(pctx->lexctx,
+                     parser_lexeme_create(pctx, LEXTYPE_NUMERIC,
+                                          (allstr ? &one : &zero)));
     }
 
     return 1;
@@ -1563,4 +1556,128 @@ parse_ASSIGN (parse_ctx_t pctx, lextype_t curlt)
     }
     lexeme_free(lex);
     return 1;
-}
+} /* parse_ASSIGN */
+
+/*
+ * %NUMBER(n)
+ *
+ * Return a numeric lexeme representing the value
+ * of 'n', which can be a (numeric) string literal,
+ * a numeric literal, or the name of a COMPILETIME
+ * or LITERAL.
+ */
+static int
+parse_NUMBER (parse_ctx_t pctx, lextype_t curlt)
+{
+    lextype_t lt;
+    lexeme_t *lex, *rlex;
+    long val;
+
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_DELIM_LPAR) {
+        /* XXX error condition */
+        lexeme_free(lex);
+        return 1;
+    }
+    rlex = 0;
+    lt = parser_next(pctx, &lex);
+    switch (lt) {
+        case LEXTYPE_STRING:
+            if (!string_numval(lexeme_text(lex), 10, &val)) {
+                /* XXX error condition */
+                lexeme_free(lex);
+                break;
+            }
+            // FALLTHROUGH
+                rlex = lex;
+        case LEXTYPE_NUMERIC:
+            rlex = lex;
+            rlex->boundtype = LEXTYPE_NUMERIC;
+            rlex->type = LEXTYPE_UNBOUND;
+            break;
+        default:
+            /* XXX error condition */
+            lexer_insert(pctx->lexctx, lex);
+            break;
+    }
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_DELIM_RPAR) {
+        /* XXX error condition */
+        lexer_insert(pctx->lexctx, lex);
+        parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
+        if (rlex != 0) {
+            lexeme_free(rlex);
+        }
+        return 1;
+    }
+    lexeme_free(lex);
+    lexer_insert(pctx->lexctx, rlex);
+    return 1;
+
+} /* parse_NUMBER */
+
+/*
+ * %DECLARED(#name)
+ *
+ * Returns 1 if the specified name has been explicitly
+ * declared, 0 otherwise.
+ */
+static int
+parse_DECLARED (parse_ctx_t pctx, lextype_t curlt)
+{
+    lextype_t lt, boundlt;
+    lexeme_t *lex, *rlex = 0;
+    quotelevel_t oldql = pctx->quotelevel;
+
+    lt = parser_next(pctx, &lex);
+    lexeme_free(lex);
+    if (lt != LEXTYPE_DELIM_LPAR) {
+        /* XXX error condition */
+        return 1;
+    }
+    pctx->quotelevel = QL_NAME;
+    lt = parser_next(pctx, &lex);
+    boundlt = lexeme_boundtype(lex);
+    if (!is_name(boundlt)) {
+        /* XXX error condition */
+        lexer_insert(pctx->lexctx, lex);
+    } else {
+        strdesc_t *text = lexeme_text(lex);
+        name_t *np = name_search(pctx->curscope, text->ptr, text->len, 0);
+        lexeme_free(lex);
+        rlex = lexeme_create(LEXTYPE_NUMERIC,
+                             (np != 0 && (name_flags(np) & NAME_M_DECLARED) != 0) ? &one : &zero);
+    }
+    pctx->quotelevel = oldql;
+    lt = parser_next(pctx, &lex);
+    if (lt != LEXTYPE_DELIM_RPAR) {
+        /* XXX error condition */
+        lexer_insert(pctx->lexctx, lex);
+        lexeme_free(rlex);
+        rlex = 0;
+    }
+    if (rlex == 0) {
+        parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
+    } else {
+        lexer_insert(pctx->lexctx, rlex);
+    }
+    return 1;
+
+} /* parse_DECLARED */
+
+/*
+ * %NBITS(n,...)
+ * %NBITSU(n,..)
+ *
+ * Returns the largest number of bits required to hold the
+ * value of the (compile-time-constant) expressions.  In the U-form,
+ * the expressions are treated as unsigned values.
+ *
+ * XXX really need %BPVAL for this
+ */
+static int
+parse_nbits_func (parse_ctx_t pctx, lextype_t curlt)
+{
+    return 1;
+
+} /* parse_nbits_func */

@@ -22,6 +22,7 @@ typedef struct scopectx_s *scopectx_t;
 #define NAME_DATA_SIZE (NAME_DATA_SIZE_IN_INTPTRS*sizeof(intptr_t))
 
 #define NAME_M_RESERVED (1<<0) // error if the name is redefined
+#define NAME_M_DECLARED (1<<1) // set if explicitly declared
 
 struct name_s {
     struct name_s       *next;
@@ -34,6 +35,9 @@ struct name_s {
 };
 // NB: max name length is (NAME_SIZE-1)
 typedef struct name_s name_t;
+
+typedef void (*name_datafree_fn)(name_t *np);
+typedef int (*name_datacopy_fn)(name_t *dst, name_t *src);
 
 /*
  * Macros for building static tables of reserved keywords
@@ -70,4 +74,6 @@ scopectx_t scope_end(scopectx_t scope);
 scopectx_t scope_copy(scopectx_t src, scopectx_t newparent);
 scopectx_t scope_getparent(scopectx_t scope);
 void scope_setparent(scopectx_t scope, scopectx_t newparent);
+void nametype_dataop_register(lextype_t lt, name_datafree_fn fn,
+                              name_datacopy_fn);
 #endif

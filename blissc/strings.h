@@ -47,5 +47,6 @@ strdesc_t *string_copy(strdesc_t *dest, strdesc_t *src);
 void string_free(strdesc_t *dsc);
 int strings_eql(strdesc_t *a, strdesc_t *b);
 strdesc_t *string_printf(strdesc_t *dst, const char *fmt, ...);
+int string_numval(strdesc_t *str, int base, long *valp);
 
 #endif

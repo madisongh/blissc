@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <errno.h>
 #include "strings.h"
 
 #define POOL_NONE   (-1)
@@ -270,3 +271,23 @@ string_printf (strdesc_t *dst, const char *fmt, ...)
     return string_from_chrs(dst, buf, (len < 0 ? 0 : len));
 
 } /* string_printf */
+
+int
+string_numval (strdesc_t *str, int base, long *valp)
+{
+    char buf[32], *cp;
+    long numval;
+
+    if (str->len >= sizeof(buf)) {
+        return 0;
+    }
+    memcpy(buf, str->ptr, str->len);
+    buf[str->len] = '\0';
+    errno = 0;
+    numval = strtol(buf, &cp, base);
+    if (errno != 0 || (cp-buf) != str->len) {
+        return 0;
+    }
+    *valp = numval;
+    return 1;
+}

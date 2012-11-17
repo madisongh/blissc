@@ -56,6 +56,9 @@ struct scopectx_s {
 struct scopectx_s *freescopes = 0;
 struct name_s     *freenames = 0;
 
+static name_datafree_fn freedata[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1] = {0};
+static name_datacopy_fn copydata[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1] = {0};
+
 /*
  * name_alloc
  *
@@ -103,6 +106,7 @@ static name_t *
 name_copy (name_t *src, scopectx_t dstscope)
 {
     name_t *dst = name_alloc(src->name, src->namelen);
+    name_datacopy_fn cfn;
 
     if (dst == 0) {
         return dst;
@@ -110,7 +114,12 @@ name_copy (name_t *src, scopectx_t dstscope)
     dst->nametype = src->nametype;
     dst->namescope = dstscope;
     dst->nameflags = NAME_M_ALLOCATED | src->nameflags;
-    memcpy(name_data(dst), name_data(src), NAME_DATA_SIZE);
+    cfn = copydata[src->nametype-LEXTYPE_NAME_MIN];
+    if (cfn != 0) {
+        cfn(dst, src);
+    } else {
+        memcpy(name_data(dst), name_data(src), NAME_DATA_SIZE);
+    }
     return dst;
     
 } /* name_copy */
@@ -124,8 +133,14 @@ name_copy (name_t *src, scopectx_t dstscope)
 void
 name_free (name_t *np)
 {
+    name_datafree_fn freefn;
+
     if (np->namescope == 0 &&
         (np->nameflags & NAME_M_ALLOCATED)) {
+        freefn = freedata[np->nametype-LEXTYPE_NAME_MIN];
+        if (freefn != 0) {
+            freefn(np);
+        }
         memset(np, 0xcc, sizeof(name_t));
         np->next = freenames;
         freenames = np;
@@ -267,6 +282,22 @@ scope_setparent (scopectx_t scope, scopectx_t newparent)
 } /* scope_setparent */
 
 /*
+ * nametype_datafree_register
+ *
+ * Used by name table users to install a
+ * function in the data-freeing function table.
+ */
+void
+nametype_dataop_register (lextype_t lt, name_datafree_fn ffn,
+                          name_datacopy_fn cfn)
+{
+    if (lt >= LEXTYPE_NAME_MIN && lt <= LEXTYPE_NAME_MAX) {
+        freedata[lt-LEXTYPE_NAME_MIN] = ffn;
+        copydata[lt-LEXTYPE_NAME_MIN] = cfn;
+    }
+} /* nametype_datafree_register */
+
+/*
  * name_search
  *
  * Looks up a name, starting from the specified scope and working
@@ -355,6 +386,7 @@ name_declare (scopectx_t scope, const char *id, size_t len,
 
     np->nametype = type;
     np->nameflags &= ~NAME_M_NODCLCHK;
+    np->nameflags |= NAME_M_DECLARED;
     if (valsize > NAME_DATA_SIZE) {
         /* XXX error condition */
         valsize = NAME_DATA_SIZE;

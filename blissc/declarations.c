@@ -130,7 +130,7 @@ bind_compiletime (void *ctx, quotelevel_t ql, quotemodifier_t qm,
     name_t *np = lexeme_ctx_get(lex);
     lexeme_t *rlex;
     strdesc_t *valdsc;
-    unsigned long val;
+    long val;
 
     if (cs == COND_CWA || cs == COND_AWC) {
         lexeme_free(lex);
@@ -143,7 +143,7 @@ bind_compiletime (void *ctx, quotelevel_t ql, quotemodifier_t qm,
     val = *(long *)name_data(np);
     valdsc = string_printf(0, "%ld", val);
     rlex = lexeme_create(LEXTYPE_NUMERIC, valdsc);
-    lexeme_val_setunsigned(rlex, val);
+    lexeme_val_setsigned(rlex, val);
     string_free(valdsc);
     lexeme_free(lex);
     lexseq_instail(result, rlex);
@@ -161,37 +161,31 @@ bind_compiletime (void *ctx, quotelevel_t ql, quotemodifier_t qm,
 static int
 declare_compiletime (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
 {
-    lexeme_t *lex;
+    lexeme_t *lex, *nlex;
     lextype_t lt;
     name_t *np;
+    strdesc_t *str;
+    long val;
 
     while (1) {
-        lt = parser_next(pctx, &lex);
+        lt = parser_next(pctx, &nlex);
         if (lt != LEXTYPE_NAME) {
             /* XXX error condition */
-            lexeme_free(lex);
-            return 0;
-        }
-        np = lexeme_ctx_get(lex);
-        lexeme_free(lex);
-        if (name_flags(np) & NAME_M_RESERVED) {
-            /* XXX error condition */
-            return 0;
-        }
-        if (name_type(np) != LEXTYPE_NAME && name_scope(np) == scope) {
-            /* XXX redeclaration error */
+            lexeme_free(nlex);
             return 0;
         }
         lt = parser_next(pctx, &lex);
         lexeme_free(lex);
         if (lt != LEXTYPE_OP_ASSIGN) {
             /* XXX error condition */
+            lexeme_free(nlex);
             return 0;
         } else {
             parser_set_quotelevel(pctx, QL_NORMAL);
 
             if (!parse_Expression(pctx)) {
                 /* XXX error condition */
+                lexeme_free(nlex);
                 return 0;
             } else {
                 lt = parser_next(pctx, &lex);
@@ -200,9 +194,16 @@ declare_compiletime (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
                     lexeme_free(lex);
                     return 0;
                 }
-                np->nametype = LEXTYPE_NAME_COMPILETIME;
-                *(long *)name_data(np) = lexeme_signedval(lex);
+                str = lexeme_text(nlex);
+                val = lexeme_signedval(lex);
+                np = name_declare(scope, str->ptr, str->len,
+                                  LEXTYPE_NAME_COMPILETIME,
+                                  &val, sizeof(val));
+                if (np == 0) {
+                    /* XXX error condition */
+                }
                 lexeme_free(lex);
+                lexeme_free(nlex);
             }
 
         }

@@ -52,19 +52,23 @@ static lextype_t openers[] = { LEXTYPE_DELIM_LPAR, LEXTYPE_DELIM_LBRACK,
 static lextype_t closers[] = { LEXTYPE_DELIM_RPAR, LEXTYPE_DELIM_RBRACK,
                                LEXTYPE_DELIM_RANGLE };
 
-static int macro_expand(parse_ctx_t pctx, name_t *macroname, lexseq_t *result);
+static int macro_expand(parse_ctx_t pctx, name_t *macroname,
+                        lexseq_t *result);
+static void macro_freedata(name_t *np);
+static int macro_copydata(name_t *dst, name_t *src);
+static void macparam_freedata(name_t *np);
+static int macparam_copydata(name_t *dst, name_t *src);
 
 
 /*
  * macro_bind
  */
-int
+static int
 macro_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
             lextype_t lt, condstate_t cs, lexeme_t *lex, lexseq_t *result)
 {
     parse_ctx_t pctx = ctx;
     name_t *np = lexeme_ctx_get(lex);
-    lexeme_t *rlex;
     strdesc_t namedsc;
 
     if (cs == COND_CWA || cs == COND_AWC) {
@@ -76,20 +80,14 @@ macro_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
 
     switch (qm) {
         case QM_QUOTE:
-            rlex = lexeme_create(LEXTYPE_NAME, &namedsc);
-            lexeme_copypos(rlex, lex);
-            lexseq_instail(result, rlex);
-            lexeme_free(lex);
-            return 1;
+            lex->type = LEXTYPE_UNBOUND;
+            return 0;
         case QM_EXPAND:
             lexeme_free(lex);
             return macro_expand(pctx, np, result);
         case QM_UNQUOTE:
-            rlex = lexeme_create(lt, &namedsc);
-            lexeme_copypos(rlex, lex);
-            lexeme_free(lex);
-            lexseq_instail(result, rlex);
-            return 1;
+            lex->type = name_type(np);
+            return 0;
         default:
             break;
     }
@@ -109,7 +107,7 @@ macro_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
 /*
  * macparam_bind
  */
-int
+static int
 macparam_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
                lextype_t lt, condstate_t cs, lexeme_t *lex, lexseq_t *result)
 {
@@ -156,6 +154,10 @@ macros_init (scopectx_t kwdscope)
 
     lextype_register(LEXTYPE_NAME_MACRO, macro_bind);
     lextype_register(LEXTYPE_NAME_MAC_PARAM, macparam_bind);
+    nametype_dataop_register(LEXTYPE_NAME_MACRO, macro_freedata,
+                               macro_copydata);
+    nametype_dataop_register(LEXTYPE_NAME_MAC_PARAM, macparam_freedata,
+                               macparam_copydata);
 
 } /* macros_init */
 
@@ -201,6 +203,96 @@ macparams_free (struct macparam_s *plist)
         freelist = p;
     }
 } /* macparams_free */
+
+/*
+ * macparam_freedata
+ *
+ * Frees up a macro parameter (in the name structure).
+ */
+static void
+macparam_freedata (name_t *np)
+{
+    lexseq_t *seq = name_data(np);
+    lexseq_free(seq);
+
+} /* macparam_freedata */
+
+/*
+ * macparam_copydata
+ *
+ * Copies a macro parameter.
+ */
+static int
+macparam_copydata (name_t *dst, name_t *src)
+{
+    lexseq_t *src_seq, *dst_seq;
+    src_seq = name_data(src);
+    dst_seq = name_data(dst);
+    lexseq_init(dst_seq);
+    lexseq_copy(dst_seq, src_seq);
+    return 1;
+}
+
+/*
+ * macro_freedata
+ *
+ * Releases a macro's storage.  Called by name_free().
+ */
+static void
+macro_freedata (name_t *np)
+{
+    struct macrodecl_s *macro = *(struct macrodecl_s **)name_data(np);
+    macparams_free(macro->plist);
+    macparams_free(macro->ilist);
+    lexseq_free(&macro->body);
+    free(macro);
+    
+} /* macro_freedata */
+
+/*
+ * macro_copydata
+ *
+ * Copies a macro's storage.  Called by name_copy().
+ */
+static int
+macro_copydata (name_t *dst, name_t *src)
+{
+    struct macrodecl_s *srcm, *dstm;
+    struct macparam_s *smp, *dmp, *dmpl;
+    srcm = *(struct macrodecl_s **)name_data(src);
+    dstm = malloc(sizeof(struct macrodecl_s));
+    if (dstm == 0) return 0;
+    memcpy(dstm, srcm, sizeof(struct macrodecl_s));
+    lexseq_init(&dstm->body);
+    lexseq_copy(&dstm->body, &srcm->body);
+    dstm->plist = dstm->ilist = 0;
+    for (smp = srcm->plist, dmp = dmpl = 0; smp != 0;
+         dmpl = dmp, smp = smp->next) {
+        dmp = macparam_alloc();
+        memcpy(dmp, smp, sizeof(struct macparam_s));
+        dmp->next = 0;
+        if (dmpl == 0) {
+            dstm->plist = dmp;
+        } else {
+            dmpl->next = dmp;
+        }
+    }
+
+    for (smp = srcm->ilist, dmp = dmpl = 0; smp != 0;
+         dmpl = dmp, smp = smp->next) {
+        dmp = macparam_alloc();
+        memcpy(dmp, smp, sizeof(struct macparam_s));
+        dmp->next = 0;
+        if (dmpl == 0) {
+            dstm->ilist = dmp;
+        } else {
+            dmpl->next = dmp;
+        }
+    }
+    *(struct macrodecl_s **)name_data(dst) = dstm;
+    return 1;
+
+} /* macro_copydata */
 
 /*
  * parse_paramlist
