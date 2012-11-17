@@ -1,3 +1,4 @@
+%NUMBER(-42)
 COMPILETIME
     hello = 37, goodbye = -15;
     
@@ -7,4 +8,14 @@ hello, goodbye
 %ASCII'hello is now:' hello
 %ASSIGN(hello, goodbye)
 %ASCII'hello is now:' hello
-
+%NUMBER('15')
+%NUMBER(%X'ff')
+%NUMBER(hello)
+%ASCII'Declared(hello):' %DECLARED(hello)
+%ASCII'Declared(nonexistent):' %DECLARED(nonexistent)
+%ASCII'Declared(COMPILETIME):' %DECLARED(COMPILETIME)
+MACRO farfel = goodbye%, zikzak = nonexistent%;
+%ASCII'Declared(farfel):' %DECLARED(farfel)
+%ASCII'Declared(%QUOTE farfel):' %DECLARED(%QUOTE farfel)
+%ASCII'Declared(zikzak):' %DECLARED(zikzak)
+%ASCII'Declared(%QUOTE zikzak):' %DECLARED(%QUOTE zikzak)
