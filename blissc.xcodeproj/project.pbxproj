@@ -18,6 +18,8 @@
 		7A9D4CAB1635CEA30013AE09 /* scanner.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A9D4CAA1635CEA30013AE09 /* scanner.c */; };
 		7A9E1C13163DA445009ACBD0 /* parser.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A9E1C12163DA445009ACBD0 /* parser.c */; };
 		7AB5ED821642A3AB0063EC94 /* expression.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AB5ED811642A3AB0063EC94 /* expression.c */; };
+		7AC12EC01659194A009C84F5 /* utils.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AC12EBF1659194A009C84F5 /* utils.c */; };
+		7AC12EC7165944B4009C84F5 /* storage.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AC12EC6165944B4009C84F5 /* storage.c */; };
 		7AF573D9164936EE005C965F /* macros.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AF573D8164936EE005C965F /* macros.c */; };
 /* End PBXBuildFile section */
 
@@ -59,6 +61,12 @@
 		7AB5ED811642A3AB0063EC94 /* expression.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = expression.c; sourceTree = "<group>"; };
 		7AB5ED841642A3B80063EC94 /* expression.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = expression.h; sourceTree = "<group>"; };
 		7ABF5680164DA2B10053480F /* test_macro.bli */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_macro.bli; path = ../testfiles/test_macro.bli; sourceTree = "<group>"; };
+		7AC12EBF1659194A009C84F5 /* utils.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = utils.c; sourceTree = "<group>"; };
+		7AC12EC2165919B2009C84F5 /* utils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = utils.h; sourceTree = "<group>"; };
+		7AC12EC316591C0A009C84F5 /* machinedef.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = machinedef.h; sourceTree = "<group>"; };
+		7AC12EC41659303B009C84F5 /* storage.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = storage.h; sourceTree = "<group>"; };
+		7AC12EC516593429009C84F5 /* declarations.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = declarations.h; sourceTree = "<group>"; };
+		7AC12EC6165944B4009C84F5 /* storage.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = storage.c; sourceTree = "<group>"; };
 		7ADC81891649CD660056600E /* macros.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = macros.h; sourceTree = "<group>"; };
 		7AF573D8164936EE005C965F /* macros.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = macros.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -95,6 +103,7 @@
 			children = (
 				7A9D4C9F1635A88F0013AE09 /* blissc.1 */,
 				7A2DD25A165009F1002CD078 /* declarations.c */,
+				7AC12EC516593429009C84F5 /* declarations.h */,
 				7AB5ED811642A3AB0063EC94 /* expression.c */,
 				7AB5ED841642A3B80063EC94 /* expression.h */,
 				7A9D4CA61635A93A0013AE09 /* fileio.c */,
@@ -103,6 +112,7 @@
 				7A7FD5181636C65200B2D7FC /* lexeme.h */,
 				7A7FD5141636C29C00B2D7FC /* lexer.c */,
 				7A7FD5171636C2A700B2D7FC /* lexer.h */,
+				7AC12EC316591C0A009C84F5 /* machinedef.h */,
 				7AF573D8164936EE005C965F /* macros.c */,
 				7ADC81891649CD660056600E /* macros.h */,
 				7A9D4C9D1635A88F0013AE09 /* main.c */,
@@ -112,12 +122,16 @@
 				7A9E1C14163DA45A009ACBD0 /* parser.h */,
 				7A9D4CAA1635CEA30013AE09 /* scanner.c */,
 				7A9D4CA91635CE970013AE09 /* scanner.h */,
+				7AC12EC6165944B4009C84F5 /* storage.c */,
+				7AC12EC41659303B009C84F5 /* storage.h */,
 				7A95BCEB1641CC2F002F851E /* strings.c */,
 				7A95BCEE1641E17C002F851E /* strings.h */,
+				7A5351E91656FE7B00BE4B99 /* test_decl.bli */,
 				7ABF5680164DA2B10053480F /* test_macro.bli */,
 				7A8735071642CA6F006BFC30 /* test_parser.bli */,
-				7A5351E91656FE7B00BE4B99 /* test_decl.bli */,
 				7A548D681646E9E500A2A20F /* test_req.req */,
+				7AC12EBF1659194A009C84F5 /* utils.c */,
+				7AC12EC2165919B2009C84F5 /* utils.h */,
 			);
 			path = blissc;
 			sourceTree = "<group>";
@@ -184,6 +198,8 @@
 				7AB5ED821642A3AB0063EC94 /* expression.c in Sources */,
 				7AF573D9164936EE005C965F /* macros.c in Sources */,
 				7A2DD25B165009F1002CD078 /* declarations.c in Sources */,
+				7AC12EC01659194A009C84F5 /* utils.c in Sources */,
+				7AC12EC7165944B4009C84F5 /* storage.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

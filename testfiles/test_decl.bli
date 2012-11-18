@@ -1,4 +1,4 @@
-%NUMBER(-42)
+%NBITSU(1023)
 COMPILETIME
     hello = 37, goodbye = -15;
     
@@ -24,3 +24,13 @@ MACRO farfel = goodbye%, zikzak = nonexistent%;
 %ASSIGN(hello,5) %ASSIGN(goodbye,8192)
 %NBITS(hello,goodbye) %NBITSU(65535,hello,goodbye)
 
+%ASSIGN(goodbye,-37)
+LITERAL
+    testlit = 99,
+    test2 = hello : UNSIGNED(16),
+    test3 = goodbye : SIGNED(24);
+
+%STRING(%CHAR(13),%CHAR(10),%ASCII'---> testlit = ') testlit
+%STRING(%CHAR(13),%CHAR(10),%ASCII'---> test2 = ') test2
+%STRING(%CHAR(13),%CHAR(10),%ASCII'---> test3 = ') test3
+%STRING(%CHAR(13),%CHAR(10),%ASCII'<--done-->',%CHAR(13),%CHAR(10))
