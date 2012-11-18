@@ -14,7 +14,7 @@ int parse_Expression (parse_ctx_t pctx)
 {
     lexeme_t *lex;
 
-    parser_next(pctx, &lex);
+    parser_next(pctx, QL_NORMAL, &lex);
     parser_insert(pctx, lex);
     
     return 1;

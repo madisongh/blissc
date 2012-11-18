@@ -61,7 +61,6 @@ int
 parse_declaration (parse_ctx_t pctx, lextype_t lt)
 {
     scopectx_t scope;
-    quotelevel_t oldql;
     lexeme_t *lex;
     int is_global = 0, is_external = 0;
     int status;
@@ -71,29 +70,26 @@ parse_declaration (parse_ctx_t pctx, lextype_t lt)
         return 1;
     }
 
-    oldql = parser_set_quotelevel(pctx, QL_NAME);
     if (lt == LEXTYPE_DCL_GLOBAL) {
         is_global = 1;
-        lt = parser_next(pctx, &lex);
+        lt = parser_next(pctx, QL_NAME, &lex);
         if (lt == LEXTYPE_NAME) {
             // status = declare_global(pctx, lex);
         } else if (!(lt == LEXTYPE_DCL_LITERAL ||
                      lt == LEXTYPE_DCL_ROUTINE)) {
             /* XXX error condition */
             lexeme_free(lex);
-            parser_set_quotelevel(pctx, oldql);
             return 1;
         }
         lexeme_free(lex);
     }
     if (!is_global && lt == LEXTYPE_DCL_EXTERNAL) {
         is_external = 1;
-        lt = parser_next(pctx, &lex);
+        lt = parser_next(pctx, QL_NAME, &lex);
         if (!(lt == LEXTYPE_DCL_LITERAL ||
               lt == LEXTYPE_DCL_ROUTINE)) {
             /* XXX error condition */
             lexeme_free(lex);
-            parser_set_quotelevel(pctx, oldql);
             return 1;
         }
         lexeme_free(lex);
@@ -113,7 +109,6 @@ parse_declaration (parse_ctx_t pctx, lextype_t lt)
             break;
     }
 
-    parser_set_quotelevel(pctx, oldql);
     return status;
     
 } /* parse_declaration */
@@ -128,8 +123,6 @@ bind_compiletime (void *ctx, quotelevel_t ql, quotemodifier_t qm,
                   lextype_t lt, condstate_t cs, lexeme_t *lex,
                   lexseq_t *result) {
     name_t *np = lexeme_ctx_get(lex);
-    lexeme_t *rlex;
-    strdesc_t *valdsc;
     long val;
 
     if (cs == COND_CWA || cs == COND_AWC) {
@@ -141,13 +134,12 @@ bind_compiletime (void *ctx, quotelevel_t ql, quotemodifier_t qm,
         return 0;
     }
     val = *(long *)name_data(np);
-    valdsc = string_printf(0, "%ld", val);
-    rlex = lexeme_create(LEXTYPE_NUMERIC, valdsc);
-    lexeme_val_setsigned(rlex, val);
-    string_free(valdsc);
-    lexeme_free(lex);
-    lexseq_instail(result, rlex);
-    return 1;
+    string_free(&lex->text);
+    string_printf(&lex->text, "%ld", val);
+    lex->type = lex->boundtype = LEXTYPE_NUMERIC;
+    lexeme_val_setsigned(lex, val);
+
+    return 0;
     
 } /* bind_compiletime */
 
@@ -168,30 +160,24 @@ declare_compiletime (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
     long val;
 
     while (1) {
-        lt = parser_next(pctx, &nlex);
-        if (lt != LEXTYPE_NAME) {
+        if (!parser_expect(pctx, QL_NAME, LEXTYPE_NAME, &nlex, 0)) {
             /* XXX error condition */
-            lexeme_free(nlex);
             return 0;
         }
-        lt = parser_next(pctx, &lex);
-        lexeme_free(lex);
-        if (lt != LEXTYPE_OP_ASSIGN) {
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 0)) {
             /* XXX error condition */
             lexeme_free(nlex);
             return 0;
         } else {
-            parser_set_quotelevel(pctx, QL_NORMAL);
 
             if (!parse_Expression(pctx)) {
                 /* XXX error condition */
                 lexeme_free(nlex);
                 return 0;
             } else {
-                lt = parser_next(pctx, &lex);
-                if (lt != LEXTYPE_NUMERIC) {
+                if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NUMERIC, &lex, 0)) {
                     /* XXX error condition */
-                    lexeme_free(lex);
+                    lexeme_free(nlex);
                     return 0;
                 }
                 str = lexeme_text(nlex);
@@ -208,8 +194,7 @@ declare_compiletime (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
 
         }
 
-        lt = parser_next(pctx, &lex);
-        lexeme_free(lex);
+        lt = parser_next(pctx, QL_NORMAL, 0);
         if (lt == LEXTYPE_DELIM_SEMI) {
             break;
         }
@@ -217,8 +202,6 @@ declare_compiletime (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
             /* XXX error condition */
             return 0;
         }
-
-        parser_set_quotelevel(pctx, QL_NAME);
 
     } /* while 1 */
 
@@ -237,75 +220,7 @@ declare_compiletime (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
 static int
 define_literal (parse_ctx_t pctx, int is_global)
 {
-    int skip_to_end = 0;
-    quotelevel_t oldql;
-    lexeme_t *lex;
-    lextype_t lt;
-    name_t *np;
-    scopectx_t scope;
-
-    if (!parser_decl_ok(pctx, &scope)) {
-        /* XXX error condition */
-        skip_to_end = 1;
-    }
-
-    oldql = parser_set_quotelevel(pctx, QL_NAME);
-
-    while (1) {
-        lt = parser_next(pctx, &lex);
-        if (lt != LEXTYPE_NAME) {
-            /* XXX error condition */
-            skip_to_end = 1;
-        }
-        np = name_search(scope, lex->text.ptr, lex->text.len, 0);
-        lexeme_free(lex);
-        if (name_flags(np) & NAME_M_RESERVED) {
-            /* XXX error condition */
-            skip_to_end = 1;
-        }
-        if (name_type(np) != LEXTYPE_NAME && name_scope(np) == scope) {
-            /* XXX redeclaration error */
-            skip_to_end = 1;
-        }
-        lt = parser_next(pctx, &lex);
-        lexeme_free(lex);
-        if (lt != LEXTYPE_OP_ASSIGN) {
-            /* XXX error condition */
-            skip_to_end = 1;
-        } else {
-            parser_set_quotelevel(pctx, QL_NORMAL);
-
-            if (!parse_Expression(pctx)) {
-                /* XXX error condition */
-                skip_to_end = 1;
-            } else {
-                lt = parser_next(pctx, &lex);
-                // process the value
-                lt = parser_next(pctx, &lex);
-                if (lt == LEXTYPE_DELIM_COLON) {
-                    lexeme_free(lex);
-                    // process the attribute(s)
-                    lt = parser_next(pctx, &lex);
-                }
-            }
-
-            parser_set_quotelevel(pctx, QL_NAME);
-
-        }
-
-        lt = parser_next(pctx, &lex);
-        if (lt == LEXTYPE_DELIM_SEMI) {
-            break;
-        }
-        if (lt != LEXTYPE_DELIM_COMMA) {
-            /* XXX error condition */
-            break;
-        }
-
-    } /* while 1 */
-
-    parser_set_quotelevel(pctx, oldql);
-    lexeme_free(lex);
+    
     return 1;
 
 } /* define_literal */

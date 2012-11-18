@@ -333,7 +333,7 @@ parse_paramlist (parse_ctx_t pctx, scopectx_t curscope,
     lexseq_init(&nullseq);
 
     while (1) {
-        lt = parser_next(pctx, &lex);
+        lt = parser_next(pctx, QL_NAME, &lex);
         if (lexeme_boundtype(lex) != LEXTYPE_NAME) {
             /* XXX error condition */
             break;
@@ -358,18 +358,15 @@ parse_paramlist (parse_ctx_t pctx, scopectx_t curscope,
         }
         lexeme_free(lex);
         count += 1;
-        lt = parser_next(pctx, &lex);
+        lt = parser_next(pctx, QL_NAME, &lex);
         if (assign_allowed && lt == LEXTYPE_OP_ASSIGN) {
-            quotelevel_t oldql;
             lexseq_t *defval = name_data(mnp);
             lexeme_free(lex);
-            oldql = parser_set_quotelevel(pctx, QL_MACRO);
             lexseq_init(defval);
-            if (!parse_lexeme_seq(pctx, 0, terms, 2, defval, &lt)) {
+            if (!parse_lexeme_seq(pctx, 0, QL_MACRO, terms, 2, defval, &lt)) {
                 /* XXX error condition */
                 break;
             }
-            parser_set_quotelevel(pctx, oldql);
         } else {
             lexeme_free(lex);
         }
@@ -405,7 +402,6 @@ int
 declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
 {
     int skip_to_end = 0;
-    quotelevel_t oldql;
     lexeme_t *lex;
     lexseq_t body;
     lextype_t lt;
@@ -417,10 +413,8 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
     int is_kwdmacro = (curlt == LEXTYPE_DCL_KEYWORDMACRO);
     macrotype_t mtype;
 
-    oldql = parser_set_quotelevel(pctx, QL_NAME);
-
     while (1) {
-        lt = parser_next(pctx, &lex);
+        lt = parser_next(pctx, QL_NAME, &lex);
         if (lexeme_boundtype(lex) != LEXTYPE_NAME) {
             /* XXX error condition */
             skip_to_end = 1;
@@ -439,7 +433,7 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
             }
         }
         mtype = (is_kwdmacro ? MACRO_KWD : MACRO_UNK);
-        lt = parser_next(pctx, &lex);
+        lt = parser_next(pctx, QL_NAME, 0);
         if (lt != LEXTYPE_DELIM_LPAR &&
             lt != LEXTYPE_OP_ASSIGN &&
             (is_kwdmacro || lt == LEXTYPE_DELIM_LBRACK)) {
@@ -457,12 +451,11 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
                                  &normcount)) {
                 skip_to_end = 1;
             }
-            lexeme_free(lex);
             if (normcount == 0) {
                 /* XXX error condition */
                 skip_to_end = 1;
             }
-            lt = parser_next(pctx, &lex);
+            lt = parser_next(pctx, QL_NAME, 0);
             if (!is_kwdmacro) {
                 mtype = MACRO_SIMPLE;
             }
@@ -477,8 +470,7 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
                                  &ntbl, &clst, &condcount)) {
                 skip_to_end = 1;
             }
-            lexeme_free(lex);
-            lt = parser_next(pctx, &lex);
+            lt = parser_next(pctx, QL_NAME, 0);
             mtype = (condcount == 0 ? MACRO_COND : MACRO_ITER);
         }
 
@@ -488,13 +480,12 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
                 mtype = MACRO_SIMPLE;
             }
 
-            parser_set_quotelevel(pctx, QL_MACRO);
             parser_incr_erroneof(pctx);
             lexeme_free(lex);
 
-            for (lt = parser_next(pctx, &lex);
+            for (lt = parser_next(pctx, QL_MACRO, &lex);
                  lt != LEXTYPE_LXF_DELIM_PERCENT;
-                 lt = parser_next(pctx, &lex)) {
+                 lt = parser_next(pctx, QL_MACRO, &lex)) {
                 if (lt == LEXTYPE_END || lt == LEXTYPE_NONE) {
                     /* XXX error condition */
                     skip_to_end = 1;
@@ -504,10 +495,7 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
                 lexseq_instail(&body, lex);
             }
             parser_decr_erroneof(pctx);
-            parser_set_quotelevel(pctx, QL_NAME);
         }
-
-        lexeme_free(lex);
 
         if (!skip_to_end) {
             struct macrodecl_s *macro = malloc(sizeof(struct macrodecl_s));
@@ -532,7 +520,7 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
             break;
         }
 
-        lt = parser_next(pctx, &lex);
+        lt = parser_next(pctx, QL_NAME, 0);
         if (lt == LEXTYPE_DELIM_SEMI) {
             break;
         }
@@ -543,8 +531,6 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
 
     } /* while 1 */
 
-    lexeme_free(lex);
-    parser_set_quotelevel(pctx, oldql);
     return 1;
 
 } /* define_macro */
@@ -587,7 +573,7 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
                 pseq = name_data(np);
                 lexseq_free(pseq);
                 np->nametype = LEXTYPE_NAME_MAC_PARAM;
-                parse_lexeme_seq(pctx, remaining, terms, 1, pseq, &lt);
+                parse_lexeme_seq(pctx, remaining, QL_MACRO, terms, 1, pseq, &lt);
             }
         }
 
@@ -661,7 +647,7 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
                                         (lt == LEXTYPE_LXF_COUNT
                                          ? curdepth : actcount));
                     lexeme_free(lex);
-                    lex = lexeme_create(LEXTYPE_NUMERIC, str);
+                    lex = parser_lexeme_create(pctx, LEXTYPE_NUMERIC, str);
                     string_free(str);
                     break;
                 }
@@ -747,7 +733,8 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
                         lexseq_free(name_data(np));
                         if (lexseq_length(&newremain) != 0) {
                             lexseq_t *val = name_data(np);
-                            parse_lexeme_seq(pctx, &newremain, terms, 1, val, &lt);
+                            parse_lexeme_seq(pctx, &newremain, QL_MACRO,
+                                             terms, 1, val, &lt);
                         }
                         cformal = cformal->next;
                     } /* walk the formals */
@@ -838,7 +825,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
         which = 3;
     } else {
 
-        lt = parser_next(pctx, &lex);
+        lt = parser_next(pctx, QL_NORMAL, &lex);
         if (macro->type == MACRO_KWD) {
             if (lt != LEXTYPE_DELIM_LPAR) {
                 /* XXX error condition */
@@ -866,7 +853,6 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
     // the actual parameters.
     if (which < 3) {
 
-        quotelevel_t oldql = parser_set_quotelevel(pctx, QL_NAME);
         lexeme_t *extralast;
         struct macparam_s *formal;
         lexseq_t val;
@@ -882,7 +868,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
             // For positionals, grab the next formal-parameter name,
             // or set np to NULL to add the actual to %REMAINING.
             if (macro->type == MACRO_KWD) {
-                lt = parser_next(pctx, &lex);
+                lt = parser_next(pctx, QL_NAME, &lex);
                 if (lexeme_boundtype(lex) != LEXTYPE_NAME) {
                     /* XXX error condition */
                     lexeme_free(lex);
@@ -893,9 +879,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
                     /* XXX error condition */
                 }
                 lexeme_free(lex);
-                lt = parser_next(pctx, &lex);
-                lexeme_free(lex);
-                if (lt != LEXTYPE_OP_ASSIGN) {
+                if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 1)) {
                     /* XXX error condition */
                     break;
                 }
@@ -907,7 +891,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
             }
             lexseq_init(&val);
             // Now parse the actual-parameter, which can be an expression
-            if (!parse_lexeme_seq(pctx, 0, terms, 2, &val, &lt)) {
+            if (!parse_lexeme_seq(pctx, 0, QL_NAME, terms, 2, &val, &lt)) {
                 lexseq_free(&val);
                 break;
             }
@@ -943,8 +927,6 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
             }
 
         } /* while (1) */
-
-        parser_set_quotelevel(pctx, oldql);
 
         if (lt != closers[which]) {
             /* XXX error condition */

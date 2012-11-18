@@ -167,8 +167,8 @@ test_parser (int argc, const char *argv[])
     }
     linewidth = 0;
     delim = "";
-    for (lt = parser_next(pctx, &lex); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
-         lt = parser_next(pctx, &lex)) {
+    for (lt = parser_next(pctx, QL_NORMAL, &lex); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
+         lt = parser_next(pctx, QL_NORMAL, &lex)) {
         PRINTLEX(lex);
         if (lt >= LEXTYPE_DCL_MIN || lt <= LEXTYPE_DCL_MAX) {
             parse_declaration(pctx, lt);
