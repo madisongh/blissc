@@ -33,8 +33,6 @@ struct saved_filename_s {
     strdesc_t *filename;
     int filename_index;
 };
-static struct saved_filename_s *saved_filenames;
-static int filename_count;
 
 /*
  * This structure is for inserting a new chain of lexemes
@@ -63,9 +61,11 @@ typedef struct lexchain_s lexchain_t;
  * marker.
  */
 struct lexer_ctx_s {
-    lexchain_t   *chain;
-    int          atend;
-    int          signok;
+    struct saved_filename_s *saved_filenames;
+    lexchain_t              *chain;
+    int                      filename_count;
+    int                      atend;
+    int                      signok;
 };
 
 /*
@@ -160,13 +160,15 @@ lexchain_free (lexchain_t *chain)
  * Filename tracking for lexeme position records
  */
 static int
-filename_lookup (const char *name, size_t len, strdesc_t **fdsc) {
+filename_lookup (lexer_ctx_t lctx, const char *name, size_t len,
+                 strdesc_t **fdsc) {
 
     struct saved_filename_s *sf, *lastsf;
     strdesc_t namedsc;
 
     strdesc_init(&namedsc, (char *)name, len);
-    for (sf = saved_filenames, lastsf = 0; sf != 0; lastsf = sf, sf = sf->next) {
+    for (sf = lctx->saved_filenames, lastsf = 0; sf != 0;
+         lastsf = sf, sf = sf->next) {
         if (strings_eql(sf->filename, &namedsc)) {
             break;
         }
@@ -175,20 +177,21 @@ filename_lookup (const char *name, size_t len, strdesc_t **fdsc) {
     if (sf == 0) {
         sf = malloc(sizeof(struct saved_filename_s));
         if (lastsf == 0) {
-            saved_filenames = sf;
+            lctx->saved_filenames = sf;
         } else {
             lastsf->next = sf;
         }
         sf->next = 0;
         sf->filename = string_from_chrs(0, name, len);
-        sf->filename_index = filename_count;
-        filename_count += 1;
+        sf->filename_index = lctx->filename_count;
+        lctx->filename_count += 1;
     }
 
     if (fdsc != 0) {
         *fdsc = sf->filename;
     }
     return sf->filename_index;
+
 } /* filename_lookup */
 
 /* --- Public API --- */
@@ -198,16 +201,24 @@ filename_lookup (const char *name, size_t len, strdesc_t **fdsc) {
  *
  * One-time lexer initialization, to register the operator names.
  */
-void
+lexer_ctx_t 
 lexer_init (scopectx_t kwdscope)
 {
+    lexer_ctx_t ctx;
     int i;
+
     for (i = 0; i < sizeof(operator_names)/sizeof(operator_names[0]); i++) {
         name_insert(kwdscope, &operator_names[i]);
     }
-    filename_count = 0;
-    saved_filenames = 0;
-    
+
+    ctx = malloc(sizeof(struct lexer_ctx_s));
+    if (ctx != 0) {
+        memset(ctx, 0, sizeof(struct lexer_ctx_s));
+        ctx->signok = 1;
+    }
+
+    return ctx;
+
 } /* lexer_init */
 
 /*
@@ -217,10 +228,10 @@ lexer_init (scopectx_t kwdscope)
  * return the relevant filename.
  */
 strdesc_t *
-lexer_filename (int filename_index)
+lexer_filename (lexer_ctx_t lctx, int filename_index)
 {
     struct saved_filename_s *sf;
-    for (sf = saved_filenames; sf != 0; sf = sf->next) {
+    for (sf = lctx->saved_filenames; sf != 0; sf = sf->next) {
         if (sf->filename_index == filename_index) {
             return sf->filename;
         }
@@ -231,38 +242,32 @@ lexer_filename (int filename_index)
 
 /*
  * lexer_fopen
- *
- * Called to begin scanning for lexemes in a file.
+ * Insert a new file at the front of the stream.
  */
-lexer_ctx_t
-lexer_fopen (const char *fname, size_t fnlen)
+int
+lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen)
 {
-    lexer_ctx_t ctx = malloc(sizeof(struct lexer_ctx_s));
-    if (ctx != 0) {
-        
-        memset(ctx, 0, sizeof(struct lexer_ctx_s));
-        ctx->chain = lexchain_alloc();
-        ctx->chain->sctx = scan_init();
-        if (ctx->chain->sctx == 0) {
-            lexchain_free(ctx->chain);
-            free(ctx);
-            ctx = 0;
-        } else {
-            if (!scan_fopen(ctx->chain->sctx,
-                           fname, fnlen)) {
-                lexchain_free(ctx->chain);
-                free(ctx);
-                ctx = 0;
-            } else {
-                ctx->chain->filename_index =
-                    filename_lookup(fname, fnlen, 0);
-            }
-        }
+    lexchain_t *chain = lexchain_alloc();
+
+    if (chain == 0) {
+        /* XXX error condition */
+        return 0;
     }
-    if (ctx != 0) {
-        ctx->signok = 1;
+    chain->sctx = scan_init();
+    if (chain->sctx == 0) {
+        lexchain_free(chain);
+        return 0;
     }
-    return ctx;
+    if (!scan_fopen(chain->sctx, fname, fnlen)) {
+        scan_finish(chain->sctx);
+        chain->sctx = 0;
+        lexchain_free(chain);
+        return 0;
+    }
+    chain->filename_index = filename_lookup(ctx, fname, fnlen, 0);
+    chain->nextchain = ctx->chain;
+    ctx->chain = chain;
+    return 1;
 
 } /* lexer_fopen */
 
@@ -454,32 +459,3 @@ lexer_insert_seq (lexer_ctx_t ctx, lexseq_t *seq)
     lexseq_prepend(&chain->seq, seq);
 }
 
-/*
- * lexer_newfile
- * Insert a new file at the front of the stream (for REQUIRE and %REQUIRE).
- */
-int
-lexer_newfile (lexer_ctx_t ctx, const char *fname, size_t fnlen)
-{
-    lexchain_t *chain = lexchain_alloc();
-
-    if (chain == 0) {
-        /* XXX error condition */
-        return 0;
-    }
-    chain->sctx = scan_init();
-    if (chain->sctx == 0) {
-        lexchain_free(chain);
-        return 0;
-    }
-    if (!scan_fopen(chain->sctx, fname, fnlen)) {
-        scan_finish(chain->sctx);
-        chain->sctx = 0;
-        lexchain_free(chain);
-        return 0;
-    }
-    chain->nextchain = ctx->chain;
-    ctx->chain = chain;
-    return 1;
-
-} /* lexer_newfile */

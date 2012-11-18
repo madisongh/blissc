@@ -19,3 +19,12 @@ int parse_Expression (parse_ctx_t pctx)
     
     return 1;
 }
+
+int
+parse_ctce (parse_ctx_t pctx, lexeme_t **lexp)
+{
+    if (!parse_Expression(pctx)) {
+        return 0;
+    }
+    return parser_expect(pctx, QL_NORMAL, LEXTYPE_NUMERIC, lexp, 1);
+}

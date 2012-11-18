@@ -13,6 +13,7 @@
 #include "fileio.h"
 #include "scanner.h"
 #include "strings.h"
+#include "utils.h"
 
 #define SCAN_MAXFILES 16
 #define SCAN_LINESIZE 1024
@@ -65,6 +66,7 @@ scan_init (void)
 {
     scanctx_t ctx = malloc(sizeof(struct scanctx_s));
     if (ctx != 0) {
+        memset(ctx, 0, sizeof(struct scanctx_s));
         ctx->curbuf = -1;
     }
     return ctx;

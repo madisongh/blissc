@@ -12,5 +12,6 @@
 #include "parser.h"
 
 int parse_Expression(parse_ctx_t pctx);
+int parse_ctce(parse_ctx_t pctx, lexeme_t **lexp);
 
 #endif

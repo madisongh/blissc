@@ -17,10 +17,13 @@
 #include "strings.h"
 #include "expression.h"
 #include "macros.h"
+#include "machinedef.h"
+#include "utils.h"
 
 struct parse_ctx_s {
     scopectx_t      kwdscope, curscope;
     void            *cctx;
+    machinedef_t    *mach;
     lexer_ctx_t     lexctx;
     int             lib_compile;
     quotemodifier_t quotemodifier;
@@ -30,6 +33,7 @@ struct parse_ctx_s {
     int             declarations_ok;
     int             fileno;
     unsigned int    lineno, colno;
+    unsigned long   valmask;
 };
 
 typedef int (*lexfunc_t)(parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt);
@@ -177,7 +181,7 @@ name_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
  * pointer to be stored in the block.
  */
 parse_ctx_t
-parser_init (scopectx_t kwdscope, void *cctx)
+parser_init (scopectx_t kwdscope, void *cctx, machinedef_t *mach)
 {
     parse_ctx_t pctx;
     int i;
@@ -193,13 +197,16 @@ parser_init (scopectx_t kwdscope, void *cctx)
         memset(pctx, 0, sizeof(struct parse_ctx_s));
         pctx->kwdscope = (kwdscope == 0 ? scope_begin(0) : kwdscope);
         pctx->curscope = pctx->kwdscope;
-        lexer_init(pctx->kwdscope);
+        pctx->lexctx = lexer_init(pctx->kwdscope);
         pctx->cctx = cctx;
     }
 
+    pctx->mach = mach;
+    pctx->valmask = (1UL << mach->bpval) - 1;
     pctx->declarations_ok = 1; /* XXX for now */
 
     return pctx;
+
 } /* parser_init */
 
 /*
@@ -215,6 +222,7 @@ parser_finish (parse_ctx_t pctx)
     }
     scope_end(pctx->curscope);
     free(pctx);
+    
 } /* parser_finish */
 
 /*
@@ -229,8 +237,8 @@ parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen)
     if (pctx->curscope == 0) {
         return 0;
     }
-    pctx->lexctx = lexer_fopen(fname, fnlen);
-    if (pctx->lexctx == 0) {
+    if (!lexer_fopen(pctx->lexctx, fname, fnlen)) {
+        pctx->curscope = scope_end(pctx->curscope);
         return 0;
     }
     return 1;
@@ -265,6 +273,12 @@ parser_insert_seq (parse_ctx_t pctx, lexseq_t *seq) {
     lexer_insert_seq(pctx->lexctx, seq);
 
 } /* parser_insert_seq */
+
+/*
+ * parser_get_machinedef
+ */
+machinedef_t *
+parser_get_machinedef (parse_ctx_t pctx) { return pctx->mach; }
 
 /*
  * parser_next
@@ -305,6 +319,21 @@ parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
             continue;
         }
         lt = lexeme_type(lex);
+        if (lt == LEXTYPE_NUMERIC) {
+            long sval;
+            sval = lexeme_signedval(lex);
+            if (sval < 0) {
+                if ((pctx->valmask & (-sval)) != (-sval)) {
+                    /* XXX error condition, truncate */
+                    lexeme_val_setsigned(lex, sval | ~pctx->valmask);
+                    string_printf(&lex->text, "%ld", (sval | ~pctx->valmask));
+                }
+            } else if ((pctx->valmask & sval) != sval) {
+                /* XXX error condition, truncate */
+                lexeme_val_setsigned(lex, sval & pctx->valmask);
+                string_printf(&lex->text, "%ld", (sval & pctx->valmask));
+            }
+        }
         if (is_lexfunc(lt, 0)) {
             if (pctx->quotemodifier == QM_EXPAND || ql < QL_MACRO ||
                 (lt == LEXTYPE_LXF_QUOTE || lt == LEXTYPE_LXF_UNQUOTE ||
@@ -799,12 +828,7 @@ parse_EXACTSTRING (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         /* XXX error condition */
         return 1;
     }
-    if (!parse_Expression(pctx)) {
-        /* XXX error condition */
-        parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
-        return 1;
-    }
-    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NUMERIC, &lex, 0)) {
+    if (!parse_ctce(pctx, &lex)) {
         /* XXX error condition */
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
@@ -820,11 +844,7 @@ parse_EXACTSTRING (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
-    if (!parse_Expression(pctx)) {
-        parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
-        return 1;
-    }
-    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NUMERIC, &lex, 0)) {
+    if (!parse_ctce(pctx, &lex)) {
         /* XXX error condition */
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
@@ -936,13 +956,9 @@ parse_CHAR (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     result = string_alloc(0, 0);
     INITSTR(chdsc, &ch, 1);
     while (1) {
-        if (!parse_Expression(pctx)) {
+        if (!parse_ctce(pctx, &lex)) {
             hit_error = 1;
-            break;
-        }
-        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NUMERIC, &lex, 0)) {
             skip_to_paren = 1;
-            hit_error = 1;
             break;
         }
         val = lexeme_signedval(lex);
@@ -1311,15 +1327,7 @@ parse_IF (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     // nesting of instances in which hitting end-of-file is a no-no.
     pctx->no_eof += 1;
 
-    if (!parse_Expression(pctx)) {
-        /* XXX error condition */
-        pctx->no_eof -= 1;
-        return 1;
-    }
-
-    // if the expression is compile-time constant,
-    // we will have a numeric literal next in the stream.
-    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NUMERIC, &lex, 0)) {
+    if (!parse_ctce(pctx, &lex)) {
         /* XXX error condition */
         pctx->no_eof -= 1;
         return 1;
@@ -1411,7 +1419,7 @@ parse_REQUIRE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         return 1;
     }
     str = lexeme_text(lex);
-    if (!lexer_newfile(pctx->lexctx, str->ptr, str->len)) {
+    if (!lexer_fopen(pctx->lexctx, str->ptr, str->len)) {
         /* XXX - error condition */
     }
     lexeme_free(lex);
@@ -1450,14 +1458,10 @@ parse_ASSIGN (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
-    if (!parse_Expression(pctx)) {
+    if (!parse_ctce(pctx, &lex)) {
         /* XXX error condition */
     } else {
-        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NUMERIC, &lex, 1)) {
-            /* XXX error condition */
-        } else {
-            *(long *)name_data(np) = lexeme_signedval(lex);
-        }
+        *(long *)name_data(np) = lexeme_signedval(lex);
         lexeme_free(lex);
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 0)) {
@@ -1572,18 +1576,7 @@ parse_DECLARED (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
  * Returns the largest number of bits required to hold the
  * value of the (compile-time-constant) expressions.  In the U-form,
  * the expressions are treated as unsigned values.
- *
- * XXX really need %BPVAL for this
  */
-static long
-countbits (unsigned long val) {
-    long count = 0;
-    while (val != 0) {
-        count += 1;
-        val = val >> 1;
-    }
-    return count;
-}
 static int
 parse_nbits_func (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 {
@@ -1591,26 +1584,26 @@ parse_nbits_func (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     lexeme_t *lex;
     strdesc_t *bcstr;
     long maxbits = 0, thesebits;
+    machinedef_t *mach = pctx->mach;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
         /* XXX error condition */
         return 1;
     }
     while (1) {
-        if (!parse_Expression(pctx)) {
-            /* XXX error condition */
-            parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
-            return 1;
-        }
-        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NUMERIC, &lex, 1)) {
+        if (!parse_ctce(pctx, &lex)) {
             /* XXX error condition */
             parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
             return 1;
         }
         if (curlt == LEXTYPE_LXF_NBITS) {
-            thesebits = countbits((unsigned long) lexeme_signedval(lex));
+            long val = lexeme_signedval(lex);
+            thesebits = bits_needed((unsigned long) labs(val));
+            if (val < 0 && thesebits < mach->bpval-1) {
+                thesebits = mach->bpval-1;
+            }
         } else {
-            thesebits = countbits(lexeme_unsignedval(lex));
+            thesebits = bits_needed(lexeme_unsignedval(lex));
         }
         if (thesebits > maxbits) {
             maxbits = thesebits;
@@ -1626,9 +1619,13 @@ parse_nbits_func (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
             return 1;
         }
     }
-    bcstr = string_printf(0, "%ld", maxbits);
-    parser_lexeme_add(pctx, LEXTYPE_NUMERIC, bcstr);
-    string_free(bcstr);
+    if (maxbits > (curlt == LEXTYPE_LXF_NBITS ? mach->bpval-1 : mach->bpval)) {
+        /* XXX error condition */
+    } else {
+        bcstr = string_printf(0, "%ld", maxbits);
+        parser_lexeme_add(pctx, LEXTYPE_NUMERIC, bcstr);
+        string_free(bcstr);
+    }
     return 1;
 
 } /* parse_nbits_func */

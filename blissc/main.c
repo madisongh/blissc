@@ -13,6 +13,8 @@
 #include "lexer.h"
 #include "nametable.h"
 #include "lexeme.h"
+#include "storage.h"
+#include "machinedef.h"
 
 int test_scanner(int argc, const char *argv[]);
 int test_parser(int argc, const char *argv[]);
@@ -153,13 +155,16 @@ test_parser (int argc, const char *argv[])
 {
     parse_ctx_t pctx;
     scopectx_t mainscope;
+    stgctx_t stg;
     lexeme_t *lex;
     lextype_t lt;
     int linewidth;
     char *delim;
+    machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32 };
 
     mainscope = scope_begin(0);
-    pctx = parser_init(mainscope, 0);
+    stg = storage_init(&machdef);
+    pctx = parser_init(mainscope, stg, &machdef);
     declarations_init(mainscope);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
@@ -170,7 +175,7 @@ test_parser (int argc, const char *argv[])
     for (lt = parser_next(pctx, QL_NORMAL, &lex); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
          lt = parser_next(pctx, QL_NORMAL, &lex)) {
         PRINTLEX(lex);
-        if (lt >= LEXTYPE_DCL_MIN || lt <= LEXTYPE_DCL_MAX) {
+        if (lt >= LEXTYPE_DCL_MIN && lt <= LEXTYPE_DCL_MAX) {
             parse_declaration(pctx, lt);
         }
         lexeme_free(lex);
