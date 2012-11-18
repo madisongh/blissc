@@ -19,3 +19,8 @@ MACRO farfel = goodbye%, zikzak = nonexistent%;
 %ASCII'Declared(%QUOTE farfel):' %DECLARED(%QUOTE farfel)
 %ASCII'Declared(zikzak):' %DECLARED(zikzak)
 %ASCII'Declared(%QUOTE zikzak):' %DECLARED(%QUOTE zikzak)
+%ASCII'--- NBITS ---'
+%NBITS(1) %NBITSU(65535) %NBITS(-1) %NBITSU(1024)
+%ASSIGN(hello,5) %ASSIGN(goodbye,8192)
+%NBITS(hello,goodbye) %NBITSU(65535,hello,goodbye)
+
