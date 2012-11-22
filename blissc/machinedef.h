@@ -11,6 +11,7 @@
 
 struct machinedef_s {
     int     bpunit, bpval, bpaddr;
+    int     addr_signed; // true if addresses are sign-extended
 };
 
 typedef struct machinedef_s machinedef_t;

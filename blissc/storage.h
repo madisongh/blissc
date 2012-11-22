@@ -53,9 +53,12 @@ typedef struct block_s block_t;
 
 struct initval_s {
     struct initval_s *next;
+    unsigned int    flags;
+#define INITVAL_M_STRING (1<<0)
     unsigned int    repcount; // for INITIAL
     unsigned int    offset, size, extend; // for PRESET
-    unsigned long   value;
+                    // size is also used for PLIT allocation units
+    intptr_t        value; // pointer for strings, value otherwise
 };
 typedef struct initval_s initval_t;
 

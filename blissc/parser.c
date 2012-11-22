@@ -59,7 +59,7 @@ typedef int (*lexfunc_t)(parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt);
     DODEF(IF, parse_IF) DODEF(ELSE, parse_ELSE) DODEF(FI, parse_FI) \
     DODEF(ASSIGN, parse_ASSIGN) DODEF(DECLARED, parse_DECLARED) \
     DODEF(NUMBER, parse_NUMBER) DODEF(NBITS, parse_nbits_func) \
-    DODEF(NBITSU, parse_nbits_func)
+    DODEF(NBITSU, parse_nbits_func) DODEF(PRINT, parse_msgfunc)
 
 #define DODEF(name_, rtn_) static int rtn_ (parse_ctx_t, quotelevel_t, lextype_t);
 DODEFS
@@ -385,28 +385,40 @@ parser_skip_to_delim (parse_ctx_t pctx, lextype_t delimtype)
 } /* parser_skip_to_delim */
 
 /*
- * parser_decl_ok
+ * parser_scope_get
  *
- * Returns 1 if declarations are OK in the current
- * parse context (between start of a block and any
- * normal expressions).  Otherwise, 0.
+ * Get the current name scope.
  */
-int
-parser_decl_ok (parse_ctx_t pctx, scopectx_t *curscope)
-{
-    if (pctx->declarations_ok && curscope != 0) {
-        *curscope = pctx->curscope;
-    }
-    return pctx->declarations_ok;
-
-} /* parser_decl_ok */
-
 scopectx_t
 parser_scope_get (parse_ctx_t pctx)
 {
     return pctx->curscope;
     
 } /* parser_scope_get */
+
+/*
+ * parser_scope_begin
+ *
+ * Push a new name scope that the
+ * parser tracks.
+ */
+scopectx_t
+parser_scope_begin (parse_ctx_t pctx)
+{
+    pctx->curscope = scope_begin(pctx->curscope);
+    return pctx->curscope;
+} /* parser_scope_begin */
+
+/*
+ * parser_scope_end
+ *
+ * Pop a name scope from the parser.
+ */
+scopectx_t
+parser_scope_end (parse_ctx_t pctx)
+{
+    return scope_end(pctx->curscope);
+}
 
 /*
  * parser_incr/decr_erroneof
@@ -1629,3 +1641,29 @@ parse_nbits_func (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     return 1;
 
 } /* parse_nbits_func */
+/*
+ * parse_msgfunc
+ *
+ * Common code for %PRINT and friends
+ *
+ * %PRINT(#p,...)
+ *
+ * Print a message on the console.
+ */
+static int
+parse_msgfunc (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
+{
+    lexeme_t *lex = string_params(pctx, 0);
+    lextype_t lt = lexeme_boundtype(lex);
+
+    if (lt == LEXTYPE_STRING) {
+        strdesc_t *text = lexeme_text(lex);
+        printf("%% %-*.*s\n", text->len, text->len, text->ptr);
+    } else {
+        fprintf(stderr, "*** wrong lextype(%s) for %s ***\n",
+                lextype_name(lt), lextype_name(curlt));
+    }
+    lexeme_free(lex);
+    return 1;
+
+} /* parse_msg_func */

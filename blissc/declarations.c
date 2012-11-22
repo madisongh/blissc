@@ -297,7 +297,14 @@ declare_literal (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
 
     return 1;
 
-} /* define_literal */
+} /* declare_literal */
+
+seg_t *
+define_plit (parse_ctx_t pctx, stgctx_t stg, lextype_t curlt)
+{
+    // Handle the parsing of a plit definition
+    return 0;
+}
 
 /*
  * declarations_init
@@ -324,17 +331,12 @@ declarations_init (scopectx_t kwdscope)
 int
 parse_declaration (parse_ctx_t pctx, lextype_t lt)
 {
-    scopectx_t scope;
+    scopectx_t scope = parser_scope_get(pctx);
     lexeme_t *lex;
     int is_global = 0, is_external = 0;
     int status;
     stgctx_t stg = parser_get_cctx(pctx);
     machinedef_t *mach = parser_get_machinedef(pctx);
-
-    if (!parser_decl_ok(pctx, &scope)) {
-        /* XXX error condition */
-        return 1;
-    }
 
     if (lt == LEXTYPE_DCL_GLOBAL) {
         is_global = 1;
