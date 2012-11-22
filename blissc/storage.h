@@ -62,13 +62,16 @@ struct initval_s {
 };
 typedef struct initval_s initval_t;
 
+#undef DOSEGTYPE
+#define DOSEGTYPES \
+    DOSEGTYPE(LITERAL) DOSEGTYPE(LOCAL) \
+    DOSEGTYPE(REGISTER) DOSEGTYPE(STACKLOCAL) \
+    DOSEGTYPE(OTHER)
+#define DOSEGTYPE(t_) SEGTYPE_##t_,
 typedef enum {
-    SEGTYPE_LITERAL,
-    SEGTYPE_LOCAL,
-    SEGTYPE_REGISTER,
-    SEGTYPE_STACKLOCAL,
-    SEGTYPE_OTHER
+    DOSEGTYPES
 } segtype_t;
+#undef DOSEGTYPE
 
 #define SEG_M_VOLATILE (1<<1)
 #define SEG_M_EXTERNAL (1<<3)
@@ -94,8 +97,9 @@ static inline __unused psect_t *seg_psect (seg_t *seg) { return seg->container; 
 
 seg_t *seg_alloc(stgctx_t ctx);
 void seg_free(stgctx_t ctx, seg_t *seg);
-block_t *block_alloc(stgctx_t ctx, block_t *parent);
+block_t *block_alloc(stgctx_t ctx);
 void block_free(stgctx_t ctx, block_t *block);
+block_t *module_block(stgctx_t ctx);
 psect_t *psect_alloc(stgctx_t ctx, strdesc_t *name);
 void psect_free(stgctx_t ctx, psect_t *psect);
 initval_t *initval_alloc(stgctx_t ctx);
@@ -104,4 +108,5 @@ void initval_freelist(stgctx_t ctx, initval_t *iv);
 stgctx_t storage_init(machinedef_t *mach);
 void storage_finish(stgctx_t ctx);
 
+strdesc_t *seg_dumpinfo(seg_t *seg);
 #endif

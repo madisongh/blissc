@@ -9,11 +9,13 @@
 #include <stdlib.h>
 #include "machinedef.h"
 #include "storage.h"
+#include "strings.h"
 
 struct stgctx_s {
     machinedef_t    *mach;
     psect_t         *psects;
-    block_t         *blocks;
+    block_t         *topblock;
+    block_t         *curblock;
     block_t         *freeblocks;
     seg_t           *freesegs;
     initval_t       *freeivs;
@@ -78,7 +80,7 @@ psect_free (stgctx_t ctx, psect_t *psect)
 } /* psect_free */
 
 block_t *
-block_alloc (stgctx_t ctx, block_t *parent)
+block_alloc (stgctx_t ctx)
 {
     block_t *blk;
 
@@ -93,14 +95,27 @@ block_alloc (stgctx_t ctx, block_t *parent)
     blk = ctx->freeblocks;
     ctx->freeblocks = blk->parent;
     memset(blk, 0, sizeof(block_t));
-    blk->parent = parent;
+    blk->parent = ctx->curblock;
+    ctx->curblock = blk;
+    if (ctx->topblock == 0) {
+        ctx->topblock = blk;
+    }
     return blk;
+
 } /* block_alloc */
+
+block_t *
+module_block (stgctx_t ctx)
+{
+    return ctx->topblock;
+
+} /* module_block */
 
 void
 block_free (stgctx_t ctx, block_t *blk)
 {
     memset(blk, 0xe9, sizeof(block_t));
+    ctx->curblock = blk->parent;
     blk->parent = ctx->freeblocks;
     ctx->freeblocks = blk;
 } /* block_free */
@@ -167,3 +182,15 @@ initval_freelist (stgctx_t ctx, initval_t *iv)
     }
 
 } /* initval_freelist */
+
+strdesc_t *
+seg_dumpinfo (seg_t *seg)
+{
+#define DOSEGTYPE(t_) #t_
+    const char *typenames[] = { DOSEGTYPES };
+#undef DOSEGTYPE
+    return string_printf(0, "%s:%lx,sz=%ld,flg=%lx",
+                         typenames[seg->type],
+                         (unsigned long)seg->offset,
+                         seg->size, seg->flags);
+}

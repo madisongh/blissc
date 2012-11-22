@@ -43,6 +43,10 @@ static name_t decl_names[] = {
     NAMEDEF("LITERAL", LEXTYPE_DCL_LITERAL, NAME_M_RESERVED),
     NAMEDEF("GLOBAL", LEXTYPE_DCL_GLOBAL, NAME_M_RESERVED),
     NAMEDEF("COMPILETIME", LEXTYPE_DCL_COMPILETIME, NAME_M_RESERVED),
+    NAMEDEF("MODULE", LEXTYPE_DCL_MODULE, NAME_M_RESERVED),
+    NAMEDEF("ELUDOM", LEXTYPE_DCL_ELUDOM, NAME_M_RESERVED),
+    NAMEDEF("ROUTINE", LEXTYPE_DCL_ROUTINE, NAME_M_RESERVED),
+    NAMEDEF("LABEL", LEXTYPE_DCL_LABEL, NAME_M_RESERVED),
     NAMEDEF("SIGNED", LEXTYPE_ATTR_SIGNED, NAME_M_RESERVED),
     NAMEDEF("UNSIGNED", LEXTYPE_ATTR_UNSIGNED, NAME_M_RESERVED)
 };
@@ -299,6 +303,49 @@ declare_literal (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
 
 } /* declare_literal */
 
+/*
+ * declare_label
+ *
+ * Declare a label.
+ *
+ * LABEL name {,...}
+ */
+static int
+declare_label (parse_ctx_t pctx, scopectx_t scope)
+{
+    lexeme_t *lex;
+    lextype_t lt;
+    name_t *np;
+    strdesc_t *str;
+
+
+    while (1) {
+        if (!parser_expect(pctx, QL_NAME, LEXTYPE_NAME, &lex, 0)) {
+            /* XXX error condition */
+            return 0;
+        }
+        str = lexeme_text(lex);
+        np = name_declare(scope, str->ptr, str->len,
+                          LEXTYPE_NAME_LABEL, 0, 0);
+        lexeme_free(lex);
+        if (np == 0) {
+            /* XXX error condition */
+        }
+        lt = parser_next(pctx, QL_NORMAL, &lex);
+        if (lt == LEXTYPE_DELIM_SEMI) {
+            break;
+        }
+        if (lt != LEXTYPE_DELIM_COMMA) {
+            /* XXX error condition - maybe just forgot? */
+            parser_insert(pctx, lex);
+        }
+    }
+    lexeme_free(lex);
+    return 1;
+
+} /* declare_label */
+
+
 seg_t *
 define_plit (parse_ctx_t pctx, stgctx_t stg, lextype_t curlt)
 {
@@ -375,6 +422,8 @@ parse_declaration (parse_ctx_t pctx, lextype_t lt)
             status = declare_literal(pctx, scope, stg, mach,
                                      is_global, is_external);
             break;
+        case LEXTYPE_DCL_LABEL:
+            status = declare_label(pctx, scope);
         default:
             /* XXX error condition */
             status = 0;
@@ -384,3 +433,55 @@ parse_declaration (parse_ctx_t pctx, lextype_t lt)
     return status;
 
 } /* parse_declaration */
+
+/*
+ * parse_module
+ */
+int
+declare_module (parse_ctx_t pctx)
+{
+    scopectx_t scope = parser_scope_get(pctx);
+    lextype_t lt;
+    lexeme_t *lex;
+    strdesc_t *text;
+    expr_node_t *blkexp;
+    name_t *np;
+
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DCL_MODULE, 0, 0)) {
+        /* XXX error condition */
+        return 0;
+    }
+    lt = parser_next(pctx, QL_NAME, &lex);
+    if (lt != LEXTYPE_NAME) {
+        /* XXX error condition */
+        return 0;
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 0)) {
+        /* XXX error condition */
+        return 0;
+    }
+    text = lexeme_text(lex);
+    np = name_declare(scope, text->ptr, text->len,
+                      LEXTYPE_NAME_MODULE, 0, 0);
+    lexeme_free(lex);
+    if (np == 0) {
+        /* XXX error condition */
+        return 0;
+    }
+
+    // XXX need to handle module-switches here
+    
+    if (!expr_parse_block(pctx, &blkexp)) {
+        /* XXX error condition */
+        return 0;
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DCL_ELUDOM, 0, 0)) {
+        /* XXX error condition */
+        // but ignore the error
+    }
+
+    *(expr_node_t **)name_data(np) = blkexp;
+
+    return 1;
+
+} /* parse_module */

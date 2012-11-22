@@ -136,13 +136,27 @@ void PRINTCR (void)
 
 void PRINTLEX(lexeme_t *lex)
 {
-    if (lex->text.len == 0) {
-        const char *cp = lextype_name(lexeme_boundtype(lex));//+sizeof("LEXTYPE");
-        printf("%s%s", delim, cp);
-        linewidth += strlen(cp);
+    lextype_t lt = lexeme_type(lex);
+    strdesc_t *text = lexeme_text(lex);
+    const char *typename = lextype_name(lt);
+
+    if (lt == LEXTYPE_UNBOUND) {
+        const char *btname = lextype_name(lexeme_boundtype(lex));
+        linewidth += printf("%sU[%s]<%-*.*s>", delim, btname,
+                            text->len, text->len, text->ptr);
+    } else if (lt == LEXTYPE_SEGMENT) {
+        text = seg_dumpinfo(lexeme_ctx_get(lex));
+        linewidth += printf("%sSEG(%-*.*s)", delim,
+                            text->len, text->len, text->ptr);
+        string_free(text);
+    } else if (lt == LEXTYPE_EXPRESSION) {
+        text = expr_dumpinfo(lexeme_ctx_get(lex));
+        linewidth += printf("%sEXPR(%-*.*s)", delim,
+                            text->len, text->len, text->ptr);
+        string_free(text);
     } else {
-        printf("%s%-*.*s", delim, lex->text.len, lex->text.len, lex->text.ptr);
-        linewidth += lex->text.len;
+        linewidth += printf("%s%s<%-*.*s>", delim, typename,
+                            text->len, text->len, text->ptr);
     }
     if (linewidth > 60) {
         delim = "\n";
@@ -208,8 +222,8 @@ test_expr (int argc, const char *argv[])
     parse_ctx_t pctx;
     scopectx_t mainscope;
     stgctx_t stg;
-    lexeme_t *lex;
-    lextype_t lt;
+//    lexeme_t *lex;
+//   lextype_t lt;
     int linewidth;
     char *delim;
     machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32 };
@@ -225,25 +239,27 @@ test_expr (int argc, const char *argv[])
     }
     linewidth = 0;
     delim = "";
-    for (lt = parser_next(pctx, QL_NORMAL, &lex); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
-         lt = parser_next(pctx, QL_NORMAL, &lex)) {
-        parser_insert(pctx, lex);
-        if (!parse_Expression(pctx)) {
-            lt = parser_next(pctx, QL_NORMAL, &lex);
-            fprintf(stderr, "*** parse_Expression failed, next lex is %s ***\n",
-                    lextype_name(lt));
-            lexeme_free(lex);
-            continue;
-        }
-        lt = parser_next(pctx, QL_NORMAL, &lex);
-        lexeme_free(lex);
-        parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1);
-    }
-    if (lt == LEXTYPE_NONE) {
-        fprintf(stderr, "parser_next returned error lexeme\n");
+    if (!declare_module(pctx)) {
+//    for (lt = expr_parse_next(pctx, &lex, 0); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
+//         lt = expr_parse_next(pctx, &lex, 0)) {
+//        PRINTLEX(lex);
+//        parser_insert(pctx, lex);
+//       if (!parse_Expression(pctx)) {
+//            lt = parser_next(pctx, QL_NORMAL, &lex);
+//            fprintf(stderr, "*** parse_Expression failed, next lex is %s ***\n",
+//                    lextype_name(lt));
+//            lexeme_free(lex);
+//            continue;
+//        }
+//        lt = parser_next(pctx, QL_NORMAL, &lex);
+//        lexeme_free(lex);
+//        parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1);
+//    }
+//    if (lt == LEXTYPE_NONE) {
+        fprintf(stderr, "declare_module failed\n");
         return 997;
     } else {
-        printf("<<end of input>>\n");
+        printf("<<end of module>>\n");
     }
     parser_finish(pctx);
     scope_end(mainscope);

@@ -93,8 +93,8 @@ typedef enum {
     DOLEXTYPE(DCL_MACRO) DOLEXTYPE(DCL_KEYWORDMACRO) \
     DOLEXTYPE(DCL_LITERAL) DOLEXTYPE(DCL_GLOBAL) \
     DOLEXTYPE(DCL_EXTERNAL) DOLEXTYPE(DCL_OWN) DOLEXTYPE(DCL_LOCAL) \
-    DOLEXTYPE(DCL_STACKLOCAL) DOLEXTYPE(DCL_STRUCTURE) \
-    DOLEXTYPE(DCL_LINKAGE) \
+    DOLEXTYPE(DCL_STACKLOCAL) DOLEXTYPE(DCL_STRUCTURE) DOLEXTYPE(DCL_LABEL) \
+    DOLEXTYPE(DCL_MODULE) DOLEXTYPE(DCL_ELUDOM) DOLEXTYPE(DCL_LINKAGE) \
     DOLEXTYPE(DCL_ENABLE) DOLEXTYPE(DCL_BIND) DOLEXTYPE(DCL_REQUIRE) \
     DOLEXTYPE(DCL_LIBRARY) DOLEXTYPE(DCL_PSECT) DOLEXTYPE(DCL_SWITCHES) \
     DOLEXTYPE(DCL_LABLEL) DOLEXTYPE(DCL_BUILTIN) DOLEXTYPE(DCL_ROUTINE) \
@@ -226,7 +226,7 @@ static inline __unused void lexeme_copypos (lexeme_t *dst, lexeme_t *src) {
 static inline __unused void lexseq_init (lexseq_t *seq) {
     seq->head = seq->tail = 0; seq->count = 0;
 }
-static inline __unused int lexseq_emtpy (lexseq_t *seq) {
+static inline __unused int lexseq_empty (lexseq_t *seq) {
     return (seq->count == 0);
 }
 static inline __unused void lexseq_inshead (lexseq_t *seq, lexeme_t *l) {

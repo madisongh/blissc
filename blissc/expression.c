@@ -40,6 +40,12 @@ static name_t expr_names[] = {
     NAMEDEF("SELECTONE", LEXTYPE_CTRL_SELECTONE, NAME_M_RESERVED),
     NAMEDEF("SELECTONEU", LEXTYPE_CTRL_SELECTONEU, NAME_M_RESERVED),
     NAMEDEF("SELECTONEA", LEXTYPE_CTRL_SELECTONEA, NAME_M_RESERVED),
+    NAMEDEF("INCR", LEXTYPE_CTRL_INCR, NAME_M_RESERVED),
+    NAMEDEF("INCRA", LEXTYPE_CTRL_INCRA, NAME_M_RESERVED),
+    NAMEDEF("INCRU", LEXTYPE_CTRL_INCRU, NAME_M_RESERVED),
+    NAMEDEF("DECR", LEXTYPE_CTRL_DECR, NAME_M_RESERVED),
+    NAMEDEF("DECRA", LEXTYPE_CTRL_DECRA, NAME_M_RESERVED),
+    NAMEDEF("DECRU", LEXTYPE_CTRL_DECRU, NAME_M_RESERVED),
     NAMEDEF("WHILE", LEXTYPE_CTRL_WHILE, NAME_M_RESERVED),
     NAMEDEF("UNTIL", LEXTYPE_CTRL_UNTIL, NAME_M_RESERVED),
     NAMEDEF("DO", LEXTYPE_CTRL_DO, NAME_M_RESERVED)
@@ -88,8 +94,20 @@ static const struct {
 static const char *oper_names[] = { DOOPTYPES };
 #undef DOOPTYPE
 
-static int parse_expr(parse_ctx_t pctx, expr_node_t **expp, int recursed);
-
+static int parse_expr(parse_ctx_t pctx, expr_node_t **expp,
+                      int recursed, int lstrok);
+static int parse_condexp(void *pctx, quotelevel_t ql,
+                         quotemodifier_t qm, lextype_t lt, condstate_t cs,
+                         lexeme_t *orig, lexseq_t *result);
+static int parse_case(void *pctx, quotelevel_t ql,
+                         quotemodifier_t qm, lextype_t lt, condstate_t cs,
+                         lexeme_t *orig, lexseq_t *result);
+static int parse_select(void *pctx, quotelevel_t ql,
+                         quotemodifier_t qm, lextype_t lt, condstate_t cs,
+                         lexeme_t *orig, lexseq_t *result);
+static int parse_incrdecr(void *pctx, quotelevel_t ql,
+                          quotemodifier_t qm, lextype_t lt, condstate_t cs,
+                          lexeme_t *orig, lexseq_t *result);
 const char *
 exprtype_name (exprtype_t type) {
     if (type >= EXPTYPE_COUNT) {
@@ -140,32 +158,83 @@ expr_node_alloc (exprtype_t type)
             return 0;
         }
         for (i = 0, node = freenodes; i < ALLOC_QTY-1; i++, node++) {
-            node->lhs = node + 1;
+            expr_next_set(node, node+1);
         }
-        node->lhs = 0;
+        expr_next_set(node, 0);
     }
     node = freenodes;
-    freenodes = node->lhs;
+    freenodes = expr_next(node);
     memset(node, 0, sizeof(expr_node_t));
-    node->type = type;
+    expr_type_set(node, type);
     return node;
 
 } /* expr_node_alloc */
 
 void
-expr_node_free (expr_node_t *node) {
+expr_node_free (expr_node_t *node, stgctx_t stg) {
 
     if (node == 0) {
         return;
     }
-    expr_node_free(node->lhs);
-    expr_node_free(node->rhs);
-    memset(node, 0x77, sizeof(expr_node_t));
-    node->lhs = freenodes;
-    freenodes = node;
-    if (node->type == EXPTYPE_PRIMARY) {
-        lexeme_free(node->lex);
+    switch (expr_type(node)) {
+        case EXPTYPE_PRIM_SEG:
+            seg_free(stg, expr_segval(node));
+            break;
+        case EXPTYPE_OPERATOR:
+            expr_node_free(expr_op_lhs(node), stg);
+            expr_node_free(expr_op_rhs(node), stg);
+            break;
+        case EXPTYPE_PRIM_BLK: {
+            expr_node_t *snode;
+            for (snode = expr_blk_seq(node); snode != 0; snode = expr_blk_seq(node)) {
+                expr_blk_seq_set(node, expr_next(node));
+                expr_node_free(snode, stg);
+            }
+            scope_end(expr_blk_scope(node));
+            block_free(stg, expr_blk_block(node));
+            break;
+        }
+        case EXPTYPE_CTRL_COND:
+            expr_node_free(expr_cond_test(node), stg);
+            expr_node_free(expr_cond_consequent(node), stg);
+            expr_node_free(expr_cond_alternative(node), stg);
+            break;
+        case EXPTYPE_CTRL_LOOPWU:
+            expr_node_free(expr_wuloop_test(node), stg);
+            expr_node_free(expr_wuloop_body(node), stg);
+            break;
+        case EXPTYPE_CTRL_LOOPID:
+            expr_node_free(expr_idloop_init(node), stg);
+            expr_node_free(expr_idloop_term(node), stg);
+            expr_node_free(expr_idloop_step(node), stg);
+            expr_node_free(expr_idloop_body(node), stg);
+            break;
+        case EXPTYPE_PRIM_RTNCALL: {
+            expr_node_t *arg, *anext;
+            expr_node_free(expr_rtnaddr(node), stg);
+            if (expr_inargs(node, &arg) > 0) {
+                while (arg != 0) {
+                    anext = expr_next(arg);
+                    expr_node_free(arg, stg);
+                    arg = anext;
+                }
+            }
+            if (expr_outargs(node, &arg) > 0) {
+                while (arg != 0) {
+                    anext = expr_next(arg);
+                    expr_node_free(arg, stg);
+                    arg = anext;
+                }
+            }
+        }
+        case EXPTYPE_PRIM_LIT:
+        case EXPTYPE_NOOP:
+        case EXPTYPE_EXECFUN: // TBD XXX
+            break;
     }
+    memset(node, 0x77, sizeof(expr_node_t));
+    expr_next_set(node, freenodes);
+    freenodes = node;
 
 } /* expr_node_free */
 
@@ -218,16 +287,38 @@ expr_init (scopectx_t kwdscope)
     }
     lextype_register(LEXTYPE_KWD_PLIT, parse_plit);
     lextype_register(LEXTYPE_KWD_UPLIT, parse_plit);
+    lextype_register(LEXTYPE_CTRL_IF, parse_condexp);
+    lextype_register(LEXTYPE_CTRL_CASE, parse_case);
+    lextype_register(LEXTYPE_CTRL_SELECT, parse_select);
+    lextype_register(LEXTYPE_CTRL_SELECTA, parse_select);
+    lextype_register(LEXTYPE_CTRL_SELECTU, parse_select);
+    lextype_register(LEXTYPE_CTRL_SELECTONE, parse_select);
+    lextype_register(LEXTYPE_CTRL_SELECTONEA, parse_select);
+    lextype_register(LEXTYPE_CTRL_SELECTONEU, parse_select);
 }
 
-int
-parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp) {
+/*
+ * parse_block
+ *
+ * Can be preceded by CODECOMMENT 'qstring':
+ * Can be preceded by label:...
+ * BEGIN or (
+ *   {declarations or nothing}
+ *   {actions or nothing}
+ *   {value or nothing}
+ * END or )
+ */
+static int
+parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
+             strdesc_t *codecomment, lexseq_t *labels) {
 
     lextype_t lt;
     lexeme_t *lex;
+    stgctx_t stg = parser_get_cctx(pctx);
     scopectx_t scope = 0;
     expr_node_t *exp = 0;
     expr_node_t *seq, *last;
+    block_t *blk;
     int expr_count;
     lextype_t closer = (curlt == LEXTYPE_EXP_DELIM_BEGIN ?
                         LEXTYPE_EXP_DELIM_END : LEXTYPE_DELIM_RPAR);
@@ -235,16 +326,13 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp) {
 
     lt = parser_next(pctx, QL_NORMAL, &lex);
 
-    if (lt == closer) {
-        lexeme_free(lex);
-        *expp = 0; // null block
-        return 1;
-    }
-
     expr_count = 0;
     seq = last = 0;
     while (1) {
-        if (lt >= LEXTYPE_DCL_MIN && lt <= LEXTYPE_DCL_MAX) {
+        if (lt == closer) {
+            lexeme_free(lex);
+            break;
+        } else if (lt >= LEXTYPE_DCL_MIN && lt <= LEXTYPE_DCL_MAX) {
             lexeme_free(lex);
             if (expr_count != 0) {
                 /* XXX error condition */
@@ -253,19 +341,16 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp) {
             }
             if (scope == 0) {
                 scope = parser_scope_begin(pctx);
+                blk = block_alloc(stg);
             }
             parse_declaration(pctx, lt);
             lt = parser_next(pctx, QL_NORMAL, &lex);
-            if (lt == closer) {
-                lexeme_free(lex);
-                break;
-            }
             continue;
         } else {
             parser_insert(pctx, lex);
         }
         exp = 0;
-        if (!parse_expr(pctx, &exp, 0)) {
+        if (!parse_expr(pctx, &exp, 0, 0)) {
             /* XXX error condition */
             parser_skip_to_delim(pctx, closer);
             break;
@@ -274,41 +359,39 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp) {
         if (seq == 0) {
             last = seq = exp;
         } else {
-            last->seqnext = exp;
+            expr_next_set(last, exp);
             last = exp;
         }
         lt = parser_next(pctx, QL_NORMAL, &lex);
-        if (lt == closer) {
-            // use this expression as block's value
+        if (lt == LEXTYPE_DELIM_SEMI) {
+            // discard the expression's value
             lexeme_free(lex);
-            break;
-        }
-        if (lt != LEXTYPE_DELIM_SEMI) {
-            /* XXX error condition */
-            parser_skip_to_delim(pctx, closer);
-            break;
-        }
-        // discard the expression's value
-        lexeme_free(lex);
-        lt = parser_next(pctx, QL_NORMAL, &lex);
-        if (lt == closer) {
-            lexeme_free(lex);
-            break;
+            lt = parser_next(pctx, QL_NORMAL, &lex);
         }
     }
 
-    if (expr_count == 1 && scope == 0) {
-        // simple compound expression, just return the expression
-        *expp = seq;
-    } else {
-        if (scope != 0) {
-            parser_scope_end(pctx);
+    if (scope == 0 && codecomment == 0 && lexseq_empty(labels) &&
+        expr_count <= 1) {
+        *expp = (expr_count == 0 ? expr_node_alloc(EXPTYPE_NOOP) : seq);
+        return 1;
+    }
+    if (scope != 0) {
+        parser_scope_end(pctx);
+    }
+    exp = expr_node_alloc(EXPTYPE_PRIM_BLK);
+    expr_blk_scope_set(exp, scope);
+    expr_blk_block_set(exp, blk);
+    expr_blk_seq_set(exp, seq);
+    expr_blk_codecomment_set(exp, codecomment);
+    *expp = exp;
+    // Now point the labels at us
+    while ((lex = lexseq_remhead(labels))) {
+        name_t *np = lexeme_ctx_get(lex);
+        if (name_data(np) != 0) {
+            /* XXX error condition */
         }
-        exp = expr_node_alloc(EXPTYPE_PRIMARY);
-        exp->lex = 0;
-        exp->seqnext = seq;
-        /* XXX revisit */
-        *expp = exp;
+        *(expr_node_t **)name_data(np) = exp;
+        lexeme_free(lex);
     }
 
     return 1;
@@ -318,9 +401,9 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp) {
 static int
 parse_wu_loop (parse_ctx_t pctx, lextype_t opener, expr_node_t **expp)
 {
-    expr_node_t *body, *test;
+    expr_node_t *body, *test, *exp;
 
-    if (!parse_expr(pctx, &test, 0)) {
+    if (!parse_expr(pctx, &test, 0, 0)) {
         /* XXX error condition */
         return 0;
     }
@@ -328,10 +411,16 @@ parse_wu_loop (parse_ctx_t pctx, lextype_t opener, expr_node_t **expp)
         /* XXX error condition */
         return 0;
     }
-    if (!parse_expr(pctx, &body, 0)) {
+    if (!parse_expr(pctx, &body, 0, 0)) {
         /* XXX error condition */
         return 0;
     }
+
+    exp = expr_node_alloc(EXPTYPE_CTRL_LOOPWU);
+    expr_wuloop_test_set(exp, test);
+    expr_wuloop_type_set(exp, LOOP_PRETEST);
+    expr_wuloop_body_set(exp, body);
+    *expp = exp;
 
     return 1;
 
@@ -342,9 +431,9 @@ parse_do_loop (parse_ctx_t pctx, lextype_t opener, expr_node_t **expp)
 {
     lextype_t lt;
     lexeme_t *lex;
-    expr_node_t *body, *test;
+    expr_node_t *body, *test, *exp;
 
-    if (!parse_expr(pctx, &body, 0)) {
+    if (!parse_expr(pctx, &body, 0, 0)) {
         /* XXX error condition */
         return 0;
     }
@@ -356,11 +445,16 @@ parse_do_loop (parse_ctx_t pctx, lextype_t opener, expr_node_t **expp)
     }
     lexeme_free(lex);
 
-    if (!parse_expr(pctx, &test, 0)) {
+    if (!parse_expr(pctx, &test, 0, 0)) {
         /* XXX error condition */
         return 0;
     }
 
+    exp = expr_node_alloc(EXPTYPE_CTRL_LOOPWU);
+    expr_wuloop_test_set(exp, test);
+    expr_wuloop_type_set(exp, LOOP_POSTTEST);
+    expr_wuloop_body_set(exp, body);
+    *expp = exp;
     return 1;
 
 } /* parse_do_loop */
@@ -376,12 +470,12 @@ parse_do_loop (parse_ctx_t pctx, lextype_t opener, expr_node_t **expp)
  * of the expr tree
  */
 static int
-parse_arglist (parse_ctx_t pctx, expr_node_t **expp)
+parse_arglist (parse_ctx_t pctx, expr_node_t *rtn, expr_node_t **expp)
 {
-    int inargs, outargs, doing_outargs;
-    expr_node_t *rtn, *arg, *lastarg;
+    int incount, outcount, doing_outargs;
+    expr_node_t *arg, *lastarg, *inargs, *outargs, *exp;
 
-    rtn = *expp;
+    incount = outcount = 0;
     inargs = outargs = 0;
 
     doing_outargs = parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1);
@@ -392,20 +486,26 @@ parse_arglist (parse_ctx_t pctx, expr_node_t **expp)
         return 1;
     }
 
-    lastarg = rtn;
-
     while (1) {
 
-        if (!parse_expr(pctx, &arg, 0)) {
+        if (!parse_expr(pctx, &arg, 0, 0)) {
             arg = 0; // set to a null argument
         }
 
         if (doing_outargs) {
-            expr_tree_insright(lastarg, arg);
-            outargs += 1;
+            if (outargs == 0) {
+                outargs = arg;
+            } else {
+                expr_next_set(lastarg, arg);
+            }
+            outcount += 1;
         } else {
-            expr_tree_insleft(lastarg, arg);
-            inargs += 1;
+            if (inargs == 0) {
+                inargs = arg;
+            } else {
+                expr_next_set(lastarg, arg);
+            }
+            incount += 1;
         }
 
         lastarg = arg;
@@ -417,7 +517,6 @@ parse_arglist (parse_ctx_t pctx, expr_node_t **expp)
         if (!doing_outargs &&
             parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1)) {
             doing_outargs = 1;
-            lastarg = rtn;
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
                 break;
             }
@@ -434,30 +533,130 @@ parse_arglist (parse_ctx_t pctx, expr_node_t **expp)
 
     // validate the arguments against the routine declaration, if we can
     // Insert the routine-call into the expression tree
+    exp = expr_node_alloc(EXPTYPE_PRIM_RTNCALL);
+    expr_rtnaddr_set(exp, rtn);
+    expr_inargs_set(exp, incount, inargs);
+    expr_outargs_set(exp, outcount, outargs);
+    *expp = exp;
 
     return 1;
 
 } /* parse_arglist */
 
-static int
-parse_primary (parse_ctx_t pctx, lextype_t lt, lexeme_t *lex, expr_node_t **expp)
+static expr_node_t *
+lex_to_expr (lextype_t lt, lexeme_t *lex)
 {
-    expr_node_t *exp;
-    machinedef_t *mach = parser_get_machinedef(pctx);
+    expr_node_t *exp = 0;
 
-    if (lt == LEXTYPE_DELIM_LPAR || lt == LEXTYPE_EXP_DELIM_BEGIN) {
+    switch (lt) {
+        case LEXTYPE_NUMERIC:
+            exp = expr_node_alloc(EXPTYPE_PRIM_LIT);
+            expr_litval_set(exp, lexeme_signedval(lex));
+            break;
+        case LEXTYPE_STRING: {
+            int i;
+            strdesc_t *text = lexeme_text(lex);
+            unsigned long val = 0;
+            exp = expr_node_alloc(EXPTYPE_PRIM_LIT);
+            for (i = 0; i < text->len; i++) {
+                val = val | (*(text->ptr+i) << (i*8));
+            }
+            expr_litval_set(exp, val);
+            break;
+        }
+        case LEXTYPE_SEGMENT:
+            exp = expr_node_alloc(EXPTYPE_PRIM_SEG);
+            expr_segval_set(exp, lexeme_ctx_get(lex));
+            break;
+        default:
+            break;
+    }
+
+    return exp;
+
+} /* lex_to_expr */
+
+static int
+parse_primary (parse_ctx_t pctx, lextype_t lt, lexeme_t *lex,
+               expr_node_t **expp, int lstrok)
+{
+    expr_node_t *exp = 0;
+    stgctx_t stg = parser_get_cctx(pctx);
+    machinedef_t *mach = parser_get_machinedef(pctx);
+    strdesc_t *codecomment = 0;
+    lexseq_t labels;
+
+    lexseq_init(&labels);
+    if (lt == LEXTYPE_KWD_CODECOMMENT) {
         lexeme_free(lex);
-        if (!parse_block(pctx, lt, &exp)) {
+        lt = parser_next(pctx, QL_NORMAL, &lex);
+        if (lt != LEXTYPE_STRING) {
+            /* XXX error condition, but just assume it was missed */
+        } else {
+            codecomment = string_copy(0, lexeme_text(lex));
+            lexeme_free(lex);
+            lt = parser_next(pctx, QL_NORMAL, &lex);
+        }
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
+            /* XXX error condition, but assume it was missed */
+        }
+        while (parser_expect(pctx, QL_NORMAL, LEXTYPE_NAME_LABEL, &lex, 1)) {
+            lexseq_instail(&labels, lex);
+            if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
+                /* XXX error condition */
+            }
+        }
+        lt = parser_next(pctx, QL_NORMAL, &lex);
+        if (lt != LEXTYPE_DELIM_LPAR && lt != LEXTYPE_EXP_DELIM_BEGIN) {
+            /* XXX error condition */
+            string_free(codecomment);
+            return 0;
+        }
+        lexeme_free(lex);
+        if (!parse_block(pctx, lt, &exp, codecomment, &labels)) {
+            return 0;
+        }
+    } else if (lt == LEXTYPE_NAME_LABEL) {
+        lexseq_instail(&labels, lex);
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
+            /* XXX error condition */
+        }
+        while (parser_expect(pctx, QL_NORMAL, LEXTYPE_NAME_LABEL, &lex, 1)) {
+            lexseq_instail(&labels, lex);
+            if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
+                /* XXX error condition */
+            }
+        }
+        lt = parser_next(pctx, QL_NORMAL, &lex);
+        if (lt == LEXTYPE_DELIM_LPAR || lt == LEXTYPE_EXP_DELIM_BEGIN) {
+            if (!parse_block(pctx, lt, &exp, 0, &labels)) {
+                return 0;
+            }
+        } else {
+            /* XXX error condition */
+            return 0;
+        }
+    } else if (lt == LEXTYPE_DELIM_LPAR || lt == LEXTYPE_EXP_DELIM_BEGIN) {
+        lexeme_free(lex);
+        if (!parse_block(pctx, lt, &exp, 0, &labels)) {
             return 0;
         }
     } else if (lt == LEXTYPE_NUMERIC || lt == LEXTYPE_SEGMENT ||
-        (lt == LEXTYPE_STRING && lexeme_textlen(lex) <= mach->bpval/8)) {
-        exp = expr_node_alloc(EXPTYPE_PRIMARY);
-        exp->lex = lex;
+               lt == LEXTYPE_STRING) {
+        if (lt == LEXTYPE_STRING && lexeme_textlen(lex) > mach->bpval/8) {
+            strdesc_t *text = lexeme_text(lex);
+            if (!lstrok) {
+                /* XXX error condition */
+            }
+            text->len = mach->bpval/8;
+        }
+        exp = lex_to_expr(lt, lex);
+        lexeme_free(lex);
     } else if (lt == LEXTYPE_NAME_FUNCTION) { // XXX Fix this
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LANGLE, 0, 1)) {
             // parse the field-selector
             // and we have ourselves a primary
+            // and return here, so we don't try to parse the field selector again
         } else {
             return 0; // executable-functions are not, by themselves, primaries
         }
@@ -466,11 +665,13 @@ parse_primary (parse_ctx_t pctx, lextype_t lt, lexeme_t *lex, expr_node_t **expp
     }
 
     if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
-        if (!parse_arglist(pctx, &exp)) {
+        expr_node_t *rtncall = 0;
+        if (!parse_arglist(pctx, exp, &rtncall)) {
             /* XXX error condition */
-            expr_node_free(exp);
+            expr_node_free(exp, stg);
             return 0;
         }
+        exp = rtncall;
     }
 
     // XXX Must also check for general routine call and codecomment
@@ -482,12 +683,7 @@ parse_primary (parse_ctx_t pctx, lextype_t lt, lexeme_t *lex, expr_node_t **expp
         // parse the field-selector
     }
 
-    if (*expp == 0) {
-        *expp = exp;
-    } else {
-        fprintf(stderr, "*** WTF?? ***\n");
-        exit(EXIT_FAILURE);
-    }
+    *expp = exp;
 
     return 1;
 
@@ -499,109 +695,112 @@ parse_op_expr (parse_ctx_t pctx, optype_t curop, expr_node_t **expp)
     expr_node_t *lhs = *expp;
     expr_node_t *thisnode, *rhs;
     optype_t op;
+    int normal;
 
-    if (lhs == 0) {
+    if (expr_is_noop(lhs)) {
         if (!op_is_unary(curop)) {
             /* XXX error condition */
             // but try anyway?
         }
     } else {
-        if (expr_node_type(lhs) == EXPTYPE_CONTROL) {
+        if (expr_is_ctrl(lhs)) {
             /* XXX error condition */
             // but try anyway
         }
     }
 
     rhs = 0;
-    if (!parse_expr(pctx, &rhs, 1) || rhs == 0) {
+    if (!parse_expr(pctx, &rhs, 1, 0) || rhs == 0) {
         // XXX error condition ?
         return 0;
     }
 
-    switch (expr_node_type(rhs)) {
-        case EXPTYPE_CONTROL:
-            /* XXX error condition */
-            /* FALLTHROUGH */
-        case EXPTYPE_PRIMARY:
-        case EXPTYPE_EXECFUN:
-            // normal case
-            break;
-        case EXPTYPE_OPERATOR:
-            op = expr_node_optype(rhs);
-            if (op_is_unary(op)) {
-                if (op_priority(op) < op_priority(curop)) {
-                    /* XXX error condition, but continue ? */
-                }
-                break; // normal case
-            }
-            if (op_priority(op) > op_priority(curop) ||
-                (op_priority(op) == op_priority(curop) &&
-                 op_is_r2l(op))) {
-                break;
-            }
-            thisnode = expr_node_alloc(EXPTYPE_OPERATOR);
-            thisnode->op = curop;
-            expr_tree_insright(thisnode, expr_node_left(rhs));
-            expr_tree_insleft(rhs, thisnode);
-            *expp = rhs;
-            return 1;
+    if (expr_is_noop(rhs) || expr_is_ctrl(rhs)) {
+        /* XXX error condition */
     }
 
-    thisnode = expr_node_alloc(EXPTYPE_OPERATOR);
-    thisnode->op = curop;
-    expr_tree_insleft(thisnode, lhs);
-    expr_tree_insright(thisnode, rhs);
-    *expp = thisnode;
+    /*
+     * When we have another operator expression on our
+     * right-hand side, check the operator priority.
+     * If RHS's priority is greater than this node's, OR if
+     *    it's the same but has r-to-l associativity,
+     *  then we swap positions - putting RHS on top
+     *  and putting ourselves in as its LHS.
+     */
+    normal = 1;
+    if (expr_is_opexp(rhs)) {
+        normal = 0;
+        op = expr_op_type(rhs);
+        if (op_is_unary(op)) {
+            if (op_priority(op) < op_priority(curop)) {
+                /* XXX error condition, but continue ? */
+            }
+            normal = 1;
+        }
+        if (op_priority(op) > op_priority(curop) ||
+            (op_priority(op) == op_priority(curop) &&
+             op_is_r2l(op))) {
+                normal = 1;
+            }
+    }
+
+    if (normal) {
+        thisnode = expr_node_alloc(EXPTYPE_OPERATOR);
+        expr_op_type_set(thisnode, curop);
+        expr_op_lhs_set(thisnode, lhs);
+        expr_op_rhs_set(thisnode, rhs);
+        *expp = thisnode;
+    } else {
+        thisnode = expr_node_alloc(EXPTYPE_OPERATOR);
+        expr_op_type_set(thisnode, curop);
+        expr_op_rhs_set(thisnode, expr_op_lhs(rhs));
+        expr_op_lhs_set(rhs, thisnode);
+        *expp = rhs;
+    }
+
     return 1;
 
 } /* parse_op_expr */
 
 void
-reduce_op_expr (expr_node_t *node) {
+reduce_op_expr (stgctx_t stg, expr_node_t *node) {
     expr_node_t *lhs, *rhs;
 
-    if (expr_node_type(node) != EXPTYPE_OPERATOR) {
+    if (!expr_is_opexp(node)) {
         return;
     }
 
-    lhs = expr_node_left(node);
-    if (lhs != 0 && expr_node_type(lhs) == EXPTYPE_OPERATOR) {
-        reduce_op_expr(lhs);
+    lhs = expr_op_lhs(node);
+    if (expr_is_opexp(lhs)) {
+        reduce_op_expr(stg, lhs);
     }
-    rhs = expr_node_right(node);
-    if (rhs != 0 && expr_node_type(rhs) == EXPTYPE_OPERATOR) {
-        reduce_op_expr(rhs);
+    rhs = expr_op_rhs(node);
+    if (expr_is_opexp(rhs)) {
+        reduce_op_expr(stg, rhs);
     }
     // Check for unary +/- of a CTCE
-    if (lhs == 0) {
-        optype_t op = expr_node_optype(node);
+    if (expr_is_noop(lhs)) {
+        optype_t op = expr_op_type(node);
         if (op == OPER_UNARY_MINUS || op == OPER_UNARY_PLUS) {
-            if (expr_node_type(rhs) == EXPTYPE_PRIMARY &&
-                rhs->lex != 0 && lexeme_type(rhs->lex) == LEXTYPE_NUMERIC) {
+            if (expr_type(rhs) == EXPTYPE_PRIM_LIT) {
                 long result = (op == OPER_UNARY_MINUS ?
-                               -lexeme_signedval(rhs->lex)
-                               : lexeme_signedval(rhs->lex));
-                node->type = EXPTYPE_PRIMARY;
-                node->lex = lexeme_create(LEXTYPE_NUMERIC,
-                                          string_printf(0, "%ld", result));
-                lexeme_val_setsigned(node->lex, result);
-                node->lex->type = LEXTYPE_NUMERIC;
-                expr_node_free(rhs);
-                node->rhs = 0;
+                               -expr_litval(rhs) : expr_litval(rhs));
+                expr_node_free(rhs, stg);
+                expr_node_free(lhs, stg);
+                expr_type_set(node, EXPTYPE_PRIM_LIT);
+                expr_litval_set(node, result);
             }
         }
         return;
     }
 
     // Check for operations on CTCEs
-    if (expr_node_type(lhs) == EXPTYPE_PRIMARY && lhs->lex != 0 &&
-        lexeme_type(lhs->lex) == LEXTYPE_NUMERIC) {
-        long leftval = lexeme_signedval(lhs->lex);
-        if (expr_node_type(rhs) == EXPTYPE_PRIMARY && rhs->lex != 0 &&
-            lexeme_type(rhs->lex) == LEXTYPE_NUMERIC) {
-            long rightval = lexeme_signedval(rhs->lex);
+    if (expr_type(lhs) == EXPTYPE_PRIM_LIT) {
+        long leftval = expr_litval(lhs);
+        if (expr_type(rhs) == EXPTYPE_PRIM_LIT) {
+            long rightval = expr_litval(rhs);
             long result;
-            switch (expr_node_optype(node)) {
+            switch (expr_op_type(node)) {
                 case OPER_ADD:
                     result = leftval + rightval;
                     break;
@@ -678,26 +877,37 @@ reduce_op_expr (expr_node_t *node) {
                 default:
                     return;
             }
-            node->type = EXPTYPE_PRIMARY;
-            node->lex = lexeme_create(LEXTYPE_NUMERIC,
-                                      string_printf(0, "%ld", result));
-            lexeme_val_setsigned(node->lex, result);
-            node->lex->type = LEXTYPE_NUMERIC;
-            expr_node_free(lhs);
-            expr_node_free(rhs);
-            node->lhs = node->rhs = 0;
+            expr_node_free(lhs, stg);
+            expr_node_free(rhs, stg);
+            expr_type_set(node, EXPTYPE_PRIM_LIT);
+            expr_litval_set(node, result);
         }
     }
 
 } /* reduce_op_expr */
 
+/*
+ * The workhorse expression-parsing routine.
+ *
+ * Can be called recursively (by parse_op_expr); if
+ * the 'recursed' flag is set, we know we are in the
+ * middle of parsing an operator expression, so we
+ * don't do any reduction.
+ *
+ * The 'lstrok' flags is passed to parse_primary,
+ * since in certain contexts (notably %ISSTRING()),
+ * we don't want to warn about strings longer that
+ * can't fit into a fullword value.  In most cases, we do.
+ */
 static int
-parse_expr (parse_ctx_t pctx, expr_node_t **expp, int recursed)
+parse_expr (parse_ctx_t pctx, expr_node_t **expp,
+            int recursed, int lstrok)
 {
     lexeme_t *lex;
     lextype_t lt;
     optype_t op;
     machinedef_t *mach = parser_get_machinedef(pctx);
+    stgctx_t stg = parser_get_cctx(pctx);
     int status = 0;
 
     lt = parser_next(pctx, QL_NORMAL, &lex);
@@ -714,10 +924,10 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp, int recursed)
         lexeme_free(lex);
         status = parse_op_expr(pctx, op, expp);
         if (status && !recursed) {
-            reduce_op_expr(*expp);
+            reduce_op_expr(stg, *expp);
         }
     }
-    if (parse_primary(pctx, lt, lex, expp)) {
+    if (parse_primary(pctx, lt, lex, expp, lstrok)) {
         lt = parser_next(pctx, QL_NORMAL, &lex);
         op = lextype_to_optype(lt, mach->addr_signed);
         if (op == OPER_NONE) {
@@ -726,7 +936,7 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp, int recursed)
         }
         status = parse_op_expr(pctx, op, expp);
         if (status && !recursed) {
-            reduce_op_expr(*expp);
+            reduce_op_expr(stg, *expp);
         }
     }
 
@@ -734,55 +944,199 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp, int recursed)
 
 } /* parse_expr */
 
-int
-parse_Expression (parse_ctx_t pctx) {
+/*
+ * expr_parse_next
+ *
+ * External interface to the expression parser.
+ * Automatically binds literals and segments
+ * to appropriate lexemes.
+ */
+lextype_t
+expr_parse_next (parse_ctx_t pctx, lexeme_t **lexp,
+                 int lstrok) {
 
+    stgctx_t stg = parser_get_cctx(pctx);
     expr_node_t *exp = 0;
-    lexeme_t *lex;
 
-    if (!parse_expr(pctx, &exp, 0)) {
-        return 0;
+    if (!parse_expr(pctx, &exp, 0, lstrok)) {
+        return parser_next(pctx, QL_NORMAL, lexp);
     }
 
-    if (expr_node_type(exp) == EXPTYPE_PRIMARY &&
-        exp->lex != 0) {
-        parser_insert(pctx, exp->lex);
-        exp->lex = 0;
+    // Bind a CTCE to its value,
+    // bind a segment reference to its value
+    // otherwise, return an EXPRESSION lexeme
+    if (expr_type(exp) == EXPTYPE_PRIM_LIT) {
+        strdesc_t *str = string_printf(0, "%ld", expr_litval(exp));
+        *lexp = parser_lexeme_create(pctx, LEXTYPE_NUMERIC, str);
+        lexeme_val_setsigned(*lexp, expr_litval(exp));
+        (*lexp)->type = LEXTYPE_NUMERIC;
+        string_free(str);
+        expr_node_free(exp, stg);
+    } else if (expr_type(exp) == EXPTYPE_PRIM_SEG) {
+        strdesc_t dsc = STRDEF("<segment>");
+        *lexp = parser_lexeme_create(pctx, LEXTYPE_SEGMENT, &dsc);
+        lexeme_ctx_set(*lexp, expr_segval(exp));
+        (*lexp)->type = LEXTYPE_SEGMENT;
+        expr_node_free(exp, stg);
     } else {
         strdesc_t dsc = STRDEF("<expression>");
-        lex = lexeme_create(LEXTYPE_EXPRESSION, &dsc);
-        lexeme_ctx_set(lex, exp);
-        parser_insert(pctx, lex);
+        *lexp = parser_lexeme_create(pctx, LEXTYPE_EXPRESSION, &dsc);
+        lexeme_ctx_set(*lexp, exp);
+        (*lexp)->type = LEXTYPE_EXPRESSION;
     }
 
-    expr_node_free(exp);
     return 1;
 }
 
+/*
+ * parse_ctce
+ *
+ * Parses a compile-time constant expression.
+ * Can be called in places where a CTCE is expected,
+ * as well as by the %CTCE lexical function.
+ *
+ * If lexp is non-NULL, we assume the caller needs
+ * a lexeme, even if we don't have a CTCE here, so
+ * we signal an error and insert a zero value so that
+ * parsing can continue.
+ *
+ * If lexp is NULL, this is just a call from %CTCE,
+ * where we just need to test, and status can be zero.
+ *
+ * We always return zero if there is an error
+ * parsing the expression. XXX
+ */
 int
 parse_ctce (parse_ctx_t pctx, lexeme_t **lexp)
 {
+    stgctx_t stg = parser_get_cctx(pctx);
     expr_node_t *exp = 0;
-    lexeme_t *lex;
+    int status = 0;
 
-    if (!parse_expr(pctx, &exp, 0)) {
+    if (!parse_expr(pctx, &exp, 0, 1)) {
         return 0;
     }
 
-    if (expr_node_type(exp) == EXPTYPE_PRIMARY &&
-        exp->lex != 0) {
-        lex = exp->lex;
-        exp->lex = 0;
+    if (expr_type(exp) == EXPTYPE_PRIM_LIT) {
+        if (lexp != 0) {
+            strdesc_t *str = string_printf(0, "%ld", expr_litval(exp));
+            *lexp = parser_lexeme_create(pctx, LEXTYPE_NUMERIC, str);
+            lexeme_val_setsigned(*lexp, expr_litval(exp));
+            (*lexp)->type = LEXTYPE_NUMERIC;
+            string_free(str);
+        }
+        status = 1;
     } else {
-        strdesc_t dsc = STRDEF("0");
+        // not a CTCE
+        if (lexp != 0) {
+            strdesc_t dsc = STRDEF("0");
+            /* XXX error condition */
+            *lexp = parser_lexeme_create(pctx, LEXTYPE_NUMERIC, &dsc);
+            lexeme_val_setsigned(*lexp, 0);
+            (*lexp)->type = LEXTYPE_NUMERIC;
+            status = 1;
+        } else {
+            status = 0;
+        }
+    }
+    expr_node_free(exp, stg);
+    return status;
+
+} /* parse_ctce */
+
+/*
+ * expr_parse_block
+ *
+ * External routine for parsing a block (specifically
+ * for the MODULE declaration).  NB: no CODECOMMENT,
+ * no labels.
+ */
+int
+expr_parse_block (parse_ctx_t pctx, expr_node_t **blockexp)
+{
+    lextype_t lt;
+    lexseq_t labels;
+
+    lexseq_init(&labels);
+    lt = parser_next(pctx, QL_NORMAL, 0);
+    if (lt != LEXTYPE_DELIM_LPAR &&
+        lt != LEXTYPE_EXP_DELIM_BEGIN) {
         /* XXX error condition */
-        lex = lexeme_create(LEXTYPE_NUMERIC, &dsc);
-        lexeme_val_setsigned(lex, 0);
-        lex->type = LEXTYPE_NUMERIC;
+        return 0;
     }
 
-    expr_node_free(exp);
-    *lexp = lex;
+    return parse_block(pctx, lt, blockexp, 0, &labels);
 
+} /* expr_parse_block */
+
+/*
+ * expr_dumpinfo
+ *
+ * Format a string with information about an expression
+ */
+strdesc_t *
+expr_dumpinfo (expr_node_t *exp) {
+
+    if (exp == 0) {
+        return string_from_chrs(0, "{NULL}", 6);
+    }
+    switch (expr_type(exp)) {
+        case EXPTYPE_PRIM_LIT:
+            return string_printf(0, "LIT=%ld", expr_litval(exp));
+        case EXPTYPE_PRIM_SEG: {
+            strdesc_t *str = string_from_chrs(0, "SEG:", 4);
+            return string_append(str, seg_dumpinfo(expr_segval(exp)));
+        }
+        case EXPTYPE_OPERATOR:
+            return string_printf(0, "OP:%s", oper_name(expr_op_type(exp)));
+        default:
+            break;
+    }
+    return string_printf(0, "%s", exprtype_name(expr_type(exp)));
+    
+} /* expr_dumpinfo */
+
+/*
+ * parse_condexp
+ *
+ * IF test THEN consequent {ELSE alternative}
+ */
+static int
+parse_condexp (void *pctx, quotelevel_t ql, quotemodifier_t qm,
+               lextype_t lt, condstate_t cs, lexeme_t *orig, lexseq_t *result)
+{
+    return 1;
+}
+/*
+ * parse_case
+ *
+ * CASE exp OF...
+ */
+static int
+parse_case (void *pctx, quotelevel_t ql, quotemodifier_t qm,
+               lextype_t lt, condstate_t cs, lexeme_t *orig, lexseq_t *result)
+{
+    return 1;
+}
+/*
+ * parse_select
+ *
+ * SELECT{A|U}|SELECTONE{A|U} exp OF...
+ */
+static int
+parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
+               lextype_t lt, condstate_t cs, lexeme_t *orig, lexseq_t *result)
+{
+    return 1;
+}
+/*
+ * parse_incrdecr
+ *
+ * INCR{A|U}|DECR{A|U} name {FROM exp} {TO exp} {BY exp}
+ */
+static int
+parse_incrdecr (void *pctx, quotelevel_t ql, quotemodifier_t qm,
+               lextype_t lt, condstate_t cs, lexeme_t *orig, lexseq_t *result)
+{
     return 1;
 }

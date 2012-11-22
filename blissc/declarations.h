@@ -17,4 +17,5 @@
 void declarations_init(scopectx_t kwdscope);
 seg_t *define_plit(parse_ctx_t pctx, stgctx_t stg, lextype_t curlt);
 int parse_declaration(parse_ctx_t pctx, lextype_t curlt);
+int declare_module(parse_ctx_t pctx);
 #endif
