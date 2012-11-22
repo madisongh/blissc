@@ -1,3 +1,4 @@
+MODULE test =
 BEGIN
     LITERAL
         Z = 3 + 4,
@@ -11,5 +12,15 @@ BEGIN
         B = Z AND 3;
 %PRINT('T is: ', %NUMBER(T))
 %PRINT('B is: ', %NUMBER(B))
-END;
+%PRINT('CTCE test: ',%NUMBER(%CTCE(A,B,T,Y,Z,%ASCII'HELLO'))) 
+%PRINT('CTCE test 2: ',%NUMBER(%CTCE('hi there',%string('go','away'))))
 
+    LABEL
+        blklabel1, blklabel2;
+        
+    blklabel1:BEGIN
+              END;
+    CODECOMMENT 'hi there': blklabel2: BEGIN END;
+    CODECOMMENT 'another': BEGIN END;
+END
+ELUDOM
