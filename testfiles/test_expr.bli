@@ -1,0 +1,15 @@
+BEGIN
+    LITERAL
+        Z = 3 + 4,
+        Y = Z + 2 * 5;
+%PRINT(%ASCII'Z is: ',%NUMBER(Z), %ASCII', Y is: ', %NUMBER(Y))
+    LITERAL
+        A = (Z + 5) * (Y - 5);
+%PRINT('A is: ', %NUMBER(A))
+    LITERAL
+        T = A EQL 144,
+        B = Z AND 3;
+%PRINT('T is: ', %NUMBER(T))
+%PRINT('B is: ', %NUMBER(B))
+END;
+

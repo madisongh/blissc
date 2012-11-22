@@ -60,6 +60,7 @@
 		7A9E1C14163DA45A009ACBD0 /* parser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = parser.h; sourceTree = "<group>"; };
 		7AB5ED811642A3AB0063EC94 /* expression.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = expression.c; sourceTree = "<group>"; };
 		7AB5ED841642A3B80063EC94 /* expression.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = expression.h; sourceTree = "<group>"; };
+		7ABCDDE7165D64E000E3A85C /* test_expr.bli */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_expr.bli; path = testfiles/test_expr.bli; sourceTree = SOURCE_ROOT; };
 		7ABF5680164DA2B10053480F /* test_macro.bli */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_macro.bli; path = ../testfiles/test_macro.bli; sourceTree = "<group>"; };
 		7AC12EBF1659194A009C84F5 /* utils.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = utils.c; sourceTree = "<group>"; };
 		7AC12EC2165919B2009C84F5 /* utils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = utils.h; sourceTree = "<group>"; };
@@ -127,6 +128,7 @@
 				7A95BCEB1641CC2F002F851E /* strings.c */,
 				7A95BCEE1641E17C002F851E /* strings.h */,
 				7A5351E91656FE7B00BE4B99 /* test_decl.bli */,
+				7ABCDDE7165D64E000E3A85C /* test_expr.bli */,
 				7ABF5680164DA2B10053480F /* test_macro.bli */,
 				7A8735071642CA6F006BFC30 /* test_parser.bli */,
 				7A548D681646E9E500A2A20F /* test_req.req */,
