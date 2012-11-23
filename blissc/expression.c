@@ -34,6 +34,14 @@ static name_t expr_names[] = {
     NAMEDEF("THEN", LEXTYPE_CTRL_THEN, NAME_M_RESERVED),
     NAMEDEF("ELSE", LEXTYPE_CTRL_ELSE, NAME_M_RESERVED),
     NAMEDEF("CASE", LEXTYPE_CTRL_CASE, NAME_M_RESERVED),
+    NAMEDEF("FROM", LEXTYPE_KWD_FROM, NAME_M_RESERVED),
+    NAMEDEF("TO", LEXTYPE_KWD_TO, NAME_M_RESERVED),
+    NAMEDEF("OF", LEXTYPE_KWD_OF, NAME_M_RESERVED),
+    NAMEDEF("BY", LEXTYPE_KWD_BY, NAME_M_RESERVED),
+    NAMEDEF("SET", LEXTYPE_KWD_SET, NAME_M_RESERVED),
+    NAMEDEF("TES", LEXTYPE_KWD_TES, NAME_M_RESERVED),
+    NAMEDEF("INRANGE", LEXTYPE_KWD_INRANGE, NAME_M_RESERVED),
+    NAMEDEF("OUTRANGE", LEXTYPE_KWD_OUTRANGE, NAME_M_RESERVED),
     NAMEDEF("SELECT", LEXTYPE_CTRL_SELECT, NAME_M_RESERVED),
     NAMEDEF("SELECTU", LEXTYPE_CTRL_SELECTU, NAME_M_RESERVED),
     NAMEDEF("SELECTA", LEXTYPE_CTRL_SELECTA, NAME_M_RESERVED),
@@ -227,6 +235,42 @@ expr_node_free (expr_node_t *node, stgctx_t stg) {
                 }
             }
         }
+
+        case EXPTYPE_CTRL_CASE: {
+            expr_node_t **actarray = expr_case_cases(node);
+            long which, lo, hi;
+            expr_node_free(expr_case_index(node), stg);
+            expr_node_free(expr_case_outrange(node), stg);
+            lo = expr_case_lowbound(node);
+            hi = expr_case_highbound(node);
+            for (which = lo; which <= hi; which++) {
+                expr_node_free(actarray[which], stg);
+            }
+            free(actarray);
+            break;
+        }
+        case EXPTYPE_SELECTOR:
+            expr_node_free(expr_selector_action(node), stg);
+            expr_node_free(expr_selector_low(node), stg);
+            expr_node_free(expr_selector_high(node), stg);
+            break;
+        case EXPTYPE_CTRL_SELECT: {
+            expr_node_t *sel, *selnext, *subnext;
+            expr_node_free(expr_sel_index(node), stg);
+            for (sel = expr_sel_selectors(node); sel != 0; sel = selnext) {
+                selnext = expr_next(sel);
+                do {
+                    subnext = expr_selector_next(sel);
+                    expr_node_free(expr_selector_action(sel), stg);
+                    expr_node_free(expr_selector_low(sel), stg);
+                    expr_node_free(expr_selector_high(sel), stg);
+                    expr_node_free(sel, stg);
+                    sel = subnext;
+                } while (sel != 0);
+            }
+            break;
+        }
+
         case EXPTYPE_PRIM_LIT:
         case EXPTYPE_NOOP:
         case EXPTYPE_EXECFUN: // TBD XXX
@@ -295,6 +339,12 @@ expr_init (scopectx_t kwdscope)
     lextype_register(LEXTYPE_CTRL_SELECTONE, parse_select);
     lextype_register(LEXTYPE_CTRL_SELECTONEA, parse_select);
     lextype_register(LEXTYPE_CTRL_SELECTONEU, parse_select);
+    lextype_register(LEXTYPE_CTRL_INCR, parse_incrdecr);
+    lextype_register(LEXTYPE_CTRL_INCRA, parse_incrdecr);
+    lextype_register(LEXTYPE_CTRL_INCRU, parse_incrdecr);
+    lextype_register(LEXTYPE_CTRL_DECR, parse_incrdecr);
+    lextype_register(LEXTYPE_CTRL_DECRA, parse_incrdecr);
+    lextype_register(LEXTYPE_CTRL_DECRU, parse_incrdecr);
 }
 
 /*
@@ -587,7 +637,14 @@ parse_primary (parse_ctx_t pctx, lextype_t lt, lexeme_t *lex,
     lexseq_t labels;
 
     lexseq_init(&labels);
-    if (lt == LEXTYPE_KWD_CODECOMMENT) {
+    if (lt == LEXTYPE_EXPRESSION) {
+        exp = lexeme_ctx_get(lex);
+        lexeme_free(lex);
+        if (!expr_is_primary(exp)) {
+            *expp = exp;
+            return 1;
+        }
+    } else if (lt == LEXTYPE_KWD_CODECOMMENT) {
         lexeme_free(lex);
         lt = parser_next(pctx, QL_NORMAL, &lex);
         if (lt != LEXTYPE_STRING) {
@@ -811,7 +868,12 @@ reduce_op_expr (stgctx_t stg, expr_node_t *node) {
                     result = leftval * rightval;
                     break;
                 case OPER_DIV:
-                    result = leftval / rightval;
+                    if (rightval == 0) {
+                        /* XXX error condition */
+                        result = 0;
+                    } else {
+                        result = leftval / rightval;
+                    }
                     break;
                 case OPER_MODULO:
                     result = leftval % rightval;
@@ -913,11 +975,11 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp,
     lt = parser_next(pctx, QL_NORMAL, &lex);
     if (lt == LEXTYPE_CTRL_WHILE || lt == LEXTYPE_CTRL_UNTIL) {
         lexeme_free(lex);
-        status = parse_wu_loop(pctx, lt, expp);
+        return parse_wu_loop(pctx, lt, expp);
     }
     if (lt == LEXTYPE_CTRL_DO) {
         lexeme_free(lex);
-        status = parse_do_loop(pctx, lt, expp);
+        return parse_do_loop(pctx, lt, expp);
     }
 
     if (check_unary_op(lt, &op)) {
@@ -926,7 +988,9 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp,
         if (status && !recursed) {
             reduce_op_expr(stg, *expp);
         }
+        return status;
     }
+
     if (parse_primary(pctx, lt, lex, expp, lstrok)) {
         lt = parser_next(pctx, QL_NORMAL, &lex);
         op = lextype_to_optype(lt, mach->addr_signed);
@@ -938,6 +1002,7 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp,
         if (status && !recursed) {
             reduce_op_expr(stg, *expp);
         }
+        return status;
     }
 
     return status;
@@ -1105,29 +1170,394 @@ static int
 parse_condexp (void *pctx, quotelevel_t ql, quotemodifier_t qm,
                lextype_t lt, condstate_t cs, lexeme_t *orig, lexseq_t *result)
 {
-    return 1;
-}
+    expr_node_t *test, *cons, *alt, *exp;
+    stgctx_t stg = parser_get_cctx(pctx);
+
+    if (cs == COND_AWC || cs == COND_CWA) {
+        lexeme_free(orig);
+        return 1;
+    }
+
+    test = cons = alt = 0;
+    if (!parse_expr(pctx, &test, 0, 0)) {
+        /* XXX error condition */
+        return -1;
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_CTRL_THEN, 0, 1)) {
+        /* XXX error condition */
+        return -1;
+    }
+    if (!parse_expr(pctx, &cons, 0, 0)) {
+        /* XXX error condition */
+        return -1;
+    }
+    if (parser_expect(pctx, QL_NORMAL, LEXTYPE_CTRL_ELSE, 0, 1)) {
+        if (!parse_expr(pctx, &alt, 0, 0)) {
+            /* XXX error condition */
+        }
+        return -1;
+    }
+
+    // Optimize away constant tests
+    if (expr_type(test) == EXPTYPE_PRIM_LIT) {
+        if (expr_litval(test) & 1) {
+            exp = cons;
+        } else {
+            exp = (alt == 0 ? expr_node_alloc(EXPTYPE_NOOP) : alt);
+            expr_node_free(cons, stg);
+        }
+        expr_node_free(test, stg);
+    } else {
+        exp = expr_node_alloc(EXPTYPE_CTRL_COND);
+        expr_cond_test_set(exp, test);
+        expr_cond_consequent_set(exp, cons);
+        expr_cond_alternative_set(exp, alt);
+    }
+    orig->type = orig->boundtype = LEXTYPE_EXPRESSION;
+    lexeme_ctx_set(orig, exp);
+    return 0;
+
+} /* parse_condexp */
+
+static int
+get_ctce (parse_ctx_t pctx, stgctx_t stg, long *valp)
+{
+    expr_node_t *exp = 0;
+
+    if (!parse_expr(pctx, &exp, 0, 1)) {
+        return 0;
+    }
+
+    if (expr_type(exp) == EXPTYPE_PRIM_LIT) {
+        *valp = expr_litval(exp);
+        expr_node_free(exp, stg);
+        return 1;
+    }
+    expr_node_free(exp, stg);
+    return 0;
+} /* get_ctce */
+
 /*
  * parse_case
  *
- * CASE exp OF...
+ * CASE exp FROM ctce TO ctce OF
+ * SET
+ *  [ctce { TO ctce } | INRANGE | OUTRANGE,...]: expression;
+ * TES
  */
 static int
 parse_case (void *pctx, quotelevel_t ql, quotemodifier_t qm,
                lextype_t lt, condstate_t cs, lexeme_t *orig, lexseq_t *result)
 {
-    return 1;
+    
+    expr_node_t *caseidx;
+    expr_node_t **cases, **unique, *exp;
+    expr_node_t *outrange;
+    int *todo;
+    stgctx_t stg = parser_get_cctx(pctx);
+    lexeme_t *lex;
+    long lo, hi, ncases, i;
+    int saw_inrange, saw_outrange, status;
+    int unique_actions;
+
+    if (cs == COND_AWC || cs == COND_CWA) {
+        lexeme_free(orig);
+        return 1;
+    }
+
+    if (!parse_expr(pctx, &caseidx, 0, 0)) {
+        /* XXX error condition */
+        return -1;
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_FROM, 0, 1)) {
+        /* XXX error condition */
+        return -1;
+    }
+    if (!get_ctce(pctx, stg, &lo)) {
+        /* XXX error condition */
+        return -1;
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_TO, 0, 1)) {
+        /* XXX error condition */
+        return -1;
+    }
+    if (!get_ctce(pctx, stg, &hi)) {
+        /* XXX error condition */
+        return -1;
+    }
+    if (lo > hi) {
+        long tmp;
+        /* XXX error condition */
+        tmp = lo;
+        lo = hi;
+        hi = tmp;
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_OF, 0, 1)) {
+        /* XXX error condition */
+        return -1;
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_SET, 0, 1)) {
+        /* XXX error condition */
+        return -1;
+    }
+    ncases = (hi - lo) + 1;
+    cases = malloc(ncases*sizeof(expr_node_t *));
+    unique = malloc(ncases*sizeof(expr_node_t *));
+    memset(cases, 0, ncases*sizeof(expr_node_t *));
+    memset(unique, 0, ncases*sizeof(expr_node_t *));
+    todo = malloc(ncases*sizeof(int));
+    saw_inrange = saw_outrange = 0;
+    unique_actions = 0;
+    status = 0;
+    while (1) {
+        int is_outrange = 0;
+        memset(todo, 0, sizeof(int)*ncases);
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LBRACK, 0, 1)) {
+            /* XXX error condition */
+            parser_skip_to_delim(pctx, LEXTYPE_KWD_TES);
+            status = -1;
+            break;
+        }
+        while (1) {
+            lt = parser_next(pctx, QL_NORMAL, &lex);
+            if (lt == LEXTYPE_KWD_INRANGE) {
+                if (saw_inrange) {
+                    /* XXX error condition */
+                }
+                saw_inrange = 1;
+                for (i = 0; i < ncases; i++) {
+                    todo[i] = (cases[i] == 0);
+                }
+            } else if (lt == LEXTYPE_KWD_OUTRANGE) {
+                if (saw_outrange) {
+                    /* XXX error condition */
+                }
+                is_outrange = saw_outrange = 1;
+            } else if (lt == LEXTYPE_NUMERIC) {
+                long beginval = lexeme_signedval(lex);
+                long endval = beginval;
+                lexeme_free(lex);
+                if (saw_inrange) {
+                    /* XXX error condition */
+                }
+                if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_TO, 0, 1)) {
+                    lt = parser_next(pctx, QL_NORMAL, &lex);
+                    if (lt != LEXTYPE_NUMERIC) {
+                        /* XXX error condition */
+                    } else {
+                        endval = lexeme_signedval(lex);
+                        if (beginval > endval) {
+                            long tmp = beginval;
+                            /* XXX error condition */
+                            beginval = endval;
+                            endval = tmp;
+                        }
+                    }
+                    lexeme_free(lex);
+                }
+                for (i = beginval-lo; i <= endval-lo; todo[i++] = 1);
+            }
+            if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RBRACK, 0, 1)) {
+                break;
+            }
+            if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
+                /* XXX error condition */
+                parser_skip_to_delim(pctx, LEXTYPE_DELIM_RBRACK);
+                break;
+            }
+        } /* per-case while */
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
+            /* XXX error condition, but keep trying */
+        }
+        if (!parse_expr(pctx, &exp, 0, 0)) {
+            /* XXX error condition */
+            status = -1;
+            break;
+        }
+        if (is_outrange) {
+            if (outrange != 0) {
+                /* XXX error condition - repeats not allowed */
+            }
+            outrange = exp;
+        } else {
+            unique[unique_actions++] = exp;
+        }
+        for (i = 0; i < ncases; i++) {
+            if (todo[i]) {
+                if (cases[i] != 0) {
+                    /* XXX error condition - repeats not allowed */
+                }
+                cases[i] = exp;
+            }
+        }
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1)) {
+            /* XXX error condition, but keep going */
+        }
+        if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_TES, 0, 1)) {
+            break;
+        }
+
+    } /* outer while */
+
+    if (status == 0) {
+        for (i = 0; i < ncases && cases[i] != 0; i++);
+        if (i < ncases) {
+            /* XXX error condition - not all cases covered */
+        }
+        status = -1;
+    }
+
+    if (status == 0) {
+        exp = expr_node_alloc(EXPTYPE_CTRL_CASE);
+        expr_case_bounds_set(exp, lo, hi);
+        expr_case_outrange_set(exp, outrange);
+        expr_case_actions_set(exp, cases);
+        expr_case_index_set(exp, caseidx);
+        orig->type = orig->boundtype = LEXTYPE_EXPRESSION;
+        lexeme_ctx_set(lex, exp);
+    } else {
+        expr_node_free(outrange, stg);
+        expr_node_free(caseidx, stg);
+        while (unique_actions > 0) {
+            expr_node_free(unique[--unique_actions], stg);
+        }
+    }
+
+    free(unique);
+    free(cases);
+    free(todo);
+
+    return status;
 }
 /*
  * parse_select
  *
- * SELECT{A|U}|SELECTONE{A|U} exp OF...
+ * SELECT{A|U}|SELECTONE{A|U} exp OF
+ * SET
+ *  [ expr { TO expr } | OTHERWISE | ALWAYS,...]: expr;
+ * TES
  */
 static int
 parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
-               lextype_t lt, condstate_t cs, lexeme_t *orig, lexseq_t *result)
+               lextype_t curlt, condstate_t cs, lexeme_t *orig, lexseq_t *result)
 {
-    return 1;
+    stgctx_t stg = parser_get_cctx(pctx);
+    machinedef_t *mach = parser_get_machinedef(pctx);
+    expr_node_t *si, *exp, *lo, *hi;
+    expr_node_t *selseq, *seqlast, *selectors, *sellast, *sel;
+
+    if (!parse_expr(pctx, &si, 0, 0)) {
+        /* XXX error condition */
+        return -1;
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_OF, 0, 1)) {
+        /* XXX error condition */
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_SET, 0, 1)) {
+        /* XXX error condition */
+    }
+    selseq = seqlast = 0;
+    while (1) {
+        selectors = sellast = 0;
+        if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_TES, 0, 1)) {
+            break;
+        }
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LBRACK, 0, 1)) {
+            /* XXX error condition */
+            parser_skip_to_delim(pctx, LEXTYPE_KWD_TES);
+            break;
+        }
+        sel = expr_node_alloc(EXPTYPE_SELECTOR);
+        while (1) {
+            lo = hi = 0;
+            if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_OTHERWISE, 0, 1)) {
+                expr_selector_otherwise_set(sel, 1);
+            } else if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_ALWAYS, 0, 1)) {
+                expr_selector_always_set(sel, 1);
+            } else if (parse_expr(pctx, &lo, 0, 0)) {
+                if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_TO, 0, 1)) {
+                    if (!parse_expr(pctx, &hi, 0, 0)) {
+                        /* XXX error condition */
+                    }
+                }
+                expr_selector_lohi_set(sel, lo, hi);
+            } else {
+                /* XXX error condition */
+                expr_node_free(sel, stg);
+                expr_node_free(selectors, stg);
+                selectors = 0;
+                break;
+            }
+            if (selectors == 0) {
+                selectors = sellast = sel;
+            } else {
+                expr_selector_next_set(sellast, sel);
+                sellast = sel;
+            }
+            if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RBRACK, 0, 1)) {
+                break;
+            }
+            if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
+                /* XXX error condition */
+            }
+        } /* inner loop */
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
+            /* XXX error condition */
+        }
+        if (!parse_expr(pctx, &exp, 0, 1)) {
+            /* XXX error condition */
+        }
+        if (selectors == 0) {
+            expr_node_free(exp, stg);
+        } else {
+            expr_selector_action_set(selectors, exp);
+            if (selseq == 0) {
+                selseq = seqlast = selectors;
+            } else {
+                expr_next_set(seqlast, selectors);
+                seqlast = selectors;
+            }
+        }
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1)) {
+            /* XXX error condition */
+        }
+    } /* outer loop */
+
+    if (selseq == 0) {
+        /* XXX error condition */
+        expr_node_free(si, stg);
+        return -1;
+    }
+
+    exp = expr_node_alloc(EXPTYPE_CTRL_SELECT);
+    expr_sel_index_set(exp, si);
+    if (curlt == LEXTYPE_CTRL_SELECTONE ||
+        curlt == LEXTYPE_CTRL_SELECTONEU ||
+        curlt == LEXTYPE_CTRL_SELECTONEA) {
+        expr_sel_oneonly_set(exp, 1);
+    }
+    switch (curlt) {
+        case LEXTYPE_CTRL_SELECT:
+        case LEXTYPE_CTRL_SELECTONE:
+            expr_sel_cmptype_set(exp, OPER_CMP_EQL);
+            break;
+        case LEXTYPE_CTRL_SELECTU:
+        case LEXTYPE_CTRL_SELECTONEU:
+            expr_sel_cmptype_set(exp, OPER_CMP_EQLU);
+            break;
+        case LEXTYPE_CTRL_SELECTA:
+        case LEXTYPE_CTRL_SELECTONEA:
+            expr_sel_cmptype_set(exp, (mach->addr_signed ?
+                                       OPER_CMP_EQL : OPER_CMP_EQLU));
+            break;
+        default:
+            break;
+    }
+    expr_sel_selectors_set(exp, selseq);
+    orig->type = orig->boundtype = LEXTYPE_EXPRESSION;
+    lexeme_ctx_set(orig, exp);
+
+    return 0;
 }
 /*
  * parse_incrdecr
@@ -1136,7 +1566,88 @@ parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
  */
 static int
 parse_incrdecr (void *pctx, quotelevel_t ql, quotemodifier_t qm,
-               lextype_t lt, condstate_t cs, lexeme_t *orig, lexseq_t *result)
+               lextype_t curlt, condstate_t cs, lexeme_t *orig, lexseq_t *result)
 {
-    return 1;
-}
+    stgctx_t stg = parser_get_cctx(pctx);
+    machinedef_t *mach = parser_get_machinedef(pctx);
+    expr_node_t *fromexp, *toexp, *byexp, *body, *exp;
+    lextype_t lt;
+    lexeme_t *lex;
+    scopectx_t scope;
+
+    fromexp = toexp = byexp = 0;
+    scope = parser_scope_begin(pctx);
+    lt = parser_next(pctx, QL_NAME, &lex);
+    if (lexeme_boundtype(lex) != LEXTYPE_NAME) {
+        /* XXX error condition */
+        parser_scope_end(pctx);
+        parser_insert(pctx, lex);
+        return -1;
+    }
+    // XXX need to declare the name LOCAL here
+    if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_FROM, 0, 1)) {
+        if (!parse_expr(pctx, &fromexp, 0, 0)) {
+            /* XXX error condition */
+        }
+    }
+    if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_TO, 0, 1)) {
+        if (!parse_expr(pctx, &toexp, 0, 0)) {
+            /* XXX error condition */
+        }
+    }
+    if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_BY, 0, 1)) {
+        if (!parse_expr(pctx, &byexp, 0, 0)) {
+            /* XXX error condition */
+        }
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_CTRL_DO, 0, 1)) {
+        /* XXX error condition */
+    }
+    if (!parse_expr(pctx, &body, 0, 0)) {
+        expr_node_free(fromexp, stg);
+        expr_node_free(toexp, stg);
+        expr_node_free(byexp, stg);
+        parser_scope_end(pctx);
+        return -1;
+    }
+    parser_scope_end(pctx);
+    exp = expr_node_alloc(EXPTYPE_CTRL_LOOPID);
+    expr_idloop_scope_set(exp, scope);
+    expr_idloop_init_set(exp, fromexp);
+    expr_idloop_term_set(exp, toexp);
+    expr_idloop_step_set(exp, byexp);
+    expr_idloop_body_set(exp, body);
+    if (curlt == LEXTYPE_CTRL_DECR ||
+        curlt == LEXTYPE_CTRL_DECRA ||
+        curlt == LEXTYPE_CTRL_DECRU) {
+        expr_idloop_decr_set(exp, 1);
+    }
+    switch (curlt) {
+        case LEXTYPE_CTRL_DECR:
+            expr_idloop_cmptype_set(exp, OPER_CMP_GEQ);
+            break;
+        case LEXTYPE_CTRL_INCR:
+            expr_idloop_cmptype_set(exp, OPER_CMP_LEQ);
+            break;
+        case LEXTYPE_CTRL_DECRU:
+            expr_idloop_cmptype_set(exp, OPER_CMP_GEQU);
+            break;
+        case LEXTYPE_CTRL_INCRU:
+            expr_idloop_cmptype_set(exp, OPER_CMP_LEQU);
+            break;
+        case LEXTYPE_CTRL_DECRA:
+            expr_idloop_cmptype_set(exp, (mach->addr_signed ?
+                                          OPER_CMP_GEQ : OPER_CMP_GEQU));
+            break;
+        case LEXTYPE_CTRL_INCRA:
+            expr_idloop_cmptype_set(exp, (mach->addr_signed ?
+                                          OPER_CMP_LEQ : OPER_CMP_LEQU));
+            break;
+        default:
+            break;
+    }
+    orig->type = orig->boundtype = LEXTYPE_EXPRESSION;
+    lexeme_ctx_set(orig, exp);
+    return 0;
+    
+} /* parse_incrdecr */

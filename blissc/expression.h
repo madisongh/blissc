@@ -21,6 +21,8 @@
     DOEXPTYPE(PRIM_RTNCALL) DOEXPTYPE(PRIM_BLK) \
     DOEXPTYPE(OPERATOR) \
     DOEXPTYPE(EXECFUN) DOEXPTYPE(CTRL_COND) \
+    DOEXPTYPE(CTRL_CASE) \
+    DOEXPTYPE(CTRL_SELECT) DOEXPTYPE(SELECTOR) \
     DOEXPTYPE(CTRL_LOOPWU) DOEXPTYPE(CTRL_LOOPID)
 #define DOEXPTYPE(t_) EXPTYPE_##t_,
 typedef enum {
@@ -86,6 +88,8 @@ struct expr_loopid_s {
     struct expr_node_s  *term;
     struct expr_node_s  *step;
     struct expr_node_s  *body;
+    optype_t            cmptype;
+    int                 is_decr;
 };
 struct expr_rtncall_s {
     struct expr_node_s  *rtn;
@@ -93,6 +97,27 @@ struct expr_rtncall_s {
     struct expr_node_s  *inargs;
     struct expr_node_s  *outargs;
     int                 incount, outcount;
+};
+struct expr_case_s {
+    struct expr_node_s  *caseindex;
+    long                 lowbound, highbound;
+    struct expr_node_s  *outrange;
+    struct expr_node_s  **cases;  // array containing hi-low+1 elements
+};
+
+struct expr_selector_s {
+    struct expr_node_s  *low;
+    struct expr_node_s  *high;
+    struct expr_node_s  *nextsel;
+    struct expr_node_s  *action;
+    int is_otherwise;
+    int is_always;
+};
+struct expr_sel_s {
+    struct expr_node_s  *selindex;
+    optype_t            cmptype;
+    int                 selectone;
+    struct expr_node_s  *sequence; // of selectors
 };
 
 struct expr_node_s {
@@ -109,6 +134,9 @@ struct expr_node_s {
         struct expr_loopwu_s wudata;
         struct expr_loopid_s iddata;
         struct expr_rtncall_s rcdata;
+        struct expr_case_s  casedata;
+        struct expr_sel_s   seldata;
+        struct expr_selector_s slctrdata;
     } data;
 };
 typedef struct expr_node_s expr_node_t;
@@ -303,6 +331,115 @@ static inline __unused expr_node_t *expr_idloop_body(expr_node_t *node) {
 static inline __unused void expr_idloop_body_set(expr_node_t *node, expr_node_t *body) {
     node->data.iddata.body = body;
 }
+static inline __unused optype_t expr_idloop_cmptype(expr_node_t *node) {
+    return node->data.iddata.cmptype;
+}
+static inline __unused void expr_idloop_cmptype_set(expr_node_t *node, optype_t cmp) {
+    node->data.iddata.cmptype = cmp;
+}
+static inline __unused int expr_idloop_decr(expr_node_t *node) {
+    return node->data.iddata.is_decr;
+}
+static inline __unused void expr_idloop_decr_set(expr_node_t *node, int val) {
+    node->data.iddata.is_decr = val;
+}
+// CTRL_CASE
+static inline __unused expr_node_t *expr_case_index(expr_node_t *node) {
+    return node->data.casedata.caseindex;
+}
+static inline __unused void expr_case_index_set(expr_node_t *node, expr_node_t *exp) {
+    node->data.casedata.caseindex = exp;
+}
+static inline __unused long expr_case_lowbound(expr_node_t *node) {
+    return node->data.casedata.lowbound;
+}
+static inline __unused long expr_case_highbound(expr_node_t *node) {
+    return node->data.casedata.highbound;
+}
+static inline __unused void expr_case_bounds_set(expr_node_t *node, long lo, long hi) {
+    node->data.casedata.highbound = hi;
+    node->data.casedata.lowbound = lo;
+}
+static inline __unused expr_node_t *expr_case_outrange(expr_node_t *node) {
+    return node->data.casedata.outrange;
+}
+static inline __unused void expr_case_outrange_set(expr_node_t *node, expr_node_t *exp) {
+    node->data.casedata.outrange = exp;
+}
+static inline __unused expr_node_t *expr_case_action(expr_node_t *node, long which) {
+    if (which < node->data.casedata.lowbound || which > node->data.casedata.highbound) {
+        return node->data.casedata.outrange;
+    }
+    return node->data.casedata.cases[which-node->data.casedata.lowbound];
+}
+static inline __unused expr_node_t **expr_case_cases(expr_node_t *node) {
+    return node->data.casedata.cases;
+}
+static inline __unused void expr_case_actions_set(expr_node_t *node, expr_node_t **arr) {
+    node->data.casedata.cases = arr;
+}
+// CTRL_SELECT
+static inline __unused expr_node_t *expr_sel_index(expr_node_t *node) {
+    return node->data.seldata.selindex;
+}
+static inline __unused void expr_sel_index_set(expr_node_t *node, expr_node_t *si) {
+    node->data.seldata.selindex = si;
+}
+static inline __unused optype_t expr_sel_cmptype(expr_node_t *node) {
+    return node->data.seldata.cmptype;
+}
+static inline __unused void expr_sel_cmptype_set(expr_node_t *node, optype_t op) {
+    node->data.seldata.cmptype = op;
+}
+static inline __unused int expr_sel_oneonly(expr_node_t *node) {
+    return node->data.seldata.selectone;
+}
+static inline __unused void expr_sel_oneonly_set(expr_node_t *node, int val) {
+    node->data.seldata.selectone = val;
+}
+static inline __unused expr_node_t *expr_sel_selectors(expr_node_t *node) {
+    return node->data.seldata.sequence;
+}
+static inline __unused void expr_sel_selectors_set(expr_node_t *node, expr_node_t *seq) {
+    node->data.seldata.sequence = seq;
+}
+// selectors
+static inline __unused expr_node_t *expr_selector_low(expr_node_t *node) {
+    return node->data.slctrdata.low;
+}
+static inline __unused expr_node_t *expr_selector_high(expr_node_t *node) {
+    return node->data.slctrdata.high;
+}
+static inline __unused void expr_selector_lohi_set(expr_node_t *node,
+                                                   expr_node_t *lo, expr_node_t *hi) {
+    node->data.slctrdata.low = lo;
+    node->data.slctrdata.high = hi;
+}
+static inline __unused expr_node_t *expr_selector_action(expr_node_t *node) {
+    return node->data.slctrdata.action;
+}
+static inline __unused void expr_selector_action_set(expr_node_t *node, expr_node_t *act) {
+    node->data.slctrdata.action = act;
+}
+static inline __unused int expr_selector_otherwise(expr_node_t *node) {
+    return node->data.slctrdata.is_otherwise;
+}
+static inline __unused void expr_selector_otherwise_set(expr_node_t *node, int val) {
+    node->data.slctrdata.is_otherwise = val;
+}
+static inline __unused int expr_selector_always(expr_node_t *node) {
+    return node->data.slctrdata.is_always;
+}
+static inline __unused void expr_selector_always_set(expr_node_t *node, int val) {
+    node->data.slctrdata.is_always = val;
+}
+static inline __unused expr_node_t *expr_selector_next(expr_node_t *node) {
+    return node->data.slctrdata.nextsel;
+}
+static inline __unused void expr_selector_next_set(expr_node_t *node, expr_node_t *sel) {
+    node->data.slctrdata.nextsel = sel;
+}
+
 
 void expr_init (scopectx_t kwdscope);
 lextype_t expr_parse_next(parse_ctx_t pctx, lexeme_t **lexp, int longstrings_ok);
