@@ -12,6 +12,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "lexeme.h"
+#include "utils.h"
 #include "strings.h"
 
 struct scopectx_s;
@@ -28,6 +29,7 @@ struct name_s {
     struct name_s       *next;
     lextype_t            nametype;
     scopectx_t           namescope;
+    textpos_t            namedclpos;
     unsigned int         nameflags;
     intptr_t             namedata[NAME_DATA_SIZE_IN_INTPTRS];
     size_t               namelen;
@@ -43,7 +45,7 @@ typedef int (*name_datacopy_fn)(name_t *dst, name_t *src);
  * Macros for building static tables of reserved keywords
  * and predeclared names
  */
-#define NAMEDEF(n_, lt_, f_) { 0, (lt_), 0, \
+#define NAMEDEF(n_, lt_, f_) { 0, (lt_), 0, 0,	\
                             (f_), { 0 }, sizeof(n_)-1, (n_) }
 
 static inline __unused lextype_t name_type(name_t *name) {
@@ -61,13 +63,19 @@ static inline __unused strdesc_t *name_string(name_t *name) {
 static inline __unused void *name_data(name_t *name) {
     return name->namedata;
 }
+static inline __unused textpos_t name_dclpos_get(name_t *name) {
+    return name->namedclpos;
+}
+static inline __unused void name_dclpos_set(name_t *name, textpos_t pos) {
+    name->namedclpos = pos;
+}
 
 name_t *name_search(scopectx_t scope, const char *id,
                     size_t len, int do_create);
 void name_insert(scopectx_t scope, name_t *name);
 void name_free(name_t *name);
 name_t *name_declare(scopectx_t scope, const char *id,
-                     size_t len, lextype_t type,
+                     size_t len, lextype_t type, textpos_t pos,
                      void *value, size_t valsize);
 scopectx_t scope_begin(scopectx_t parent);
 scopectx_t scope_end(scopectx_t scope);

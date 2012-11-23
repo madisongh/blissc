@@ -341,6 +341,7 @@ parse_paramlist (parse_ctx_t pctx, scopectx_t curscope,
         ltext = lexeme_text(lex);
         mnp = name_declare(pscope, ltext->ptr, ltext->len,
                            LEXTYPE_NAME_MAC_PARAM,
+                           lexeme_textpos_get(lex),
                            &nullseq, sizeof(nullseq));
         if (mnp == 0) {
             /* XXX error condition */
@@ -512,7 +513,9 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
                 macro->ilist = clst;
                 macro->iparamcount = condcount;
                 name_declare(scope, np->name, np->namelen,
-                             LEXTYPE_NAME_MACRO, &macro, sizeof(macro));
+                             LEXTYPE_NAME_MACRO,
+                             parser_curpos(pctx),
+                             &macro, sizeof(macro));
             }
         } else {
             lexseq_free(&body);
@@ -568,7 +571,9 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
                     lexseq_t nullseq;
                     lexseq_init(&nullseq);
                     np = name_declare(expscope, iformal->np->name, iformal->np->namelen,
-                                      LEXTYPE_NAME_MAC_PARAM, &nullseq, sizeof(nullseq));
+                                      LEXTYPE_NAME_MAC_PARAM,
+                                      parser_curpos(pctx),
+                                      &nullseq, sizeof(nullseq));
                 }
                 pseq = name_data(np);
                 lexseq_free(pseq);
@@ -909,7 +914,9 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
                 // name_declare() clears this flag, so we can catch genuine
                 // redeclarations.
                 actual = name_declare(expscope, np->name, np->namelen,
-                                      LEXTYPE_NAME_MAC_PARAM, &val, sizeof(val));
+                                      LEXTYPE_NAME_MAC_PARAM,
+                                      parser_curpos(pctx),
+                                      &val, sizeof(val));
                 if (actual == 0) {
                     /* XXX error condition */
                 }
@@ -940,7 +947,9 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
             lexseq_init(&nullseq);
             while (formal != 0) {
                 name_declare(expscope, formal->np->name, formal->np->namelen,
-                             LEXTYPE_NAME_MAC_PARAM, &nullseq, sizeof(nullseq));
+                             LEXTYPE_NAME_MAC_PARAM,
+                             parser_curpos(pctx),
+                             &nullseq, sizeof(nullseq));
                 formal = formal->next;
             }
         }

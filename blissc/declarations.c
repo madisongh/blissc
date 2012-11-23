@@ -133,6 +133,7 @@ declare_compiletime (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
                 val = lexeme_signedval(lex);
                 np = name_declare(scope, str->ptr, str->len,
                                   LEXTYPE_NAME_COMPILETIME,
+                                  lexeme_textpos_get(nlex),
                                   &val, sizeof(val));
                 if (np == 0) {
                     /* XXX error condition */
@@ -277,7 +278,7 @@ declare_literal (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
             /* XXX error condition */
         }
         str = lexeme_text(nlex);
-        litseg = seg_alloc(stg);
+        litseg = seg_alloc(stg, lexeme_textpos_get(nlex));
         litseg->type = SEGTYPE_LITERAL;
         litseg->flags = (is_external ? 0 : SEG_M_HASVAL) |
                        (is_signed ? SEG_M_SIGNED : 0) |
@@ -293,6 +294,7 @@ declare_literal (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
         }
         np = name_declare(scope, str->ptr, str->len,
                           LEXTYPE_NAME_LITERAL,
+                          lexeme_textpos_get(nlex),
                           &litseg, sizeof(litseg));
         lexeme_free(nlex);
         if (np == 0) {
@@ -336,7 +338,9 @@ declare_label (parse_ctx_t pctx, scopectx_t scope)
         }
         str = lexeme_text(lex);
         np = name_declare(scope, str->ptr, str->len,
-                          LEXTYPE_NAME_LABEL, 0, 0);
+                          LEXTYPE_NAME_LABEL,
+                          lexeme_textpos_get(lex),
+                          0, 0);
         lexeme_free(lex);
         if (np == 0) {
             /* XXX error condition */
@@ -472,7 +476,9 @@ declare_module (parse_ctx_t pctx)
     }
     text = lexeme_text(lex);
     np = name_declare(scope, text->ptr, text->len,
-                      LEXTYPE_NAME_MODULE, 0, 0);
+                      LEXTYPE_NAME_MODULE,
+                      lexeme_textpos_get(lex),
+                      0, 0);
     lexeme_free(lex);
     if (np == 0) {
         /* XXX error condition */

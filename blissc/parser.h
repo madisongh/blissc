@@ -36,4 +36,5 @@ lexeme_t *parser_lexeme_create(parse_ctx_t pctx, lextype_t lt, strdesc_t *txt);
 int parser_expect(parse_ctx_t pctx, quotelevel_t ql,
                   lextype_t explt, lexeme_t **lex, int pboe);
 machinedef_t *parser_get_machinedef(parse_ctx_t pctx);
+textpos_t parser_curpos(parse_ctx_t pctx);
 #endif

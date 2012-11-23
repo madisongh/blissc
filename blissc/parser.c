@@ -31,8 +31,7 @@ struct parse_ctx_s {
     int             condlevel;
     int             no_eof;
     int             declarations_ok;
-    int             fileno;
-    unsigned int    lineno, colno;
+    textpos_t       curpos;
     unsigned long   valmask;
 };
 
@@ -104,7 +103,7 @@ static int is_name(lextype_t lt) {
 lexeme_t *
 parser_lexeme_create (parse_ctx_t pctx, lextype_t lt, strdesc_t *text) {
     lexeme_t *lex = lexeme_create(lt, text);
-    lexeme_setpos(lex, pctx->fileno, pctx->lineno, pctx->colno);
+    lexeme_textpos_set(lex, pctx->curpos);
     return lex;
 }
 
@@ -113,6 +112,12 @@ parser_lexeme_add (parse_ctx_t pctx, lextype_t lt, strdesc_t *text)
 {
     lexeme_t *lex = parser_lexeme_create(pctx, lt, text);
     lexer_insert(pctx->lexctx, lex);
+}
+
+textpos_t
+parser_curpos (parse_ctx_t pctx)
+{
+    return pctx->curpos;
 }
 /*
  * name_bind
@@ -307,7 +312,7 @@ parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
         if (lt == LEXTYPE_NONE || lt == LEXTYPE_END) {
             break;
         }
-        lexeme_getpos(lex, &pctx->fileno, &pctx->lineno, &pctx->colno);
+        pctx->curpos = lexeme_textpos_get(lex);
         status = lexeme_bind(pctx, ql, pctx->quotemodifier,
                              pctx->condstate[pctx->condlevel], lex, &result);
         if (status < 0) {

@@ -9,9 +9,10 @@
 #ifndef blissc_storage_h
 #define blissc_storage_h
 
+#include <stdint.h>
 #include "machinedef.h"
 #include "strings.h"
-#include <stdint.h>
+#include "utils.h"
 
 typedef struct stgctx_s *stgctx_t;
 
@@ -35,6 +36,7 @@ struct psect_s {
     storageclass_t   class;
     unsigned int     alignment;
     addrmode_t       addrmode;
+    textpos_t        defpos;
     intptr_t         baseaddr;
     intptr_t         size;
     void            *machattr;
@@ -48,6 +50,7 @@ struct block_s {
     struct block_s  *parent;
     struct seg_s    *segchain;
     intptr_t         framebase;
+    textpos_t        defpos;
 };
 typedef struct block_s block_t;
 
@@ -89,18 +92,19 @@ struct seg_s {
     initval_t       *initializer;
     unsigned long    flags;
     void             *machattr;
+    textpos_t         defpos;
 };
 typedef struct seg_s seg_t;
 
 static inline __unused block_t *seg_block (seg_t *seg) { return seg->container; }
 static inline __unused psect_t *seg_psect (seg_t *seg) { return seg->container; }
 
-seg_t *seg_alloc(stgctx_t ctx);
+seg_t *seg_alloc(stgctx_t ctx, textpos_t defpos);
 void seg_free(stgctx_t ctx, seg_t *seg);
-block_t *block_alloc(stgctx_t ctx);
+block_t *block_alloc(stgctx_t ctx, textpos_t defpos);
 void block_free(stgctx_t ctx, block_t *block);
 block_t *module_block(stgctx_t ctx);
-psect_t *psect_alloc(stgctx_t ctx, strdesc_t *name);
+psect_t *psect_alloc(stgctx_t ctx, strdesc_t *name, textpos_t defpos);
 void psect_free(stgctx_t ctx, psect_t *psect);
 initval_t *initval_alloc(stgctx_t ctx);
 void initval_freelist(stgctx_t ctx, initval_t *iv);

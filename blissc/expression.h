@@ -13,12 +13,14 @@
 #include "storage.h"
 #include "nametable.h"
 #include "lexeme.h"
+#include "utils.h"
 
 #undef DOEXPTYPE
 #define DOEXPTYPES \
     DOEXPTYPE(NOOP) \
     DOEXPTYPE(PRIM_LIT) DOEXPTYPE(PRIM_SEG) \
-    DOEXPTYPE(PRIM_RTNCALL) DOEXPTYPE(PRIM_BLK) \
+    DOEXPTYPE(PRIM_FLDREF) DOEXPTYPE(PRIM_RTNCALL) \
+    DOEXPTYPE(PRIM_BLK) \
     DOEXPTYPE(OPERATOR) \
     DOEXPTYPE(EXECFUN) DOEXPTYPE(CTRL_COND) \
     DOEXPTYPE(CTRL_CASE) \
@@ -68,6 +70,12 @@ struct expr_oper_s {
 struct expr_func_s {
     struct expr_node_s *func_arglist;
     // exfntype_t which;
+};
+struct expr_fldref_s {
+    struct expr_node_s  *addr;
+    struct expr_node_s  *pos;
+    struct expr_node_s  *size;
+    int                 signext;
 };
 struct expr_cond_s {
     struct expr_node_s  *test;
@@ -124,10 +132,12 @@ struct expr_node_s {
     // for freelist tracking and sequences in blocks
     struct expr_node_s *next;
     exprtype_t          type;
+    textpos_t           textpos;
     union {
         long            litval;
         seg_t           *segval;
         struct expr_blk_s  blkdata;
+        struct expr_fldref_s flddata;
         struct expr_oper_s opdata;
         struct expr_func_s fdata;
         struct expr_cond_s cdata;
@@ -142,7 +152,7 @@ struct expr_node_s {
 typedef struct expr_node_s expr_node_t;
 
 const char *exprtype_name(exprtype_t type);
-expr_node_t *expr_node_alloc(exprtype_t type);
+expr_node_t *expr_node_alloc(exprtype_t type, textpos_t pos);
 void expr_node_free(expr_node_t *node, stgctx_t stg);
 
 
@@ -150,7 +160,8 @@ static inline __unused int expr_is_noop(expr_node_t *node) {
     return (node == 0 ? 1 : node->type == EXPTYPE_NOOP);
 }
 static inline __unused int expr_is_primary(expr_node_t *node) {
-    return (node == 0 ? 0 : node->type >= EXPTYPE_PRIM_LIT && node->type <= EXPTYPE_PRIM_BLK);
+    return (node == 0 ? 0 :
+            (node->type >= EXPTYPE_PRIM_LIT && node->type <= EXPTYPE_PRIM_BLK));
 }
 static inline __unused int expr_is_opexp(expr_node_t *node) {
     return (node == 0 ? 0 : node->type == EXPTYPE_OPERATOR);
@@ -179,6 +190,12 @@ static inline __unused void expr_type_set(expr_node_t *node, exprtype_t type) {
 static inline __unused void *expr_data(expr_node_t *node) {
     return &node->data;
 }
+static inline __unused textpos_t expr_textpos(expr_node_t *node) {
+    return node->textpos;
+}
+static inline __unused void expr_textpos_set(expr_node_t *node, textpos_t pos) {
+    node->textpos = pos;
+}
 // PRIM_LIT
 static inline __unused long expr_litval(expr_node_t *node) {
     return node->data.litval;
@@ -193,6 +210,32 @@ static inline __unused seg_t *expr_segval(expr_node_t *node) {
 static inline __unused void expr_segval_set(expr_node_t *node, seg_t *segval) {
     node->data.segval = segval;
 }
+// PRIM_FLDREF
+static inline __unused expr_node_t *expr_fldref_addr(expr_node_t *node) {
+    return node->data.flddata.addr;
+}
+static inline __unused void expr_fldref_addr_set(expr_node_t *node, expr_node_t *a) {
+    node->data.flddata.addr = a;
+}
+static inline __unused expr_node_t *expr_fldref_pos(expr_node_t *node) {
+    return node->data.flddata.pos;
+}
+static inline __unused void expr_fldref_pos_set(expr_node_t *node, expr_node_t *p) {
+    node->data.flddata.pos = p;
+}
+static inline __unused expr_node_t *expr_fldref_size(expr_node_t *node) {
+    return node->data.flddata.size;
+}
+static inline __unused void expr_fldref_size_set(expr_node_t *node, expr_node_t *s) {
+    node->data.flddata.size = s;
+}
+static inline __unused int expr_fldref_signext(expr_node_t *node) {
+    return node->data.flddata.signext;
+}
+static inline __unused void expr_fldref_signext_set(expr_node_t *node, int val) {
+    node->data.flddata.signext = val;
+}
+
 // PRIM_BLK
 static inline __unused expr_node_t *expr_blk_seq(expr_node_t *node) {
     return node->data.blkdata.blkseq;

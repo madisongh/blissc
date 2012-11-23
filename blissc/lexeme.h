@@ -10,6 +10,7 @@
 #define blissc_lexeme_h
 
 #include "strings.h"
+#include "utils.h"
 
 typedef enum {
     QL_NORMAL, QL_NAME, QL_MACRO
@@ -150,8 +151,7 @@ struct lexeme_s {
     unsigned long    flags;
     unsigned long    numval;
     void            *extra;
-    int              fileno;
-    unsigned int     lineno, colno;
+    textpos_t        textpos;
 };
 typedef struct lexeme_s lexeme_t;
 
@@ -189,6 +189,12 @@ static inline __unused lextype_t lexeme_boundtype (lexeme_t *lex) {
 static inline __unused lextype_t lexeme_type (lexeme_t *lex) {
     return lex->type;
 }
+static inline __unused void lexeme_type_set(lexeme_t *lex, lextype_t type) {
+    lex->type = type; if (type != LEXTYPE_UNBOUND) lex->boundtype = type;
+}
+static inline __unused void lexeme_boundtype_set(lexeme_t *lex, lextype_t type) {
+    lex->boundtype = type;
+}
 static inline __unused long lexeme_signedval (lexeme_t *lex) {
     return (long) lex->numval;
 }
@@ -213,17 +219,25 @@ static inline __unused void *lexeme_ctx_get (lexeme_t *lex) {
 static inline __unused void lexeme_ctx_set (lexeme_t *lex, void *p) {
     lex->extra = p;
 }
+static inline __unused textpos_t lexeme_textpos_get(lexeme_t *lex) {
+    return lex->textpos;
+}
+static inline __unused void lexeme_textpos_set (lexeme_t *lex, textpos_t pos) {
+    lex->textpos = pos;
+}
 static inline __unused void lexeme_setpos (lexeme_t *lex, int f,
                                            unsigned int l, unsigned int c) {
-    lex->fileno = f; lex->lineno = l; lex->colno = c;
+    lex->textpos = textpos_create(f, l, c);
 }
 static inline __unused void lexeme_getpos (lexeme_t *lex, int *f,
                                            unsigned int *l, unsigned int *c) {
-    *f = lex->fileno; *l = lex->lineno; *c = lex->colno;
+    *f = textpos_fileno(lex->textpos);
+    *l = textpos_lineno(lex->textpos);
+    *c = textpos_colnum(lex->textpos);
 }
 
 static inline __unused void lexeme_copypos (lexeme_t *dst, lexeme_t *src) {
-    dst->fileno = src->fileno; dst->lineno = src->lineno; dst->colno = src->colno;
+    dst->textpos = src->textpos;
 }
 
 static inline __unused void lexseq_init (lexseq_t *seq) {

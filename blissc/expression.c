@@ -116,6 +116,8 @@ static int parse_select(void *pctx, quotelevel_t ql,
 static int parse_incrdecr(void *pctx, quotelevel_t ql,
                           quotemodifier_t qm, lextype_t lt, condstate_t cs,
                           lexeme_t *orig, lexseq_t *result);
+static int get_ctce(parse_ctx_t pctx, stgctx_t stg, long *valp);
+
 const char *
 exprtype_name (exprtype_t type) {
     if (type >= EXPTYPE_COUNT) {
@@ -155,7 +157,7 @@ check_unary_op (lextype_t lt, optype_t *opp)
 }
 
 expr_node_t *
-expr_node_alloc (exprtype_t type)
+expr_node_alloc (exprtype_t type, textpos_t pos)
 {
     expr_node_t *node;
     int i;
@@ -174,6 +176,7 @@ expr_node_alloc (exprtype_t type)
     freenodes = expr_next(node);
     memset(node, 0, sizeof(expr_node_t));
     expr_type_set(node, type);
+    expr_textpos_set(node, pos);
     return node;
 
 } /* expr_node_alloc */
@@ -202,6 +205,11 @@ expr_node_free (expr_node_t *node, stgctx_t stg) {
             block_free(stg, expr_blk_block(node));
             break;
         }
+        case EXPTYPE_PRIM_FLDREF:
+            expr_node_free(expr_fldref_addr(node), stg);
+            expr_node_free(expr_fldref_pos(node), stg);
+            expr_node_free(expr_fldref_size(node), stg);
+            break;
         case EXPTYPE_CTRL_COND:
             expr_node_free(expr_cond_test(node), stg);
             expr_node_free(expr_cond_consequent(node), stg);
@@ -370,6 +378,7 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
     expr_node_t *seq, *last;
     block_t *blk;
     int expr_count;
+    textpos_t endpos;
     lextype_t closer = (curlt == LEXTYPE_EXP_DELIM_BEGIN ?
                         LEXTYPE_EXP_DELIM_END : LEXTYPE_DELIM_RPAR);
 
@@ -380,6 +389,7 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
     seq = last = 0;
     while (1) {
         if (lt == closer) {
+            endpos = lexeme_textpos_get(lex);
             lexeme_free(lex);
             break;
         } else if (lt >= LEXTYPE_DCL_MIN && lt <= LEXTYPE_DCL_MAX) {
@@ -387,11 +397,12 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
             if (expr_count != 0) {
                 /* XXX error condition */
                 parser_skip_to_delim(pctx, closer);
+                endpos = parser_curpos(pctx);
                 break;
             }
             if (scope == 0) {
                 scope = parser_scope_begin(pctx);
-                blk = block_alloc(stg);
+                blk = block_alloc(stg, parser_curpos(pctx));
             }
             parse_declaration(pctx, lt);
             lt = parser_next(pctx, QL_NORMAL, &lex);
@@ -403,6 +414,7 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
         if (!parse_expr(pctx, &exp, 0, 0)) {
             /* XXX error condition */
             parser_skip_to_delim(pctx, closer);
+            endpos = parser_curpos(pctx);
             break;
         }
         expr_count += 1;
@@ -422,13 +434,15 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
 
     if (scope == 0 && codecomment == 0 && lexseq_empty(labels) &&
         expr_count <= 1) {
-        *expp = (expr_count == 0 ? expr_node_alloc(EXPTYPE_NOOP) : seq);
+        *expp = (expr_count == 0 ?
+                 expr_node_alloc(EXPTYPE_NOOP, endpos) :
+                 seq);
         return 1;
     }
     if (scope != 0) {
         parser_scope_end(pctx);
     }
-    exp = expr_node_alloc(EXPTYPE_PRIM_BLK);
+    exp = expr_node_alloc(EXPTYPE_PRIM_BLK, endpos);
     expr_blk_scope_set(exp, scope);
     expr_blk_block_set(exp, blk);
     expr_blk_seq_set(exp, seq);
@@ -466,7 +480,7 @@ parse_wu_loop (parse_ctx_t pctx, lextype_t opener, expr_node_t **expp)
         return 0;
     }
 
-    exp = expr_node_alloc(EXPTYPE_CTRL_LOOPWU);
+    exp = expr_node_alloc(EXPTYPE_CTRL_LOOPWU, parser_curpos(pctx));
     expr_wuloop_test_set(exp, test);
     expr_wuloop_type_set(exp, LOOP_PRETEST);
     expr_wuloop_body_set(exp, body);
@@ -500,7 +514,7 @@ parse_do_loop (parse_ctx_t pctx, lextype_t opener, expr_node_t **expp)
         return 0;
     }
 
-    exp = expr_node_alloc(EXPTYPE_CTRL_LOOPWU);
+    exp = expr_node_alloc(EXPTYPE_CTRL_LOOPWU, parser_curpos(pctx));
     expr_wuloop_test_set(exp, test);
     expr_wuloop_type_set(exp, LOOP_POSTTEST);
     expr_wuloop_body_set(exp, body);
@@ -583,7 +597,7 @@ parse_arglist (parse_ctx_t pctx, expr_node_t *rtn, expr_node_t **expp)
 
     // validate the arguments against the routine declaration, if we can
     // Insert the routine-call into the expression tree
-    exp = expr_node_alloc(EXPTYPE_PRIM_RTNCALL);
+    exp = expr_node_alloc(EXPTYPE_PRIM_RTNCALL, parser_curpos(pctx));
     expr_rtnaddr_set(exp, rtn);
     expr_inargs_set(exp, incount, inargs);
     expr_outargs_set(exp, outcount, outargs);
@@ -600,14 +614,14 @@ lex_to_expr (lextype_t lt, lexeme_t *lex)
 
     switch (lt) {
         case LEXTYPE_NUMERIC:
-            exp = expr_node_alloc(EXPTYPE_PRIM_LIT);
+            exp = expr_node_alloc(EXPTYPE_PRIM_LIT, lexeme_textpos_get(lex));
             expr_litval_set(exp, lexeme_signedval(lex));
             break;
         case LEXTYPE_STRING: {
             int i;
             strdesc_t *text = lexeme_text(lex);
             unsigned long val = 0;
-            exp = expr_node_alloc(EXPTYPE_PRIM_LIT);
+            exp = expr_node_alloc(EXPTYPE_PRIM_LIT, lexeme_textpos_get(lex));
             for (i = 0; i < text->len; i++) {
                 val = val | (*(text->ptr+i) << (i*8));
             }
@@ -615,7 +629,7 @@ lex_to_expr (lextype_t lt, lexeme_t *lex)
             break;
         }
         case LEXTYPE_SEGMENT:
-            exp = expr_node_alloc(EXPTYPE_PRIM_SEG);
+            exp = expr_node_alloc(EXPTYPE_PRIM_SEG, lexeme_textpos_get(lex));
             expr_segval_set(exp, lexeme_ctx_get(lex));
             break;
         default:
@@ -625,6 +639,47 @@ lex_to_expr (lextype_t lt, lexeme_t *lex)
     return exp;
 
 } /* lex_to_expr */
+
+static int
+parse_fldref (parse_ctx_t pctx, stgctx_t stg, expr_node_t **expp) {
+
+    expr_node_t *pos, *size, *exp;
+    long signext = 0;
+
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LANGLE, 0, 1)) {
+        return 0;
+    }
+    pos = size = 0;
+    if (!parse_expr(pctx, &pos, 0, 0)) {
+        /* XXX error condition */
+        pos = expr_node_alloc(EXPTYPE_NOOP, parser_curpos(pctx));
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
+        /* XXX error condition */
+    }
+    if (!parse_expr(pctx, &size, 0, 0)) {
+        /* XXX error condition */
+        size = expr_node_alloc(EXPTYPE_NOOP, parser_curpos(pctx));
+    }
+    if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
+        if (!get_ctce(pctx, stg, &signext) || (signext != 0 &&
+                                               signext != 1)) {
+            /* XXX error condition */
+            signext = 0;
+        }
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RANGLE, 0, 1)) {
+        /* XXX error condition */
+    }
+    exp = expr_node_alloc(EXPTYPE_PRIM_FLDREF, parser_curpos(pctx));
+    expr_fldref_addr_set(exp, *expp);
+    expr_fldref_pos_set(exp, pos);
+    expr_fldref_size_set(exp, size);
+    expr_fldref_signext_set(exp, (signext != 0));
+    *expp = exp;
+    return 1;
+
+} /* parse_fldref */
 
 static int
 parse_primary (parse_ctx_t pctx, lextype_t lt, lexeme_t *lex,
@@ -710,11 +765,14 @@ parse_primary (parse_ctx_t pctx, lextype_t lt, lexeme_t *lex,
         exp = lex_to_expr(lt, lex);
         lexeme_free(lex);
     } else if (lt == LEXTYPE_NAME_FUNCTION) { // XXX Fix this
-        if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LANGLE, 0, 1)) {
-            // parse the field-selector
-            // and we have ourselves a primary
-            // and return here, so we don't try to parse the field selector again
+        exp = expr_node_alloc(EXPTYPE_EXECFUN, lexeme_textpos_get(lex));
+        // XXX need to parse the entire function invocation here
+        if (parse_fldref(pctx, stg, &exp)) {
+            // and exp is updated to be a PRIM_FLDREF
+            lexeme_free(lex);
+            return 1;
         } else {
+            expr_node_free(exp, stg);
             return 0; // executable-functions are not, by themselves, primaries
         }
     } else {
@@ -731,13 +789,12 @@ parse_primary (parse_ctx_t pctx, lextype_t lt, lexeme_t *lex,
         exp = rtncall;
     }
 
-    // XXX Must also check for general routine call and codecomment
+    // XXX Must also check for general routine calls
 
-    // At this point, 'exp' is the primary expression
-
-    // Any primary can take a field-selector
-    if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LANGLE, 0, 1)) {
-        // parse the field-selector
+    // At this point, 'exp' is the primary expression.
+    // If it's not already a field-ref, see if we've got one.
+    if (expr_type(exp) != EXPTYPE_PRIM_FLDREF) {
+        parse_fldref(pctx, stg, &exp);
     }
 
     *expp = exp;
@@ -802,13 +859,13 @@ parse_op_expr (parse_ctx_t pctx, optype_t curop, expr_node_t **expp)
     }
 
     if (normal) {
-        thisnode = expr_node_alloc(EXPTYPE_OPERATOR);
+        thisnode = expr_node_alloc(EXPTYPE_OPERATOR, expr_textpos(rhs));
         expr_op_type_set(thisnode, curop);
         expr_op_lhs_set(thisnode, lhs);
         expr_op_rhs_set(thisnode, rhs);
         *expp = thisnode;
     } else {
-        thisnode = expr_node_alloc(EXPTYPE_OPERATOR);
+        thisnode = expr_node_alloc(EXPTYPE_OPERATOR, expr_textpos(rhs));
         expr_op_type_set(thisnode, curop);
         expr_op_rhs_set(thisnode, expr_op_lhs(rhs));
         expr_op_lhs_set(rhs, thisnode);
@@ -1203,12 +1260,14 @@ parse_condexp (void *pctx, quotelevel_t ql, quotemodifier_t qm,
         if (expr_litval(test) & 1) {
             exp = cons;
         } else {
-            exp = (alt == 0 ? expr_node_alloc(EXPTYPE_NOOP) : alt);
+            exp = (alt == 0 ?
+                   expr_node_alloc(EXPTYPE_NOOP, parser_curpos(pctx)) :
+                   alt);
             expr_node_free(cons, stg);
         }
         expr_node_free(test, stg);
     } else {
-        exp = expr_node_alloc(EXPTYPE_CTRL_COND);
+        exp = expr_node_alloc(EXPTYPE_CTRL_COND, parser_curpos(pctx));
         expr_cond_test_set(exp, test);
         expr_cond_consequent_set(exp, cons);
         expr_cond_alternative_set(exp, alt);
@@ -1408,7 +1467,7 @@ parse_case (void *pctx, quotelevel_t ql, quotemodifier_t qm,
     }
 
     if (status == 0) {
-        exp = expr_node_alloc(EXPTYPE_CTRL_CASE);
+        exp = expr_node_alloc(EXPTYPE_CTRL_CASE, parser_curpos(pctx));
         expr_case_bounds_set(exp, lo, hi);
         expr_case_outrange_set(exp, outrange);
         expr_case_actions_set(exp, cases);
@@ -1467,7 +1526,7 @@ parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
             parser_skip_to_delim(pctx, LEXTYPE_KWD_TES);
             break;
         }
-        sel = expr_node_alloc(EXPTYPE_SELECTOR);
+        sel = expr_node_alloc(EXPTYPE_SELECTOR, parser_curpos(pctx));
         while (1) {
             lo = hi = 0;
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_OTHERWISE, 0, 1)) {
@@ -1529,7 +1588,7 @@ parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
         return -1;
     }
 
-    exp = expr_node_alloc(EXPTYPE_CTRL_SELECT);
+    exp = expr_node_alloc(EXPTYPE_CTRL_SELECT, parser_curpos(pctx));
     expr_sel_index_set(exp, si);
     if (curlt == LEXTYPE_CTRL_SELECTONE ||
         curlt == LEXTYPE_CTRL_SELECTONEU ||
@@ -1611,7 +1670,7 @@ parse_incrdecr (void *pctx, quotelevel_t ql, quotemodifier_t qm,
         return -1;
     }
     parser_scope_end(pctx);
-    exp = expr_node_alloc(EXPTYPE_CTRL_LOOPID);
+    exp = expr_node_alloc(EXPTYPE_CTRL_LOOPID, parser_curpos(pctx));
     expr_idloop_scope_set(exp, scope);
     expr_idloop_init_set(exp, fromexp);
     expr_idloop_term_set(exp, toexp);

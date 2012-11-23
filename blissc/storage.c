@@ -44,7 +44,7 @@ storage_finish (stgctx_t ctx)
 } /* storage_finish */
 
 psect_t *
-psect_alloc (stgctx_t ctx, strdesc_t *name)
+psect_alloc (stgctx_t ctx, strdesc_t *name, textpos_t pos)
 {
     psect_t *psect = malloc(sizeof(psect_t));
 
@@ -52,6 +52,7 @@ psect_alloc (stgctx_t ctx, strdesc_t *name)
         memset(psect, 0, sizeof(psect_t));
         psect->name = string_copy(0, name);
         psect->next = ctx->psects;
+        psect->defpos = pos;
         ctx->psects = psect;
     }
     return psect;
@@ -80,7 +81,7 @@ psect_free (stgctx_t ctx, psect_t *psect)
 } /* psect_free */
 
 block_t *
-block_alloc (stgctx_t ctx)
+block_alloc (stgctx_t ctx, textpos_t pos)
 {
     block_t *blk;
 
@@ -96,6 +97,7 @@ block_alloc (stgctx_t ctx)
     ctx->freeblocks = blk->parent;
     memset(blk, 0, sizeof(block_t));
     blk->parent = ctx->curblock;
+    blk->defpos = pos;
     ctx->curblock = blk;
     if (ctx->topblock == 0) {
         ctx->topblock = blk;
@@ -114,14 +116,15 @@ module_block (stgctx_t ctx)
 void
 block_free (stgctx_t ctx, block_t *blk)
 {
-    memset(blk, 0xe9, sizeof(block_t));
     ctx->curblock = blk->parent;
+    memset(blk, 0xe9, sizeof(block_t));
     blk->parent = ctx->freeblocks;
     ctx->freeblocks = blk;
+
 } /* block_free */
 
 seg_t *
-seg_alloc (stgctx_t ctx)
+seg_alloc (stgctx_t ctx, textpos_t pos)
 {
     seg_t *seg;
 
@@ -136,6 +139,7 @@ seg_alloc (stgctx_t ctx)
     seg = ctx->freesegs;
     ctx->freesegs = seg->next;
     memset(seg, 0, sizeof(seg_t));
+    seg->defpos = pos;
     return seg;
 } /* seg_alloc */
 

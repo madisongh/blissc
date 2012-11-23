@@ -360,7 +360,7 @@ name_insert (scopectx_t scope, name_t *np)
  */
 name_t *
 name_declare (scopectx_t scope, const char *id, size_t len,
-              lextype_t type, void *value, size_t valsize)
+              lextype_t type, textpos_t pos, void *value, size_t valsize)
 {
     name_t *np;
 
@@ -387,6 +387,7 @@ name_declare (scopectx_t scope, const char *id, size_t len,
     np->nametype = type;
     np->nameflags &= ~NAME_M_NODCLCHK;
     np->nameflags |= NAME_M_DECLARED;
+    np->namedclpos = pos;
     if (valsize > NAME_DATA_SIZE) {
         /* XXX error condition */
         valsize = NAME_DATA_SIZE;
