@@ -14,15 +14,81 @@
 struct stgctx_s {
     machinedef_t    *mach;
     psect_t         *psects;
-    block_t         *topblock;
-    block_t         *curblock;
-    block_t         *freeblocks;
+    frame_t         *topframe;
+    frame_t         *curframe;
+    frame_t         *freeframes;
     seg_t           *freesegs;
     initval_t       *freeivs;
 };
-#define BLOCK_ALLOCOUNT 128
+#define frame_ALLOCOUNT 128
 #define SEG_ALLOCOUNT   128
 #define IV_ALLOCOUNT    128
+
+struct psect_s {
+    struct psect_s  *next;
+    strdesc_t       *name;
+    textpos_t        defpos;
+    void            *machattr;
+    struct seg_s    *segchain, *seglast;
+    unsigned long    size;
+    unsigned int     attr; // common attributes
+};
+
+struct frame_s {
+    struct psect_s  *psect;
+    struct frame_s  *parent;
+    struct seg_s    *segchain, *seglast;
+    textpos_t        defpos;
+    unsigned long    size;
+};
+
+
+struct initval_s {
+    struct initval_s *next;
+    struct initval_s *lastptr;
+    enum { IVTYPE_SCALAR, IVTYPE_STRING, IVTYPE_LIST } type;
+    unsigned int repcount;
+    union {
+        struct {
+            long            value;
+            unsigned int    width;
+            int             signext;
+        } scalar;
+        strdesc_t           *string;
+        struct initval_s    *listptr;
+    } data;
+};
+
+struct seg_static_s {
+    psect_t         *psect;
+    unsigned long   offset;
+    unsigned long   size;
+    initval_t       *initializer, *iv_last;
+};
+struct seg_stack_s {
+    frame_t         *frame;
+    unsigned long    offset;
+    unsigned long    size;
+    initval_t       *initializer, *iv_last;
+};
+struct seg_literal_s {
+    unsigned long    value;
+};
+
+struct seg_s {
+    struct seg_s    *next;
+    textpos_t        defpos;
+    void            *machattr;
+    segtype_t       type;
+    unsigned int    flags;
+    union {
+        struct seg_static_s staticinfo;
+        struct seg_stack_s  stackinfo;
+        struct seg_literal_s litinfo;
+    }               info;
+};
+
+
 
 stgctx_t
 storage_init (machinedef_t *mach)
@@ -43,22 +109,20 @@ storage_finish (stgctx_t ctx)
 
 } /* storage_finish */
 
-psect_t *
-psect_alloc (stgctx_t ctx, strdesc_t *name, textpos_t pos)
+static psect_t *
+psect_alloc (stgctx_t ctx)
 {
     psect_t *psect = malloc(sizeof(psect_t));
 
     if (psect != 0) {
         memset(psect, 0, sizeof(psect_t));
-        psect->name = string_copy(0, name);
         psect->next = ctx->psects;
-        psect->defpos = pos;
         ctx->psects = psect;
     }
     return psect;
 } /* psect_alloc */
 
-void
+static void
 psect_free (stgctx_t ctx, psect_t *psect)
 {
     psect_t *p, *lp;
@@ -76,55 +140,88 @@ psect_free (stgctx_t ctx, psect_t *psect)
     string_free(psect->name);
     memset(psect, 0xf0, sizeof(psect_t));
     free(psect);
-    // XXX - free the blocks and segments, too
+    // XXX - free the frames and segments, too
 
 } /* psect_free */
 
-block_t *
-block_alloc (stgctx_t ctx, textpos_t pos)
+psect_t *
+psect_create (stgctx_t ctx, strdesc_t *name, textpos_t pos, unsigned int attr)
 {
-    block_t *blk;
+    psect_t *psect = psect_alloc(ctx);
 
-    if (ctx->freeblocks == 0) {
+    if (psect != 0) {
+        psect->name = string_copy(0, name);
+        psect->defpos = pos;
+        psect->attr = attr;
+    }
+
+    return psect;
+}
+
+frame_t *
+frame_alloc (stgctx_t ctx, textpos_t pos)
+{
+    frame_t *frm;
+
+    if (ctx->freeframes == 0) {
         int i;
-        ctx->freeblocks = malloc(sizeof(block_t)*BLOCK_ALLOCOUNT);
-        for (i = 0, blk = ctx->freeblocks; i < BLOCK_ALLOCOUNT-1; i++, blk++) {
-            blk->parent = blk + 1;
+        ctx->freeframes = malloc(sizeof(frame_t)*frame_ALLOCOUNT);
+        for (i = 0, frm = ctx->freeframes; i < frame_ALLOCOUNT-1; i++, frm++) {
+            frm->parent = frm + 1;
         }
-        blk->parent = 0;
+        frm->parent = 0;
     }
-    blk = ctx->freeblocks;
-    ctx->freeblocks = blk->parent;
-    memset(blk, 0, sizeof(block_t));
-    blk->parent = ctx->curblock;
-    blk->defpos = pos;
-    ctx->curblock = blk;
-    if (ctx->topblock == 0) {
-        ctx->topblock = blk;
+    frm = ctx->freeframes;
+    ctx->freeframes = frm->parent;
+    memset(frm, 0, sizeof(frame_t));
+    frm->parent = ctx->curframe;
+    frm->defpos = pos;
+    ctx->curframe = frm;
+    if (ctx->topframe == 0) {
+        ctx->topframe = frm;
     }
-    return blk;
+    return frm;
 
-} /* block_alloc */
-
-block_t *
-module_block (stgctx_t ctx)
-{
-    return ctx->topblock;
-
-} /* module_block */
+} /* frame_alloc */
 
 void
-block_free (stgctx_t ctx, block_t *blk)
+frame_free (stgctx_t ctx, frame_t *frm)
 {
-    ctx->curblock = blk->parent;
-    memset(blk, 0xe9, sizeof(block_t));
-    blk->parent = ctx->freeblocks;
-    ctx->freeblocks = blk;
+    ctx->curframe = frm->parent;
+    memset(frm, 0xe9, sizeof(frame_t));
+    frm->parent = ctx->freeframes;
+    ctx->freeframes = frm;
 
-} /* block_free */
+} /* frame_free */
 
-seg_t *
-seg_alloc (stgctx_t ctx, textpos_t pos)
+frame_t *
+frame_create (stgctx_t ctx, textpos_t pos)
+{
+    frame_t *frm;
+
+    if (ctx->freeframes == 0) {
+        int i;
+        ctx->freeframes = malloc(sizeof(frame_t)*frame_ALLOCOUNT);
+        for (i = 0, frm = ctx->freeframes; i < frame_ALLOCOUNT-1; i++, frm++) {
+            frm->parent = frm + 1;
+        }
+        frm->parent = 0;
+    }
+    frm = ctx->freeframes;
+    ctx->freeframes = frm->parent;
+    memset(frm, 0, sizeof(frame_t));
+    frm->parent = ctx->curframe;
+    frm->defpos = pos;
+    ctx->curframe = frm;
+    if (ctx->topframe == 0) {
+        ctx->topframe = frm;
+    }
+    return frm;
+
+} /* frame_alloc */
+
+static seg_t *
+seg_alloc (stgctx_t ctx, segtype_t type, textpos_t defpos)
 {
     seg_t *seg;
 
@@ -139,14 +236,24 @@ seg_alloc (stgctx_t ctx, textpos_t pos)
     seg = ctx->freesegs;
     ctx->freesegs = seg->next;
     memset(seg, 0, sizeof(seg_t));
-    seg->defpos = pos;
+    seg->type = type;
+    seg->defpos = defpos;
     return seg;
 } /* seg_alloc */
 
-void
+static void
 seg_free (stgctx_t ctx, seg_t *seg)
 {
-    initval_freelist(ctx, seg->initializer);
+    switch (seg->type) {
+        case SEGTYPE_LITERAL:
+            break;
+        case SEGTYPE_STACK:
+            initval_freelist(ctx, seg->info.stackinfo.initializer);
+            break;
+        case SEGTYPE_STATIC:
+            initval_freelist(ctx, seg->info.stackinfo.initializer);
+            break;
+    }
     memset(seg, 0x7a, sizeof(seg_t));
     seg->next = ctx->freesegs;
     ctx->freesegs = seg;
@@ -180,6 +287,15 @@ initval_freelist (stgctx_t ctx, initval_t *iv)
 
     while (iv != 0) {
         nextiv = iv->next;
+        switch (iv->type) {
+            case IVTYPE_STRING:
+                string_free(iv->data.string);
+                break;
+            case IVTYPE_LIST:
+                initval_freelist(ctx, iv->data.listptr);
+            case IVTYPE_SCALAR:
+                break;
+        }
         iv->next = ctx->freeivs;
         ctx->freeivs = iv;
         iv = nextiv;
@@ -187,14 +303,239 @@ initval_freelist (stgctx_t ctx, initval_t *iv)
 
 } /* initval_freelist */
 
+initval_t *
+initval_scalar_add (stgctx_t ctx, initval_t *listhead, unsigned int reps,
+                    long val, unsigned int width, int signext)
+{
+    initval_t *iv = initval_alloc(ctx);
+
+    if (iv == 0) {
+        return 0;
+    }
+    iv->type = IVTYPE_SCALAR;
+    iv->repcount = reps;
+    iv->data.scalar.value = val;
+    iv->data.scalar.width = width;
+    iv->data.scalar.signext = signext;
+    if (listhead == 0) {
+        iv->lastptr = iv;
+        return iv;
+    }
+    listhead->lastptr->next = iv;
+    listhead->lastptr = iv;
+    return listhead;
+}
+
+initval_t *
+initval_string_add (stgctx_t ctx, initval_t *listhead, unsigned int reps,
+                    strdesc_t *str)
+{
+    initval_t *iv = initval_alloc(ctx);
+
+    if (iv == 0) {
+        return 0;
+    }
+    iv->type = IVTYPE_STRING;
+    iv->repcount = reps;
+    iv->data.string = string_copy(0, str);
+    if (listhead == 0) {
+        iv->lastptr = iv;
+        return iv;
+    }
+    listhead->lastptr->next = iv;
+    listhead->lastptr = iv;
+    return listhead;
+}
+
+initval_t *
+initval_ivlist_add (stgctx_t ctx, initval_t *listhead, unsigned int reps,
+                    initval_t *sublist)
+{
+    initval_t *iv = initval_alloc(ctx);
+
+    if (iv == 0) {
+        return 0;
+    }
+    iv->type = IVTYPE_LIST;
+    iv->repcount = reps;
+    iv->data.listptr = sublist;
+    if (listhead == 0) {
+        iv->lastptr = iv;
+        return iv;
+    }
+    listhead->lastptr->next = iv;
+    listhead->lastptr = iv;
+    return listhead;
+}
+
+static void
+update_seg (seg_t *seg, initval_t *iv, unsigned long size)
+{
+    switch (seg->type) {
+        case SEGTYPE_STATIC:
+            if (seg->info.staticinfo.initializer == 0) {
+                seg->info.staticinfo.initializer =
+                seg->info.staticinfo.iv_last = iv;
+            } else {
+                seg->info.staticinfo.iv_last->next = iv;
+                seg->info.staticinfo.iv_last = iv;
+            }
+            seg->info.staticinfo.size += size;
+            seg->info.staticinfo.psect->size += size;
+            break;
+        case SEGTYPE_STACK:
+            if (seg->info.stackinfo.initializer == 0) {
+                seg->info.stackinfo.initializer =
+                seg->info.stackinfo.iv_last = iv;
+            } else {
+                seg->info.stackinfo.iv_last->next = iv;
+                seg->info.stackinfo.iv_last = iv;
+            }
+            seg->info.stackinfo.size += size;
+            seg->info.stackinfo.frame->size += size;
+            break;
+
+        default:
+            break;
+    }
+}
+int
+seg_initval_add_scalar (stgctx_t ctx, seg_t *seg, unsigned int reps,
+                        long value, unsigned int width, int signext)
+{
+    initval_t *iv = initval_alloc(ctx);
+
+    if (iv == 0 || (seg->type != SEGTYPE_STATIC &&
+                    seg->type != SEGTYPE_STACK)) {
+        return 0;
+    }
+    if (reps == 0) {
+        return 1;
+    }
+    iv->repcount = reps;
+    iv->type     = IVTYPE_SCALAR;
+    iv->data.scalar.width    = width;
+    iv->data.scalar.signext  = signext;
+    iv->data.scalar.value    = value;
+    update_seg(seg, iv, reps * width);
+    return 1;
+}
+
+int
+seg_initval_add_string (stgctx_t ctx, seg_t *seg, unsigned int reps,
+                        strdesc_t *str)
+{
+    initval_t *iv = initval_alloc(ctx);
+
+    if (iv == 0 || (seg->type != SEGTYPE_STATIC &&
+                    seg->type != SEGTYPE_STACK)) {
+        return 0;
+    }
+    if (reps == 0) {
+        return 1;
+    }
+    iv->repcount = reps;
+    iv->type = IVTYPE_STRING;
+    iv->data.string = string_copy(0, str);
+    update_seg(seg, iv,
+               reps * ((str->len + machine_unit_maxbytes(ctx->mach)-1) /
+                       machine_unit_maxbytes(ctx->mach)));
+    return 1;
+}
+
+int
+seg_initval_add_ivlist (stgctx_t ctx, seg_t *seg, unsigned int reps,
+                        initval_t *ivlist)
+{
+    initval_t *iv, *nextiv;
+
+    if (seg->type != SEGTYPE_STATIC && seg->type != SEGTYPE_STACK) {
+        return 0;
+    }
+    while (reps-- > 0) {
+        for (iv = ivlist; iv != 0; iv = nextiv) {
+            nextiv = iv->next;
+            switch (iv->type) {
+                case IVTYPE_LIST:
+                    seg_initval_add_ivlist(ctx, seg, iv->repcount,
+                                           iv->data.listptr);
+                    break;
+                case IVTYPE_SCALAR:
+                    seg_initval_add_scalar(ctx, seg, iv->repcount,
+                                           iv->data.scalar.value,
+                                           iv->data.scalar.width,
+                                           iv->data.scalar.signext);
+                    break;
+                case IVTYPE_STRING:
+                    seg_initval_add_string(ctx, seg, iv->repcount,
+                                           iv->data.string);
+                    break;
+            }
+        }
+    }
+    initval_freelist(ctx, ivlist);
+    return 1;
+}
+
+seg_t *
+seg_alloc_static (stgctx_t ctx, textpos_t defpos, psect_t *psect)
+{
+    seg_t *seg = seg_alloc(ctx, SEGTYPE_STATIC, defpos);
+
+    if (seg == 0) {
+        return 0;
+    }
+    seg->info.staticinfo.psect = psect;
+    seg->info.staticinfo.offset = psect->size; // XXX - alignment, etc.
+    if (psect->segchain == 0) {
+        psect->segchain = psect->seglast = seg;
+    } else {
+        psect->seglast->next = seg;
+        psect->seglast = seg;
+    }
+    return seg;
+}
+
+seg_t *
+seg_alloc_stack (stgctx_t ctx, textpos_t defpos, int stackonly)
+{
+    seg_t *seg;
+    frame_t *frame = ctx->curframe;
+
+    if (frame == 0) {
+        return 0;
+    }
+    seg = seg_alloc(ctx, SEGTYPE_STACK, defpos);
+
+    if (seg == 0) {
+        return 0;
+    }
+    seg->info.stackinfo.frame = frame;
+    seg->info.stackinfo.offset = frame->size; // XXX - alignment, etc.
+    if (frame->segchain == 0) {
+        frame->segchain = frame->seglast = seg;
+    } else {
+        frame->seglast->next = seg;
+        frame->seglast = seg;
+    }
+    return seg;
+}
+
+seg_t *
+seg_alloc_literal (stgctx_t ctx, textpos_t defpos, unsigned long value)
+{
+    seg_t *seg = seg_alloc(ctx, SEGTYPE_LITERAL, defpos);
+
+    if (seg != 0) {
+        seg->type = SEGTYPE_LITERAL;
+        seg->info.litinfo.value = value;
+    }
+
+    return seg;
+}
+
 strdesc_t *
 seg_dumpinfo (seg_t *seg)
 {
-#define DOSEGTYPE(t_) #t_
-    const char *typenames[] = { DOSEGTYPES };
-#undef DOSEGTYPE
-    return string_printf(0, "%s:%lx,sz=%ld,flg=%lx",
-                         typenames[seg->type],
-                         (unsigned long)seg->offset,
-                         seg->size, seg->flags);
+    return 0;
 }

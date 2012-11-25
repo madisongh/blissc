@@ -59,7 +59,6 @@ struct expr_node_s;
 
 struct expr_blk_s {
     struct expr_node_s *blkseq;
-    block_t            *blkstg;
     scopectx_t          blkscope;
     strdesc_t          *codecomment;
 };
@@ -242,12 +241,6 @@ static inline __unused expr_node_t *expr_blk_seq(expr_node_t *node) {
 }
 static inline __unused void expr_blk_seq_set(expr_node_t *node, expr_node_t *seq) {
     node->data.blkdata.blkseq = seq;
-}
-static inline __unused block_t *expr_blk_block(expr_node_t *node) {
-    return node->data.blkdata.blkstg;
-}
-static inline __unused void expr_blk_block_set(expr_node_t *node, block_t *blk) {
-    node->data.blkdata.blkstg = blk;
 }
 static inline __unused scopectx_t expr_blk_scope(expr_node_t *node) {
     return node->data.blkdata.blkscope;

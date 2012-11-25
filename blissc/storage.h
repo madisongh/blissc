@@ -16,101 +16,59 @@
 
 typedef struct stgctx_s *stgctx_t;
 
-typedef enum {
-    SCLASS_OWN,
-    SCLASS_GLOBAL,
-    SCLASS_PLIT,
-    SCLASS_CODE
-} storageclass_t;
 
-typedef enum {
-    ADDRMODE_ABSOLUTE,
-    ADDRMODE_RELATIVE
-} addrmode_t;
-
-struct seg_s;
-
-struct psect_s {
-    struct psect_s  *next;
-    strdesc_t       *name;
-    storageclass_t   class;
-    unsigned int     alignment;
-    addrmode_t       addrmode;
-    textpos_t        defpos;
-    intptr_t         baseaddr;
-    intptr_t         size;
-    void            *machattr;
-    struct seg_s    *segchain;
-};
-typedef struct psect_s psect_t;
-
-
-struct block_s {
-    struct psect_s  *psect;
-    struct block_s  *parent;
-    struct seg_s    *segchain;
-    intptr_t         framebase;
-    textpos_t        defpos;
-};
-typedef struct block_s block_t;
-
-struct initval_s {
-    struct initval_s *next;
-    unsigned int    flags;
-#define INITVAL_M_STRING (1<<0)
-    unsigned int    repcount; // for INITIAL
-    unsigned int    offset, size, extend; // for PRESET
-                    // size is also used for PLIT allocation units
-    intptr_t        value; // pointer for strings, value otherwise
-};
-typedef struct initval_s initval_t;
+#define PSECT_M_ATTR_WRITE   (1<<0)
+#define PSECT_M_ATTR_EXEC    (1<<1)
+#define PSECT_M_ATTR_OVERLAY (1<<2)
 
 #undef DOSEGTYPE
 #define DOSEGTYPES \
-    DOSEGTYPE(LITERAL) DOSEGTYPE(LOCAL) \
-    DOSEGTYPE(REGISTER) DOSEGTYPE(STACKLOCAL) \
-    DOSEGTYPE(OTHER)
+    DOSEGTYPE(STATIC) DOSEGTYPE(STACK) \
+    DOSEGTYPE(LITERAL)
 #define DOSEGTYPE(t_) SEGTYPE_##t_,
 typedef enum {
     DOSEGTYPES
 } segtype_t;
 #undef DOSEGTYPE
 
-#define SEG_M_VOLATILE (1<<1)
-#define SEG_M_EXTERNAL (1<<3)
-#define SEG_M_GLOBAL   (1<<4)
-#define SEG_M_HASVAL   (1<<5)
-#define SEG_M_REF      (1<<6)
-#define SEG_M_ALIAS    (1<<7)
-#define SEG_M_SIGNED   (1<<8)
-struct seg_s {
-    struct seg_s    *next;
-    void            *container; // block when stack-allocated; psect otherwise
-    intptr_t         offset; // for literals, holds the value
-    segtype_t        type;
-    unsigned long    size; // in units (bits for literals)
-    initval_t       *initializer;
-    unsigned long    flags;
-    void             *machattr;
-    textpos_t         defpos;
-};
+struct psect_s;
+typedef struct psect_s psect_t;
+struct frame_s;
+typedef struct frame_s frame_t;
+struct initval_s;
+typedef struct initval_s initval_t;
+struct seg_s;
 typedef struct seg_s seg_t;
 
-static inline __unused block_t *seg_block (seg_t *seg) { return seg->container; }
-static inline __unused psect_t *seg_psect (seg_t *seg) { return seg->container; }
 
-seg_t *seg_alloc(stgctx_t ctx, textpos_t defpos);
-void seg_free(stgctx_t ctx, seg_t *seg);
-block_t *block_alloc(stgctx_t ctx, textpos_t defpos);
-void block_free(stgctx_t ctx, block_t *block);
-block_t *module_block(stgctx_t ctx);
-psect_t *psect_alloc(stgctx_t ctx, strdesc_t *name, textpos_t defpos);
-void psect_free(stgctx_t ctx, psect_t *psect);
-initval_t *initval_alloc(stgctx_t ctx);
+seg_t *seg_alloc_static(stgctx_t ctx, textpos_t defpos, psect_t *psect);
+seg_t *seg_alloc_stack(stgctx_t ctx, textpos_t defpos, int stackonly);
+seg_t *seg_alloc_literal(stgctx_t ctx, textpos_t defpos, unsigned long value);
+int seg_initval_add_scalar(stgctx_t ctx, seg_t *seg, unsigned int reps,
+                           long value, unsigned int width, int signext);
+int seg_initval_add_string(stgctx_t ctx, seg_t *seg, unsigned int reps,
+                           strdesc_t *str);
+int seg_initval_add_ivlist(stgctx_t ctx, seg_t *seg, unsigned int reps,
+                           initval_t *ivlist);
+
+
+frame_t *frame_begin(stgctx_t ctx, textpos_t defpos, frame_t *parent);
+void frame_end(stgctx_t ctx, frame_t *fr);
+
+psect_t *psect_create(stgctx_t ctx, strdesc_t *name, textpos_t defpos, unsigned int attr);
+
+initval_t *initval_scalar_add(stgctx_t ctx, initval_t *head, unsigned int reps,
+                              long val, unsigned int width, int signext);
+initval_t *initval_string_add(stgctx_t ctx, initval_t *head, unsigned int reps,
+                              strdesc_t *str);
+initval_t *initval_ivlist_add(stgctx_t ctx, initval_t *head, unsigned int reps,
+                              initval_t *sublist);
 void initval_freelist(stgctx_t ctx, initval_t *iv);
 
 stgctx_t storage_init(machinedef_t *mach);
 void storage_finish(stgctx_t ctx);
 
 strdesc_t *seg_dumpinfo(seg_t *seg);
+
+#undef SIU
 #endif

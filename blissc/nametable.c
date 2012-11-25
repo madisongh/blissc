@@ -50,6 +50,7 @@ hash (const char *str, size_t len)
 struct scopectx_s {
     struct scopectx_s *parent;
     int                namecount;
+    struct name_s     *sclassnames[SCLASS_COUNT];
     struct name_s     *hashtable[HT_BUCKETS];
 };
 
@@ -81,8 +82,7 @@ name_alloc (const char *name, size_t namelen)
     }
     np = freenames;
     freenames = np->next;
-    np->next = 0;
-    np->namescope = 0;
+    memset(np, 0, sizeof(name_t));
     if (namelen > NAME_SIZE-1) {
         namelen = NAME_SIZE-1;
     }
@@ -91,7 +91,6 @@ name_alloc (const char *name, size_t namelen)
     np->nameflags = NAME_M_ALLOCATED;
     np->namelen = namelen;
     np->nametype = LEXTYPE_NAME;
-    memset(name_data(np), 0, NAME_DATA_SIZE);
     return np;
 
 } /* name_alloc */
@@ -118,7 +117,7 @@ name_copy (name_t *src, scopectx_t dstscope)
     if (cfn != 0) {
         cfn(dst, src);
     } else {
-        memcpy(name_data(dst), name_data(src), NAME_DATA_SIZE);
+        memcpy(&dst->nameunion, &src->nameunion, sizeof(dst->nameunion));
     }
     return dst;
     
@@ -172,6 +171,9 @@ scope_begin (scopectx_t parent)
     freescopes = scope->parent;
     memset(scope, 0, sizeof(struct scopectx_s));
     scope->parent = parent;
+    if (parent != 0) {
+        memcpy(scope->sclassnames, parent->sclassnames, sizeof(scope->sclassnames));
+    }
     return scope;
 
 } /* scope_begin */
@@ -246,6 +248,7 @@ scope_copy (scopectx_t src, scopectx_t newparent)
         }
     }
     dst->namecount = src->namecount;
+    memcpy(dst->sclassnames, src->sclassnames, sizeof(dst->sclassnames));
     return dst;
 
 } /* scope_copy */
@@ -280,6 +283,26 @@ scope_setparent (scopectx_t scope, scopectx_t newparent)
     scope->parent = newparent;
 
 } /* scope_setparent */
+
+/*
+ * scope_sclass_psectname
+ */
+name_t *
+scope_sclass_psectname (scopectx_t scope, storageclass_t cl)
+{
+    return scope->sclassnames[cl];
+
+} /* scope_sclass_psectname */
+
+/*
+ * scope_sclass_psectname_set
+ */
+void
+scope_sclass_psectname_set (scopectx_t scope, storageclass_t cl, name_t *np)
+{
+    scope->sclassnames[cl] = np;
+    
+} /* scope_sclass_psectname_set */
 
 /*
  * nametype_datafree_register
@@ -360,7 +383,7 @@ name_insert (scopectx_t scope, name_t *np)
  */
 name_t *
 name_declare (scopectx_t scope, const char *id, size_t len,
-              lextype_t type, textpos_t pos, void *value, size_t valsize)
+              lextype_t type, textpos_t pos)
 {
     name_t *np;
 
@@ -388,13 +411,6 @@ name_declare (scopectx_t scope, const char *id, size_t len,
     np->nameflags &= ~NAME_M_NODCLCHK;
     np->nameflags |= NAME_M_DECLARED;
     np->namedclpos = pos;
-    if (valsize > NAME_DATA_SIZE) {
-        /* XXX error condition */
-        valsize = NAME_DATA_SIZE;
-    }
-    if (value != 0) {
-        memcpy(np->namedata, value, valsize);
-    }
 
     return np;
 

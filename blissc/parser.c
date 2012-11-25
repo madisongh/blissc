@@ -208,7 +208,7 @@ parser_init (scopectx_t kwdscope, void *cctx, machinedef_t *mach)
     }
 
     pctx->mach = mach;
-    pctx->valmask = (1UL << mach->bpval) - 1;
+    pctx->valmask = (1UL << machine_scalar_bits(mach)) - 1;
     pctx->declarations_ok = 1; /* XXX for now */
 
     return pctx;
@@ -451,7 +451,11 @@ parser_expect (parse_ctx_t pctx, quotelevel_t ql, lextype_t expected_lt,
 
     lt = parser_next(pctx, ql, &lex);
     if (lt == expected_lt) {
-        if (lexp != 0) *lexp =  lex;
+        if (lexp != 0) {
+            *lexp =  lex;
+        } else {
+            lexeme_free(lex);
+        }
         return 1;
     }
     if (putbackonerr) {
@@ -463,6 +467,41 @@ parser_expect (parse_ctx_t pctx, quotelevel_t ql, lextype_t expected_lt,
     
 } /* parser_expect */
 
+/*
+ * parser_expect_oneof
+ *
+ * Common routine for parsing an expected lexeme type.
+ * Lexeme can be returned, if desired.
+ *
+ * Returns: array index on success, -1 on failure
+ */
+int
+parser_expect_oneof (parse_ctx_t pctx, quotelevel_t ql, lextype_t expected_lts[],
+                     int numlts, lexeme_t **lexp, int putbackonerr)
+{
+    lextype_t lt;
+    lexeme_t *lex;
+    int i;
+
+    lt = parser_next(pctx, ql, &lex);
+    for (i = 0; i < numlts; i++) {
+        if (lt == expected_lts[i]) {
+            if (lexp != 0) {
+                *lexp =  lex;
+            } else {
+                lexeme_free(lex);
+            }
+            return i;
+        }
+    }
+    if (putbackonerr) {
+        lexer_insert(pctx->lexctx, lex);
+    } else {
+        lexeme_free(lex);
+    }
+    return -1;
+
+} /* parser_expect_oneof */
 
 /*
  * parse_lexeme_seq
@@ -1474,7 +1513,7 @@ parse_ASSIGN (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     if (!parse_ctce(pctx, &lex)) {
         /* XXX error condition */
     } else {
-        *(long *)name_data(np) = lexeme_signedval(lex);
+        name_data_set_int(np, lexeme_signedval(lex));
         lexeme_free(lex);
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 0)) {
@@ -1612,8 +1651,8 @@ parse_nbits_func (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         if (curlt == LEXTYPE_LXF_NBITS) {
             long val = lexeme_signedval(lex);
             thesebits = bits_needed((unsigned long) labs(val));
-            if (val < 0 && thesebits < mach->bpval-1) {
-                thesebits = mach->bpval-1;
+            if (val < 0 && thesebits < machine_scalar_bits(mach)-1) {
+                thesebits = machine_scalar_bits(mach)-1;
             }
         } else {
             thesebits = bits_needed(lexeme_unsignedval(lex));
@@ -1632,7 +1671,7 @@ parse_nbits_func (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
             return 1;
         }
     }
-    if (maxbits > (curlt == LEXTYPE_LXF_NBITS ? mach->bpval-1 : mach->bpval)) {
+    if (maxbits > machine_scalar_bits(mach) - (curlt == LEXTYPE_LXF_NBITS ? 1 : 0)) {
         /* XXX error condition */
     } else {
         bcstr = string_printf(0, "%ld", maxbits);

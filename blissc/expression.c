@@ -189,7 +189,6 @@ expr_node_free (expr_node_t *node, stgctx_t stg) {
     }
     switch (expr_type(node)) {
         case EXPTYPE_PRIM_SEG:
-            seg_free(stg, expr_segval(node));
             break;
         case EXPTYPE_OPERATOR:
             expr_node_free(expr_op_lhs(node), stg);
@@ -202,7 +201,6 @@ expr_node_free (expr_node_t *node, stgctx_t stg) {
                 expr_node_free(snode, stg);
             }
             scope_end(expr_blk_scope(node));
-            block_free(stg, expr_blk_block(node));
             break;
         }
         case EXPTYPE_PRIM_FLDREF:
@@ -372,11 +370,9 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
 
     lextype_t lt;
     lexeme_t *lex;
-    stgctx_t stg = parser_get_cctx(pctx);
     scopectx_t scope = 0;
     expr_node_t *exp = 0;
     expr_node_t *seq, *last;
-    block_t *blk;
     int expr_count;
     textpos_t endpos;
     lextype_t closer = (curlt == LEXTYPE_EXP_DELIM_BEGIN ?
@@ -402,7 +398,6 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
             }
             if (scope == 0) {
                 scope = parser_scope_begin(pctx);
-                blk = block_alloc(stg, parser_curpos(pctx));
             }
             parse_declaration(pctx, lt);
             lt = parser_next(pctx, QL_NORMAL, &lex);
@@ -444,17 +439,16 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
     }
     exp = expr_node_alloc(EXPTYPE_PRIM_BLK, endpos);
     expr_blk_scope_set(exp, scope);
-    expr_blk_block_set(exp, blk);
     expr_blk_seq_set(exp, seq);
     expr_blk_codecomment_set(exp, codecomment);
     *expp = exp;
     // Now point the labels at us
     while ((lex = lexseq_remhead(labels))) {
         name_t *np = lexeme_ctx_get(lex);
-        if (name_data(np) != 0) {
+        if (name_data_ptr(np) != 0) {
             /* XXX error condition */
         }
-        *(expr_node_t **)name_data(np) = exp;
+        name_data_set_ptr(np, exp);
         lexeme_free(lex);
     }
 
@@ -755,12 +749,12 @@ parse_primary (parse_ctx_t pctx, lextype_t lt, lexeme_t *lex,
         }
     } else if (lt == LEXTYPE_NUMERIC || lt == LEXTYPE_SEGMENT ||
                lt == LEXTYPE_STRING) {
-        if (lt == LEXTYPE_STRING && lexeme_textlen(lex) > mach->bpval/8) {
+        if (lt == LEXTYPE_STRING && lexeme_textlen(lex) > machine_scalar_maxbytes(mach)) {
             strdesc_t *text = lexeme_text(lex);
             if (!lstrok) {
                 /* XXX error condition */
             }
-            text->len = mach->bpval/8;
+            text->len = machine_scalar_maxbytes(mach);
         }
         exp = lex_to_expr(lt, lex);
         lexeme_free(lex);
@@ -1050,7 +1044,7 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp,
 
     if (parse_primary(pctx, lt, lex, expp, lstrok)) {
         lt = parser_next(pctx, QL_NORMAL, &lex);
-        op = lextype_to_optype(lt, mach->addr_signed);
+        op = lextype_to_optype(lt, machine_addr_signed(mach));
         if (op == OPER_NONE) {
             parser_insert(pctx, lex);
             return 1;
@@ -1606,7 +1600,7 @@ parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
             break;
         case LEXTYPE_CTRL_SELECTA:
         case LEXTYPE_CTRL_SELECTONEA:
-            expr_sel_cmptype_set(exp, (mach->addr_signed ?
+            expr_sel_cmptype_set(exp, (machine_addr_signed(mach) ?
                                        OPER_CMP_EQL : OPER_CMP_EQLU));
             break;
         default:
@@ -1695,11 +1689,11 @@ parse_incrdecr (void *pctx, quotelevel_t ql, quotemodifier_t qm,
             expr_idloop_cmptype_set(exp, OPER_CMP_LEQU);
             break;
         case LEXTYPE_CTRL_DECRA:
-            expr_idloop_cmptype_set(exp, (mach->addr_signed ?
+            expr_idloop_cmptype_set(exp, (machine_addr_signed(mach) ?
                                           OPER_CMP_GEQ : OPER_CMP_GEQU));
             break;
         case LEXTYPE_CTRL_INCRA:
-            expr_idloop_cmptype_set(exp, (mach->addr_signed ?
+            expr_idloop_cmptype_set(exp, (machine_addr_signed(mach) ?
                                           OPER_CMP_LEQ : OPER_CMP_LEQU));
             break;
         default:

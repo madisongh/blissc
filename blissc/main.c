@@ -22,9 +22,6 @@ int test_scanner(int argc, const char *argv[]);
 int test_parser(int argc, const char *argv[]);
 int test_expr(int argc, const char *argv[]);
 
-//void declarations_init(scopectx_t scope);
-//int parse_declaration(parse_ctx_t pctx, lextype_t lt);
-
 int main(int argc, const char * argv[])
 {
     const char *which;
@@ -180,12 +177,12 @@ test_parser (int argc, const char *argv[])
     lextype_t lt;
     int linewidth;
     char *delim;
-    machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32 };
+    machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32, .signext_supported=1 };
 
     mainscope = scope_begin(0);
     stg = storage_init(&machdef);
     pctx = parser_init(mainscope, stg, &machdef);
-    declarations_init(mainscope);
+    declarations_init(mainscope, stg, &machdef);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
@@ -232,7 +229,7 @@ test_expr (int argc, const char *argv[])
     stg = storage_init(&machdef);
     expr_init(mainscope);
     pctx = parser_init(mainscope, stg, &machdef);
-    declarations_init(mainscope);
+    declarations_init(mainscope, stg, &machdef);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
