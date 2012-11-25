@@ -1,5 +1,11 @@
 MODULE test =
 BEGIN
+    PSECT
+        NODEFAULT = FARFEL (EXECUTE,OVERLAY),
+        OWN = FARFEL,
+        GLOBAL = $CODE$,
+        CODE = $OWN$;
+        
     LITERAL
         Z = 3 + 4,
         Y = Z + 2 * 5;

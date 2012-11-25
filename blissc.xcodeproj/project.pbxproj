@@ -46,6 +46,7 @@
 		7A8735071642CA6F006BFC30 /* test_parser.bli */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_parser.bli; path = testfiles/test_parser.bli; sourceTree = SOURCE_ROOT; };
 		7A95BCEB1641CC2F002F851E /* strings.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = strings.c; sourceTree = "<group>"; };
 		7A95BCEE1641E17C002F851E /* strings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = strings.h; sourceTree = "<group>"; };
+		7A9854EC1660FE7600828371 /* structures.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = structures.h; sourceTree = "<group>"; };
 		7A995E0C163C2286003BEAC7 /* lexeme.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = lexeme.c; sourceTree = "<group>"; };
 		7A995E0F163C2F82003BEAC7 /* nametable.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = nametable.c; sourceTree = "<group>"; };
 		7A995E11163C2F8F003BEAC7 /* nametable.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = nametable.h; sourceTree = "<group>"; };
@@ -127,6 +128,7 @@
 				7AC12EC41659303B009C84F5 /* storage.h */,
 				7A95BCEB1641CC2F002F851E /* strings.c */,
 				7A95BCEE1641E17C002F851E /* strings.h */,
+				7A9854EC1660FE7600828371 /* structures.h */,
 				7A5351E91656FE7B00BE4B99 /* test_decl.bli */,
 				7ABCDDE7165D64E000E3A85C /* test_expr.bli */,
 				7ABF5680164DA2B10053480F /* test_macro.bli */,
