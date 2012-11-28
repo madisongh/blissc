@@ -24,6 +24,10 @@ struct stgctx_s {
 #define SEG_ALLOCOUNT   128
 #define IV_ALLOCOUNT    128
 
+#define SEG_M_STACKONLY (1<<15)
+#define SEG_M_ALLOCATED (1<<14)
+#define SEG_M_USERFLAGS (~(1<<14))
+
 struct psect_s {
     struct psect_s  *next;
     strdesc_t       *name;
@@ -61,8 +65,8 @@ struct initval_s {
 
 struct seg_static_s {
     psect_t         *psect;
-    unsigned long   offset;
-    unsigned long   size;
+    unsigned long    offset;
+    unsigned long    size;
     initval_t       *initializer, *iv_last;
 };
 struct seg_stack_s {
@@ -81,6 +85,7 @@ struct seg_s {
     void            *machattr;
     segtype_t       type;
     unsigned int    flags;
+    unsigned int    alignment;
     union {
         struct seg_static_s staticinfo;
         struct seg_stack_s  stackinfo;
@@ -241,9 +246,12 @@ seg_alloc (stgctx_t ctx, segtype_t type, textpos_t defpos)
     return seg;
 } /* seg_alloc */
 
-static void
+void
 seg_free (stgctx_t ctx, seg_t *seg)
 {
+    if (seg->flags & SEG_M_ALLOCATED) {
+        return; // can't do this once committed to storage
+    }
     switch (seg->type) {
         case SEGTYPE_LITERAL:
             break;
@@ -279,6 +287,136 @@ initval_alloc (stgctx_t ctx)
     return iv;
 
 } /* initval_alloc */
+
+static void
+seg_storage_commit (stgctx_t ctx, seg_t *seg)
+{
+    unsigned long alignadj = (1UL<<seg->alignment)-1;
+    if (seg->type == SEGTYPE_STATIC) {
+        if (seg->info.staticinfo.size == 0) {
+            return;
+        }
+        if (seg->info.staticinfo.psect != 0) {
+            psect_t *psect = seg->info.staticinfo.psect;
+            seg->info.staticinfo.offset = (psect->size + alignadj) & ~alignadj;
+            psect->size = seg->info.staticinfo.offset + seg->info.staticinfo.size;
+            if (psect->segchain == 0) {
+                psect->segchain = psect->seglast = seg;
+            } else {
+                psect->seglast->next = seg;
+                psect->seglast = seg;
+            }
+            seg->flags |= SEG_M_ALLOCATED;
+        }
+    } else {
+        if (seg->info.stackinfo.size == 0) {
+            return;
+        }
+        seg->info.stackinfo.frame = ctx->curframe;
+        if (seg->info.stackinfo.frame != 0) {
+            frame_t *frame = seg->info.stackinfo.frame;
+            seg->info.stackinfo.offset = (frame->size + alignadj) & ~alignadj;
+            frame->size = seg->info.stackinfo.offset + seg->info.stackinfo.size;
+            if (frame->segchain == 0) {
+                frame->segchain = frame->seglast = seg;
+            } else {
+                frame->seglast->next = seg;
+                frame->seglast = seg;
+            }
+            seg->flags |= SEG_M_ALLOCATED;
+        }
+    }
+
+} /* seg_storage_commit */
+
+void
+seg_static_psect_set (stgctx_t ctx, seg_t *seg, psect_t *psect)
+{
+    if (seg->type != SEGTYPE_STATIC) {
+        return;
+    }
+    seg->info.staticinfo.psect = psect;
+}
+
+psect_t *
+seg_static_psect (stgctx_t ctx, seg_t *seg)
+{
+    return (seg->type == SEGTYPE_STATIC ?
+            seg->info.staticinfo.psect :
+            0);
+}
+
+frame_t *
+seg_stack_frame (stgctx_t ctx, seg_t *seg)
+{
+    return (seg->type == SEGTYPE_STACK ?
+            seg->info.stackinfo.frame :
+            0);
+}
+
+unsigned long
+seg_size (stgctx_t ctx, seg_t *seg)
+{
+    if (seg->type == SEGTYPE_STATIC) {
+        return seg->info.staticinfo.size;
+    } else if (seg->type == SEGTYPE_STACK) {
+        return seg->info.stackinfo.size;
+    }
+    return 0;
+}
+
+static int log2(unsigned int n) {
+    static int table[] = { -1, 0, 1, -1, 2, -1, -1, -1, 3 };
+    if (n >= sizeof(table) || table[n] < 0) return 0;
+    return table[n];
+}
+
+void
+seg_size_set (stgctx_t ctx, seg_t *seg, unsigned long size)
+{
+    machinedef_t *mach = ctx->mach;
+
+    if (seg->type == SEGTYPE_STATIC) {
+        seg->info.staticinfo.size = size;
+    } else if (seg->type == SEGTYPE_STACK) {
+        seg->info.stackinfo.size = size;
+    }
+
+    if (seg->alignment == 0) {
+        seg->alignment = (size >  machine_scalar_units(mach) ?
+                          log2(machine_scalar_units(mach)) :
+                          log2((unsigned int)size));
+    }
+}
+
+unsigned int
+seg_alignment (stgctx_t ctx, seg_t *seg)
+{
+    return seg->alignment;
+}
+
+void
+seg_alignment_set (stgctx_t ctx, seg_t *seg, unsigned int a)
+{
+    seg->alignment = a;
+}
+
+unsigned int
+seg_flags (stgctx_t ctx, seg_t *seg) {
+    return seg->flags & SEG_M_USERFLAGS;
+}
+
+void
+seg_flags_set (stgctx_t ctx, seg_t *seg, unsigned int flags)
+{
+    seg->flags = (seg->flags & ~SEG_M_USERFLAGS) |
+    (flags & SEG_M_USERFLAGS);
+}
+
+int
+seg_has_storage (stgctx_t ctx, seg_t *seg) {
+    return (seg->flags & SEG_M_ALLOCATED) != 0;
+}
 
 void
 initval_freelist (stgctx_t ctx, initval_t *iv)
@@ -317,6 +455,29 @@ initval_scalar_add (stgctx_t ctx, initval_t *listhead, unsigned int reps,
     iv->data.scalar.value = val;
     iv->data.scalar.width = width;
     iv->data.scalar.signext = signext;
+    if (listhead == 0) {
+        iv->lastptr = iv;
+        return iv;
+    }
+    listhead->lastptr->next = iv;
+    listhead->lastptr = iv;
+    return listhead;
+}
+
+initval_t *
+initval_scalar_prepend (stgctx_t ctx, initval_t *listhead, unsigned int reps,
+                        long val, unsigned int width, int signext)
+{
+    initval_t *iv = initval_alloc(ctx);
+
+    if (iv == 0) {
+        return 0;
+    }
+    iv->type = IVTYPE_SCALAR;
+    iv->repcount = reps;
+    iv->data.scalar.value = val;
+    iv->data.scalar.width = width;
+    iv->data.scalar.signext = 0;
     if (listhead == 0) {
         iv->lastptr = iv;
         return iv;
@@ -368,8 +529,32 @@ initval_ivlist_add (stgctx_t ctx, initval_t *listhead, unsigned int reps,
     return listhead;
 }
 
+unsigned long
+initval_size (stgctx_t ctx, initval_t *ivlist)
+{
+    initval_t *iv;
+    unsigned long totsize = 0;
+    for (iv = ivlist; iv != 0; iv = iv->next) {
+        switch (iv->type) {
+            case IVTYPE_SCALAR:
+                totsize += iv->repcount * iv->data.scalar.width;
+                break;
+            case IVTYPE_STRING:
+                totsize += iv->repcount *
+                ((iv->data.string->len + machine_unit_maxbytes(ctx->mach)-1) /
+                 machine_unit_maxbytes(ctx->mach));
+                break;
+            case IVTYPE_LIST:
+                totsize += iv->repcount * initval_size(ctx, iv->data.listptr);
+                break;
+        }
+    }
+    return totsize;
+
+} /* initval_size */
+
 static void
-update_seg (seg_t *seg, initval_t *iv, unsigned long size)
+update_seg (seg_t *seg, initval_t *iv)
 {
     switch (seg->type) {
         case SEGTYPE_STATIC:
@@ -380,8 +565,6 @@ update_seg (seg_t *seg, initval_t *iv, unsigned long size)
                 seg->info.staticinfo.iv_last->next = iv;
                 seg->info.staticinfo.iv_last = iv;
             }
-            seg->info.staticinfo.size += size;
-            seg->info.staticinfo.psect->size += size;
             break;
         case SEGTYPE_STACK:
             if (seg->info.stackinfo.initializer == 0) {
@@ -391,15 +574,13 @@ update_seg (seg_t *seg, initval_t *iv, unsigned long size)
                 seg->info.stackinfo.iv_last->next = iv;
                 seg->info.stackinfo.iv_last = iv;
             }
-            seg->info.stackinfo.size += size;
-            seg->info.stackinfo.frame->size += size;
             break;
 
         default:
             break;
     }
 }
-int
+static int
 seg_initval_add_scalar (stgctx_t ctx, seg_t *seg, unsigned int reps,
                         long value, unsigned int width, int signext)
 {
@@ -417,11 +598,11 @@ seg_initval_add_scalar (stgctx_t ctx, seg_t *seg, unsigned int reps,
     iv->data.scalar.width    = width;
     iv->data.scalar.signext  = signext;
     iv->data.scalar.value    = value;
-    update_seg(seg, iv, reps * width);
+    update_seg(seg, iv);
     return 1;
 }
 
-int
+static int
 seg_initval_add_string (stgctx_t ctx, seg_t *seg, unsigned int reps,
                         strdesc_t *str)
 {
@@ -437,13 +618,11 @@ seg_initval_add_string (stgctx_t ctx, seg_t *seg, unsigned int reps,
     iv->repcount = reps;
     iv->type = IVTYPE_STRING;
     iv->data.string = string_copy(0, str);
-    update_seg(seg, iv,
-               reps * ((str->len + machine_unit_maxbytes(ctx->mach)-1) /
-                       machine_unit_maxbytes(ctx->mach)));
+    update_seg(seg, iv);
     return 1;
 }
 
-int
+static int
 seg_initval_add_ivlist (stgctx_t ctx, seg_t *seg, unsigned int reps,
                         initval_t *ivlist)
 {
@@ -477,6 +656,36 @@ seg_initval_add_ivlist (stgctx_t ctx, seg_t *seg, unsigned int reps,
     return 1;
 }
 
+int
+seg_initval_set (stgctx_t ctx, seg_t *seg, initval_t *ivlist)
+{
+    unsigned long ivsize = initval_size(ctx, ivlist);
+    unsigned long segsize;
+    if (seg->type != SEGTYPE_STATIC && seg->type != SEGTYPE_STACK) {
+        return 0;
+    }
+    segsize = seg_size(ctx, seg);
+
+    if (segsize == 0) {
+        seg_size_set(ctx, seg, ivsize);
+    } else if (ivsize > segsize) {
+        return 0;
+    }
+
+    return seg_initval_add_ivlist(ctx, seg, 1, ivlist);
+
+} /* seg_initval_set */
+
+int
+seg_commit (stgctx_t ctx, seg_t *seg)
+{
+    if (seg->flags & SEG_M_ALLOCATED) {
+        return 0;
+    }
+    seg_storage_commit(ctx, seg);
+    return 1;
+}
+
 seg_t *
 seg_alloc_static (stgctx_t ctx, textpos_t defpos, psect_t *psect)
 {
@@ -485,14 +694,7 @@ seg_alloc_static (stgctx_t ctx, textpos_t defpos, psect_t *psect)
     if (seg == 0) {
         return 0;
     }
-    seg->info.staticinfo.psect = psect;
-    seg->info.staticinfo.offset = psect->size; // XXX - alignment, etc.
-    if (psect->segchain == 0) {
-        psect->segchain = psect->seglast = seg;
-    } else {
-        psect->seglast->next = seg;
-        psect->seglast = seg;
-    }
+    seg->info.staticinfo.psect = psect;    
     return seg;
 }
 
@@ -500,23 +702,14 @@ seg_t *
 seg_alloc_stack (stgctx_t ctx, textpos_t defpos, int stackonly)
 {
     seg_t *seg;
-    frame_t *frame = ctx->curframe;
 
-    if (frame == 0) {
-        return 0;
-    }
     seg = seg_alloc(ctx, SEGTYPE_STACK, defpos);
 
     if (seg == 0) {
         return 0;
     }
-    seg->info.stackinfo.frame = frame;
-    seg->info.stackinfo.offset = frame->size; // XXX - alignment, etc.
-    if (frame->segchain == 0) {
-        frame->segchain = frame->seglast = seg;
-    } else {
-        frame->seglast->next = seg;
-        frame->seglast = seg;
+    if (stackonly) {
+        seg->flags |= SEG_M_STACKONLY;
     }
     return seg;
 }

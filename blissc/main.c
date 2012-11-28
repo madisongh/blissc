@@ -193,9 +193,11 @@ test_parser (int argc, const char *argv[])
          lt = parser_next(pctx, QL_NORMAL, &lex)) {
         PRINTLEX(lex);
         if (lt >= LEXTYPE_DCL_MIN && lt <= LEXTYPE_DCL_MAX) {
-            parse_declaration(pctx, lt);
+            parser_insert(pctx, lex);
+            parse_declaration(pctx);
+        } else {
+            lexeme_free(lex);
         }
-        lexeme_free(lex);
     }
     if (lt == LEXTYPE_NONE) {
         fprintf(stderr, "parser_next returned error lexeme\n");
@@ -223,7 +225,8 @@ test_expr (int argc, const char *argv[])
 //   lextype_t lt;
     int linewidth;
     char *delim;
-    machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32 };
+    machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32,
+        .signext_supported=1, .max_align=2 };
 
     mainscope = scope_begin(0);
     stg = storage_init(&machdef);

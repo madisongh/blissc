@@ -471,7 +471,9 @@ parser_expect (parse_ctx_t pctx, quotelevel_t ql, lextype_t expected_lt,
  * parser_expect_oneof
  *
  * Common routine for parsing an expected lexeme type.
- * Lexeme can be returned, if desired.
+ * Lexeme can be returned, if desired.  Callers can
+ * use LEXTYPE_NONE to put "holes" in the array that
+ * won't match.
  *
  * Returns: array index on success, -1 on failure
  */
@@ -485,7 +487,7 @@ parser_expect_oneof (parse_ctx_t pctx, quotelevel_t ql, lextype_t expected_lts[]
 
     lt = parser_next(pctx, ql, &lex);
     for (i = 0; i < numlts; i++) {
-        if (lt == expected_lts[i]) {
+        if (lt == expected_lts[i] && lt != LEXTYPE_NONE) {
             if (lexp != 0) {
                 *lexp =  lex;
             } else {

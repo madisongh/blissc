@@ -13,6 +13,7 @@ struct machinedef_s {
     unsigned int    bpunit, bpval, bpaddr;
     int             addr_signed; // true if addresses are sign-extended
     int             signext_supported;
+    int             max_align; // maximum allowed for ALIGN attribute
 };
 
 typedef struct machinedef_s machinedef_t;

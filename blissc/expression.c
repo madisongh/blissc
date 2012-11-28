@@ -389,9 +389,9 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
             lexeme_free(lex);
             break;
         } else if (lt >= LEXTYPE_DCL_MIN && lt <= LEXTYPE_DCL_MAX) {
-            lexeme_free(lex);
             if (expr_count != 0) {
                 /* XXX error condition */
+                lexeme_free(lex);
                 parser_skip_to_delim(pctx, closer);
                 endpos = parser_curpos(pctx);
                 break;
@@ -399,7 +399,8 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
             if (scope == 0) {
                 scope = parser_scope_begin(pctx);
             }
-            parse_declaration(pctx, lt);
+            parser_insert(pctx, lex);
+            parse_declaration(pctx);
             lt = parser_next(pctx, QL_NORMAL, &lex);
             continue;
         } else {
