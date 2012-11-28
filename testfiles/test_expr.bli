@@ -2,10 +2,17 @@ MODULE test =
 BEGIN
     PSECT
         NODEFAULT = FARFEL (EXECUTE,OVERLAY),
-        OWN = FARFEL,
         GLOBAL = $CODE$,
         CODE = $OWN$;
-        
+    OWN
+        ALPHA : WORD ALIGN(2) PSECT(FARFEL) VOLATILE,
+        BETA  : LONG INITIAL(37) ALIAS,
+        GAMMA : LONG,
+        MU : WORD;
+    GLOBAL
+        BITE : SIGNED WORD;
+    EXTERNAL
+        ME : LONG UNSIGNED;        
     LITERAL
         Z = 3 + 4,
         Y = Z + 2 * 5;
