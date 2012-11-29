@@ -20,6 +20,7 @@
 		7AB5ED821642A3AB0063EC94 /* expression.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AB5ED811642A3AB0063EC94 /* expression.c */; };
 		7AC12EC01659194A009C84F5 /* utils.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AC12EBF1659194A009C84F5 /* utils.c */; };
 		7AC12EC7165944B4009C84F5 /* storage.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AC12EC6165944B4009C84F5 /* storage.c */; };
+		7AD8D0FF1666B7EA002AB41D /* structures.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AD8D0FE1666B7E9002AB41D /* structures.c */; };
 		7AF573D9164936EE005C965F /* macros.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AF573D8164936EE005C965F /* macros.c */; };
 /* End PBXBuildFile section */
 
@@ -69,6 +70,7 @@
 		7AC12EC41659303B009C84F5 /* storage.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = storage.h; sourceTree = "<group>"; };
 		7AC12EC516593429009C84F5 /* declarations.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = declarations.h; sourceTree = "<group>"; };
 		7AC12EC6165944B4009C84F5 /* storage.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = storage.c; sourceTree = "<group>"; };
+		7AD8D0FE1666B7E9002AB41D /* structures.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = structures.c; sourceTree = "<group>"; };
 		7ADC81891649CD660056600E /* macros.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = macros.h; sourceTree = "<group>"; };
 		7AF573D8164936EE005C965F /* macros.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = macros.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -128,6 +130,7 @@
 				7AC12EC41659303B009C84F5 /* storage.h */,
 				7A95BCEB1641CC2F002F851E /* strings.c */,
 				7A95BCEE1641E17C002F851E /* strings.h */,
+				7AD8D0FE1666B7E9002AB41D /* structures.c */,
 				7A9854EC1660FE7600828371 /* structures.h */,
 				7A5351E91656FE7B00BE4B99 /* test_decl.bli */,
 				7ABCDDE7165D64E000E3A85C /* test_expr.bli */,
@@ -204,6 +207,7 @@
 				7A2DD25B165009F1002CD078 /* declarations.c in Sources */,
 				7AC12EC01659194A009C84F5 /* utils.c in Sources */,
 				7AC12EC7165944B4009C84F5 /* storage.c in Sources */,
+				7AD8D0FF1666B7EA002AB41D /* structures.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

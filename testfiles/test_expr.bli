@@ -1,5 +1,12 @@
 MODULE test =
 BEGIN
+    STRUCTURE
+        BLK[O,P,S,E;BS,UNIT=4] =
+            [BS*UNIT]
+            (BLK+O*UNIT)<P,S,E>;
+    OWN
+        QQQ : BLK [8,BYTE];
+        
     PSECT
         NODEFAULT = FARFEL (EXECUTE,OVERLAY),
         GLOBAL = $CODE$,
@@ -13,25 +20,26 @@ BEGIN
         BITE : SIGNED WORD;
     EXTERNAL
         ME : LONG UNSIGNED;        
-    LITERAL
-        Z = 3 + 4,
-        Y = Z + 2 * 5;
-%PRINT(%ASCII'Z is: ',%NUMBER(Z), %ASCII', Y is: ', %NUMBER(Y))
-    LITERAL
-        A = (Z + 5) * (Y - 5);
-%PRINT('A is: ', %NUMBER(A))
-    LITERAL
-        T = A EQL 144,
-        B = Z AND 3;
-%PRINT('T is: ', %NUMBER(T))
-%PRINT('B is: ', %NUMBER(B))
-%PRINT('CTCE test: ',%NUMBER(%CTCE(A,B,T,Y,Z,%ASCII'HELLO'))) 
-%PRINT('CTCE test 2: ',%NUMBER(%CTCE('hi there',%string('go','away'))))
+!    LITERAL
+!        Z = 3 + 4,
+!        Y = Z + 2 * 5;
+!%PRINT(%ASCII'Z is: ',%NUMBER(Z), %ASCII', Y is: ', %NUMBER(Y))
+!    LITERAL
+!        A = (Z + 5) * (Y - 5);
+!%PRINT('A is: ', %NUMBER(A))
+!    LITERAL
+!        T = A EQL 144,
+!        B = Z AND 3;
+!%PRINT('T is: ', %NUMBER(T))
+!%PRINT('B is: ', %NUMBER(B))
+!%PRINT('CTCE test: ',%NUMBER(%CTCE(A,B,T,Y,Z,%ASCII'HELLO')))
+!%PRINT('CTCE test 2: ',%NUMBER(%CTCE('hi there',%string('go','away'))))
 
     LABEL
         blklabel1, blklabel2;
         
     blklabel1:BEGIN
+                BLK[beta,0,8,8,0;1] = 99;
               END;
     CODECOMMENT 'hi there': blklabel2: BEGIN END;
     CODECOMMENT 'another': BEGIN END;
