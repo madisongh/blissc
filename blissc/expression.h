@@ -159,6 +159,7 @@ typedef struct expr_node_s expr_node_t;
 const char *exprtype_name(exprtype_t type);
 expr_node_t *expr_node_alloc(exprtype_t type, textpos_t pos);
 void expr_node_free(expr_node_t *node, stgctx_t stg);
+expr_node_t *expr_node_copy(expr_node_t *src);
 
 
 static inline __unused int expr_is_noop(expr_node_t *node) {

@@ -24,7 +24,8 @@ typedef enum {
     DCL_NORMAL = 0,
     DCL_GLOBAL,
     DCL_EXTERNAL,
-    DCL_FORWARD
+    DCL_FORWARD,
+    DCL_MAP
 } decltype_t;
 
 
@@ -37,6 +38,7 @@ static name_t decl_names[] = {
     NAMEDEF("EXTERNAL", LEXTYPE_DCL_EXTERNAL, NAME_M_RESERVED),
     NAMEDEF("FORWARD", LEXTYPE_DCL_FORWARD, NAME_M_RESERVED),
     NAMEDEF("COMPILETIME", LEXTYPE_DCL_COMPILETIME, NAME_M_RESERVED),
+    NAMEDEF("MAP", LEXTYPE_DCL_MAP, NAME_M_RESERVED),
     NAMEDEF("MODULE", LEXTYPE_DCL_MODULE, NAME_M_RESERVED),
     NAMEDEF("ELUDOM", LEXTYPE_DCL_ELUDOM, NAME_M_RESERVED),
     NAMEDEF("ROUTINE", LEXTYPE_DCL_ROUTINE, NAME_M_RESERVED),
@@ -139,6 +141,24 @@ nameinfo_free (nameinfo_t *ni, stgctx_t stg)
     freenis = ni;
 
 } /* nameinfo_free */
+
+nameinfo_t *
+nameinfo_copy (nameinfo_t *src)
+{
+    nameinfo_t *dst;
+
+    if (src == 0) {
+        return 0;
+    }
+    dst = nameinfo_alloc(sizeof(nameinfo_t));
+    memcpy(dst, src, sizeof(nameinfo_t));
+    if (nameinfo_type(src) == NAMETYPE_BIND ||
+        nameinfo_type(src) == NAMETYPE_GLOBBIND) {
+        nameinfo_bind_expr_set(dst, expr_node_copy(nameinfo_bind_expr(src)));
+    }
+    
+    return dst;
+}
 
 /*
  * bind_compiletime
@@ -1017,6 +1037,50 @@ declare_data (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
     return 1;
 }
 
+static int
+declare_map (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
+              machinedef_t *mach)
+{
+    strdesc_t *namestr;
+    textpos_t pos;
+    name_t *np;
+    int status = 1;
+    static lextype_t delims[2] = { LEXTYPE_DELIM_SEMI, LEXTYPE_DELIM_COMMA };
+
+    while (status != 0) {
+        nameinfo_t *ni;
+        if (!parse_decl_name(pctx, scope, &namestr, &pos)) {
+            /* XXX error condition */
+            return 0;
+        }
+        np = name_search(scope, namestr->ptr, namestr->len, 0);
+        if (name_type(np) != LEXTYPE_NAME_DATA) {
+            /* XXX error condition */
+            return 0;
+        }
+        ni = name_data_ptr(np);
+        if (name_scope(np) != scope) {
+            np = name_declare(scope, namestr->ptr, namestr->len, LEXTYPE_NAME_DATA, pos);
+            ni = nameinfo_copy(ni);
+            name_data_set_ptr(np, ni);
+        }
+        if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
+            status = handle_data_attrs(pctx, scope, stg, mach, DCL_MAP, 0, ni);
+        } else {
+            /* XXX error condition */
+            status = parser_expect_oneof(pctx, QL_NORMAL, delims, 2, 0, 1);
+        }
+        if (status < 0) {
+            string_free(namestr);
+            /* XXX error condition */
+            break;
+        }
+        string_free(namestr);
+    }
+
+    return 1;
+}
+
 /*
  * psects_init
  *
@@ -1151,6 +1215,8 @@ parse_declaration (parse_ctx_t pctx)
         case LEXTYPE_DCL_STRUCTURE:
             status = declare_structure(pctx, scope);
             break;
+        case LEXTYPE_DCL_MAP:
+            status = declare_map(pctx, scope, stg, mach);
         default:
             /* XXX error condition */
             status = 0;

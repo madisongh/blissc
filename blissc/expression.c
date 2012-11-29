@@ -252,7 +252,7 @@ expr_node_free (expr_node_t *node, stgctx_t stg) {
             lo = expr_case_lowbound(node);
             hi = expr_case_highbound(node);
             for (which = lo; which <= hi; which++) {
-                expr_node_free(actarray[which], stg);
+                expr_node_free(actarray[which-lo], stg);
             }
             free(actarray);
             break;
@@ -289,6 +289,158 @@ expr_node_free (expr_node_t *node, stgctx_t stg) {
     freenodes = node;
 
 } /* expr_node_free */
+
+expr_node_t *
+expr_node_copy (expr_node_t *node)
+{
+    expr_node_t *dst;
+
+    if (node == 0) {
+        return 0;
+    }
+
+    dst = expr_node_alloc(expr_type(node), expr_textpos(node));
+    memcpy(dst, node, sizeof(expr_node_t));
+
+    switch (expr_type(node)) {
+        case EXPTYPE_PRIM_SEG:
+        case EXPTYPE_PRIM_SEGNAME:
+            break;
+        case EXPTYPE_OPERATOR:
+            expr_op_lhs_set(dst, expr_node_copy(expr_op_lhs(node)));
+            expr_op_rhs_set(dst, expr_node_copy(expr_op_rhs(node)));
+            break;
+        case EXPTYPE_PRIM_BLK: {
+            expr_node_t *snode, *slast;
+            expr_blk_seq_set(dst, 0);
+            for (snode = expr_blk_seq(node); snode != 0; snode = expr_next(snode)) {
+                if (expr_blk_seq(dst) == 0) {
+                    expr_blk_seq_set(dst, expr_node_copy(snode));
+                    slast = expr_blk_seq(dst);
+                } else {
+                    expr_next_set(slast, expr_node_copy(snode));
+                    slast = expr_next(slast);
+                }
+            }
+            expr_blk_scope_set(dst,
+                               scope_copy(expr_blk_scope(node),
+                                          scope_getparent(expr_blk_scope(node))));
+            break;
+        }
+        case EXPTYPE_PRIM_FLDREF:
+            expr_fldref_addr_set(dst, expr_node_copy(expr_fldref_addr(node)));
+            expr_fldref_pos_set(dst, expr_node_copy(expr_fldref_pos(node)));
+            expr_fldref_size_set(dst, expr_node_copy(expr_fldref_size(node)));
+            break;
+        case EXPTYPE_CTRL_COND:
+            expr_cond_test_set(dst, expr_node_copy(expr_cond_test(node)));
+            expr_cond_consequent_set(dst,
+                                     expr_node_copy(expr_cond_consequent(node)));
+            expr_cond_alternative_set(dst,
+                                      expr_node_copy(expr_cond_alternative(node)));
+            break;
+        case EXPTYPE_CTRL_LOOPWU:
+            expr_wuloop_test_set(dst, expr_node_copy(expr_wuloop_test(node)));
+            expr_wuloop_body_set(dst, expr_node_copy(expr_wuloop_body(node)));
+            break;
+        case EXPTYPE_CTRL_LOOPID:
+            expr_idloop_init_set(dst, expr_node_copy(expr_idloop_init(node)));
+            expr_idloop_term_set(dst, expr_node_copy(expr_idloop_term(node)));
+            expr_idloop_step_set(dst, expr_node_copy(expr_idloop_step(node)));
+            expr_idloop_body_set(dst, expr_node_copy(expr_idloop_body(node)));
+            break;
+        case EXPTYPE_PRIM_RTNCALL: {
+            expr_node_t *arg, *anext, *alist, *alast;
+            int acount;
+            expr_rtnaddr_set(dst, expr_node_copy(expr_rtnaddr(node)));
+            if (expr_inargs(node, &arg) > 0) {
+                alist = 0;
+                acount = 0;
+                while (arg != 0) {
+                    anext = expr_next(arg);
+                    if (alist == 0) {
+                        alist = expr_node_copy(arg);
+                        alast = alist;
+                    } else {
+                        expr_next_set(alast, expr_node_copy(arg));
+                        alast = expr_next(alast);
+                    }
+                    acount += 1;
+                    arg = anext;
+                }
+                expr_inargs_set(dst, acount, alist);
+            }
+            if (expr_outargs(node, &arg) > 0) {
+                alist = 0;
+                acount = 0;
+                while (arg != 0) {
+                    anext = expr_next(arg);
+                    if (alist == 0) {
+                        alist = expr_node_copy(arg);
+                        alast = alist;
+                    } else {
+                        expr_next_set(alast, expr_node_copy(arg));
+                        alast = expr_next(alast);
+                    }
+                    acount += 1;
+                    arg = anext;
+                }
+                expr_outargs_set(dst, acount, alist);
+            }
+        }
+
+        case EXPTYPE_CTRL_CASE: {
+            expr_node_t **actarray = expr_case_cases(node);
+            expr_node_t **dstarray;
+            long which, lo, hi;
+            expr_case_index_set(dst, expr_node_copy(expr_case_index(node)));
+            expr_case_outrange_set(dst, expr_node_copy(expr_case_outrange(node)));
+            lo = expr_case_lowbound(node);
+            hi = expr_case_highbound(node);
+            dstarray = malloc((hi-lo+1)*sizeof(expr_node_t *));
+            memset(dstarray, 0, ((hi-lo+1)*sizeof(expr_node_t *)));
+            for (which = lo; which <= hi; which++) {
+                dstarray[which-lo] = expr_node_copy(actarray[which-lo]);
+            }
+            expr_case_actions_set(dst, dstarray);
+            break;
+        }
+        case EXPTYPE_SELECTOR:
+            expr_selector_action_set(dst, expr_node_copy(expr_selector_action(node)));
+            expr_selector_lohi_set(dst, expr_node_copy(expr_selector_low(node)),
+                                   expr_node_copy(expr_selector_high(node)));
+            break;
+        case EXPTYPE_CTRL_SELECT: {
+            expr_node_t *sel, *toplast, *sellast;
+            expr_sel_index_set(dst, expr_node_copy(expr_sel_index(node)));
+            expr_sel_selectors_set(dst, 0);
+            for (sel = expr_sel_selectors(node); sel != 0; sel = expr_next(sel)) {
+                if (expr_sel_selectors(dst) == 0) {
+                    expr_sel_selectors_set(dst, expr_node_copy(sel));
+                    toplast = sellast = expr_sel_selectors(dst);
+                } else {
+                    expr_next_set(toplast, expr_node_copy(sel));
+                    sellast = toplast;
+                    toplast = expr_next(toplast);
+                }
+                for (sel = expr_selector_next(sel); sel != 0;
+                     sel = expr_selector_next(sel)) {
+                    expr_selector_next_set(sellast, expr_node_copy(sel));
+                    sellast = expr_selector_next(sellast);
+                }
+            }
+            break;
+        }
+            
+        case EXPTYPE_PRIM_LIT:
+        case EXPTYPE_NOOP:
+        case EXPTYPE_EXECFUN: // TBD XXX
+            break;
+    }
+
+    return dst;
+
+} /* expr_node_copy */
 
 static optype_t
 lextype_to_optype (lextype_t lt, int addr_signed)
