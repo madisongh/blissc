@@ -20,20 +20,20 @@ BEGIN
         BITE : SIGNED WORD;
     EXTERNAL
         ME : LONG UNSIGNED;        
-!    LITERAL
-!        Z = 3 + 4,
-!        Y = Z + 2 * 5;
-!%PRINT(%ASCII'Z is: ',%NUMBER(Z), %ASCII', Y is: ', %NUMBER(Y))
-!    LITERAL
-!        A = (Z + 5) * (Y - 5);
-!%PRINT('A is: ', %NUMBER(A))
-!    LITERAL
-!        T = A EQL 144,
-!        B = Z AND 3;
-!%PRINT('T is: ', %NUMBER(T))
-!%PRINT('B is: ', %NUMBER(B))
-!%PRINT('CTCE test: ',%NUMBER(%CTCE(A,B,T,Y,Z,%ASCII'HELLO')))
-!%PRINT('CTCE test 2: ',%NUMBER(%CTCE('hi there',%string('go','away'))))
+    LITERAL
+        Z = 3 + 4,
+        Y = Z + 2 * 5;
+%PRINT(%ASCII'Z is: ',%NUMBER(Z), %ASCII', Y is: ', %NUMBER(Y))
+    LITERAL
+        A = (Z + 5) * (Y - 5);
+%PRINT('A is: ', %NUMBER(A))
+    LITERAL
+        T = A EQL 144,
+        B = Z AND 3;
+%PRINT('T is: ', %NUMBER(T))
+%PRINT('B is: ', %NUMBER(B))
+%PRINT('CTCE test: ',%NUMBER(%CTCE(A,B,T,Y,Z,%ASCII'HELLO')))
+%PRINT('CTCE test 2: ',%NUMBER(%CTCE('hi there',%string('go','away'))))
 
     LABEL
         blklabel1, blklabel2;
