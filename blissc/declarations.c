@@ -151,6 +151,9 @@ nameinfo_copy (nameinfo_t *src)
         return 0;
     }
     dst = nameinfo_alloc(sizeof(nameinfo_t));
+    if (dst == 0) {
+        return 0;
+    }
     memcpy(dst, src, sizeof(nameinfo_t));
     if (nameinfo_type(src) == NAMETYPE_BIND ||
         nameinfo_type(src) == NAMETYPE_GLOBBIND) {
@@ -391,6 +394,7 @@ declare_literal (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
                 }
                 if (!parse_ctce(pctx, &lex)) {
                     /* XXX error condition */
+                    rval = machine_scalar_bits(mach);
                 } else {
                     rval = lexeme_signedval(lex);
                     lexeme_free(lex);
@@ -411,7 +415,8 @@ declare_literal (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
             // now get the semicolon or comma, for later
             lt = parser_next(pctx, QL_NORMAL, 0);
         }
-        if (bits_needed(labs(val)) > machine_scalar_bits(mach) - is_signed) {
+        if (decltype != DCL_EXTERNAL &&
+            bits_needed(labs(val)) > machine_scalar_bits(mach) - is_signed) {
             /* XXX error condition */
         }
         ni = nameinfo_alloc((decltype == DCL_EXTERNAL ? NAMETYPE_EXTLIT
@@ -537,7 +542,6 @@ static int
 declare_psect (parse_ctx_t pctx, scopectx_t scope)
 {
     stgctx_t stg = parser_get_cctx(pctx);
-    psect_t *ps;
     name_t *np;
     int which, n, has_attr;
     unsigned int attr;
@@ -576,12 +580,12 @@ declare_psect (parse_ctx_t pctx, scopectx_t scope)
         }
         if (n == 1) {
             np = lexeme_ctx_get(lex);
-            ps = name_data_ptr(np);
             if (has_attr) {
                 // check for attribute compatibility XXX
             }
         } else {
             strdesc_t *text = lexeme_text(lex);
+            psect_t *ps;
             ps = psect_create(stg, lexeme_text(lex), defpos, attr);
             np = name_declare(scope, text->ptr, text->len,
                               LEXTYPE_NAME_PSECT, defpos);
@@ -629,7 +633,7 @@ attr_psect (parse_ctx_t pctx, stgctx_t stg, psect_t **psp)
         /* XXX error condition */
     }
 
-    return 1;
+    return (ps != 0);
 
 } /* attr_psect */
 
@@ -945,7 +949,7 @@ handle_data_attrs (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
 
     nameinfo_data_seg_set(ni, seg);
 
-    if (saw_stru) {
+    if (saw_stru > 0) {
         nameinfo_data_struc_set(ni, stru);
         nameinfo_data_struscope_set(ni, struscope);
         if (niflags & NI_M_REF) {
@@ -1217,6 +1221,7 @@ parse_declaration (parse_ctx_t pctx)
             break;
         case LEXTYPE_DCL_MAP:
             status = declare_map(pctx, scope, stg, mach);
+            break;
         default:
             /* XXX error condition */
             status = 0;

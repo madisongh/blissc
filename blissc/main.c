@@ -175,8 +175,8 @@ test_parser (int argc, const char *argv[])
     stgctx_t stg;
     lexeme_t *lex;
     lextype_t lt;
-    int linewidth;
-    char *delim;
+//    int linewidth;
+//    char *delim;
     machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32, .signext_supported=1 };
 
     mainscope = scope_begin(0);
@@ -187,8 +187,8 @@ test_parser (int argc, const char *argv[])
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
     }
-    linewidth = 0;
-    delim = "";
+//    linewidth = 0;
+//    delim = "";
     for (lt = parser_next(pctx, QL_NORMAL, &lex); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
          lt = parser_next(pctx, QL_NORMAL, &lex)) {
         PRINTLEX(lex);
@@ -223,8 +223,8 @@ test_expr (int argc, const char *argv[])
     stgctx_t stg;
 //    lexeme_t *lex;
 //   lextype_t lt;
-    int linewidth;
-    char *delim;
+//    int linewidth;
+//    char *delim;
     machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32,
         .signext_supported=1, .max_align=2, .reg_count = 16 };
 
@@ -237,8 +237,8 @@ test_expr (int argc, const char *argv[])
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
     }
-    linewidth = 0;
-    delim = "";
+//    linewidth = 0;
+//    delim = "";
     if (!declare_module(pctx)) {
 //    for (lt = expr_parse_next(pctx, &lex, 0); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
 //         lt = expr_parse_next(pctx, &lex, 0)) {

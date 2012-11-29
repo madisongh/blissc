@@ -434,12 +434,12 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
     macrotype_t mtype;
 
     while (1) {
-        lt = parser_next(pctx, QL_NAME, &lex);
+        parser_next(pctx, QL_NAME, &lex);
         if (lexeme_boundtype(lex) != LEXTYPE_NAME) {
             /* XXX error condition */
             skip_to_end = 1;
         }
-        ltext = lexeme_text(lex);
+        ltext = string_copy(0, lexeme_text(lex));
         np = name_search(scope, ltext->ptr, ltext->len, 1);
         lexeme_free(lex);
         if (np != 0) {
@@ -533,14 +533,16 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
                 macro->ilist = clst;
                 macro->iparamcount = condcount;
                 mnp = name_declare(scope,
-                                   np->name, np->namelen,
+                                   ltext->ptr, ltext->len,
                                    LEXTYPE_NAME_MACRO,
                                    parser_curpos(pctx));
                 name_data_set_ptr(mnp, macro);
             }
+            string_free(ltext);
         } else {
             lexseq_free(&body);
             scope_end(ntbl);
+            string_free(ltext);
             break;
         }
 
@@ -937,8 +939,9 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
                                       parser_curpos(pctx));
                 if (actual == 0) {
                     /* XXX error condition */
+                } else {
+                    name_data_set_lexseq(actual, &val);
                 }
-                name_data_set_lexseq(actual, &val);
                 lexseq_free(&val);
             }
 

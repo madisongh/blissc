@@ -1503,7 +1503,6 @@ parse_REQUIRE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 static int
 parse_ASSIGN (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 {
-    lextype_t lt;
     name_t *np;
     lexeme_t *lex;
 
@@ -1511,7 +1510,7 @@ parse_ASSIGN (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         /* XXX error condition */
         return 1;
     }
-    lt = parser_next(pctx, QL_NAME, &lex);
+    parser_next(pctx, QL_NAME, &lex);
     if (lexeme_boundtype(lex) != LEXTYPE_NAME_COMPILETIME) {
         /* XXX error condition */
         lexeme_free(lex);
@@ -1567,8 +1566,8 @@ parse_NUMBER (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
                 lexeme_free(lex);
                 break;
             }
+            lexeme_val_setsigned(lex, val);
             // FALLTHROUGH
-            rlex = lex;
         case LEXTYPE_NUMERIC:
             rlex = lex;
             rlex->boundtype = LEXTYPE_NUMERIC;
@@ -1603,14 +1602,14 @@ parse_NUMBER (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 static int
 parse_DECLARED (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 {
-    lextype_t lt, boundlt;
+    lextype_t boundlt;
     lexeme_t *lex, *rlex = 0;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 0)) {
         /* XXX error condition */
         return 1;
     }
-    lt = parser_next(pctx, QL_NAME, &lex);
+    parser_next(pctx, QL_NAME, &lex);
     boundlt = lexeme_boundtype(lex);
     if (!is_name(boundlt)) {
         /* XXX error condition */

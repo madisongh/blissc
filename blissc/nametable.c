@@ -236,6 +236,10 @@ scope_copy (scopectx_t src, scopectx_t newparent)
             dlast = 0;
             while (sname != 0) {
                 dname = name_copy(sname, dst);
+                if (dname == 0) {
+                    scope_end(dst);
+                    return 0;
+                }
                 dname->nameflags |= NAME_M_NODCLCHK;
                 if (dlast == 0) {
                     dst->hashtable[i] = dlast = dname;
@@ -366,6 +370,9 @@ void
 name_insert (scopectx_t scope, name_t *np)
 {
     int i;
+    if (np == 0 || scope == 0) {
+        return;
+    }
     i = hash(np->name, np->namelen);
     np->next = scope->hashtable[i];
     scope->hashtable[i] = np;
@@ -415,6 +422,9 @@ name_declare_internal (scopectx_t scope, const char *id, size_t len,
     }
     if (np == 0) {
         np = name_alloc(id, len);
+        if (np == 0) {
+            return 0;
+        }
         name_insert(scope, np);
     }
 

@@ -144,6 +144,10 @@ static void
 psect_free (stgctx_t ctx, psect_t *psect)
 {
     psect_t *p, *lp;
+
+    if (psect == 0) {
+        return;
+    }
     for (p = ctx->psects, lp = 0; p != 0; lp = p, p = p->next) {
         if (p == psect) break;
     }

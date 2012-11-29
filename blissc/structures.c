@@ -205,7 +205,7 @@ structure_allocate (parse_ctx_t pctx, name_t *struname,
             }
         }
     }
-    for (i = 0, p = stru->alloformals; i < stru->nallo; i++, p = p->next) {
+    for (i = 0, p = stru->alloformals; p != 0 && i < stru->nallo; i++, p = p->next) {
         name_t *rnp;
         strdesc_t *alloname = name_string(p->np);
         np = name_search(myscope, alloname->ptr, alloname->len, 0);

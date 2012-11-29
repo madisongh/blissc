@@ -176,9 +176,13 @@ ascic_string_from_chrs (strdesc_t *dest, const char *cp, size_t len)
 strdesc_t *
 string_append (strdesc_t *trg, strdesc_t *add)
 {
-    string_t *str = desc_to_str(trg);
+    string_t *str;
     string_t *newstr;
 
+    if (trg == 0) {
+        return string_copy(trg, add);
+    }
+    str = desc_to_str(trg);
     if (is_static(trg) ||
         (trg->len + add->len <= pool[str->poolindex].maxsize)) {
         memcpy(trg->ptr + trg->len, add->ptr, add->len);

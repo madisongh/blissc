@@ -114,7 +114,7 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
     char *cp;
     size_t remain = ctx->buflen - ctx->bufpos;
     ssize_t ret;
-    int status;
+    int status = 0;
 
     while (bufsiz > 0) {
         if (remain > 0) {

@@ -96,7 +96,7 @@ lexeme_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
         size_t len;
 
         len = ltext->len > 255 ? 255 : ltext->len;
-        cstr = ascic_string_from_chrs(0, ltext->ptr, ltext->len);
+        cstr = ascic_string_from_chrs(0, ltext->ptr, len);
         nlex = lexeme_alloc(lt, cstr->ptr, cstr->len);
         lexeme_copypos(nlex, lex);
         lexseq_instail(result, nlex);
