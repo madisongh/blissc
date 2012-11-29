@@ -123,7 +123,7 @@ typedef enum {
     DOLEXTYPE(KWD_CODE) DOLEXTYPE(KWD_NODEFAULT) \
     DOLEXTYPE(KWD_WRITE) DOLEXTYPE(KWD_NOWRITE) \
     DOLEXTYPE(KWD_EXECUTE) DOLEXTYPE(KWD_NOEXECUTE) \
-    DOLEXTYPE(KWD_OVERLAY) DOLEXTYPE(KWD_CONCATENATE)
+    DOLEXTYPE(KWD_OVERLAY) DOLEXTYPE(KWD_CONCATENATE) DOLEXTYPE(KWD_REF)
 
 #define DOLEXTYPE(lt) LEXTYPE_##lt,
 typedef enum {
@@ -190,7 +190,7 @@ static inline __unused lexeme_t *lexeme_next (lexeme_t *lex) {
     return lex->next;
 }
 static inline __unused lextype_t lexeme_boundtype (lexeme_t *lex) {
-    return (lex->type == LEXTYPE_UNBOUND ? lex->boundtype : lex->type);
+    return lex->boundtype;
 }
 static inline __unused lextype_t lexeme_type (lexeme_t *lex) {
     return lex->type;

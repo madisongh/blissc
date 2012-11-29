@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "parser.h"
+#include "expression.h"
 #include "lexer.h"
 #include "nametable.h"
 #include "lexeme.h"
@@ -17,10 +18,6 @@
 
 #define PARAM_ALLOCOUNT 64
 
-struct macparam_s {
-    struct macparam_s *next;
-    name_t *np;
-};
 
 typedef enum {
     MACRO_UNK, MACRO_SIMPLE, MACRO_COND, MACRO_ITER, MACRO_KWD
@@ -193,10 +190,10 @@ macparam_alloc (void)
  *
  * Free up a list of macparam structures.
  */
-static void
-macparams_free (struct macparam_s *plist)
+void
+macparams_free (macparam_t *plist)
 {
-    struct macparam_s *p, *n;
+    macparam_t *p, *n;
     for (p = plist; p != 0; p = n) {
         n = p->next;
         p->next = freelist;
@@ -291,29 +288,40 @@ macro_copydata (name_t *dst, name_t *src)
 } /* macro_copydata */
 
 /*
- * parse_paramlist
+ * macro_paramlist
  *
- * Parse a macro parameter list, for declarations.
+ * Parse a macro or structure parameter list, for declarations.
  *
- * For keyword macros, handles the default value setting.
+ * For keyword macros and structure declarations,
+ * handles the default value setting.
  *
  * For non-keyword macros, handles simple, conditional, and
  * iterative macro parameter lists.
+ *
+ * Returns: -1 on error
+ *          index of closing delimiter in delims[] array on success
  */
-static int
-parse_paramlist (parse_ctx_t pctx, scopectx_t curscope,
-                 int assign_allowed, lextype_t closer,
-                 scopectx_t *ptable, struct macparam_s **plist, int *pcount)
+int
+macro_paramlist (parse_ctx_t pctx, scopectx_t curscope,
+                 int assign_allowed, int for_macro,
+                 lextype_t delims[], int ndelims,
+                 scopectx_t *ptable, macparam_t **plist, int *pcount)
 {
     lexeme_t *lex, *head, *last;
     lextype_t lt;
     strdesc_t *ltext;
     name_t *mnp;
     scopectx_t pscope;
-    struct macparam_s *param, *lastp;
+    macparam_t *param, *lastp;
     lexseq_t nullseq;
-    int count = 0;
-    static lextype_t terms[] = {LEXTYPE_DELIM_COMMA, LEXTYPE_DELIM_RPAR};
+    int count = 0, i;
+    static lextype_t *terms;
+
+    // Need a delimiter array that adds ',' to the
+    // caller's list
+    terms = malloc(sizeof(lextype_t)*(ndelims+1));
+    memcpy(terms, delims, sizeof(lextype_t)*ndelims);
+    terms[ndelims] = LEXTYPE_DELIM_COMMA;
 
     if (*ptable == 0) {
         pscope = scope_begin(curscope);
@@ -327,6 +335,7 @@ parse_paramlist (parse_ctx_t pctx, scopectx_t curscope,
     }
 
     lexseq_init(&nullseq);
+    parser_scope_begin(pctx);
 
     while (1) {
         lt = parser_next(pctx, QL_NAME, &lex);
@@ -357,10 +366,19 @@ parse_paramlist (parse_ctx_t pctx, scopectx_t curscope,
         count += 1;
         lt = parser_next(pctx, QL_NAME, &lex);
         if (assign_allowed && lt == LEXTYPE_OP_ASSIGN) {
+            int status;
             lexseq_t *defval = name_data_lexseq(mnp);
             lexeme_free(lex);
             lexseq_init(defval);
-            if (!parse_lexeme_seq(pctx, 0, QL_MACRO, terms, 2, defval, &lt)) {
+            if (for_macro) {
+                status = parse_lexeme_seq(pctx, 0, QL_MACRO,
+                                          terms, ndelims+1, defval, &lt);
+            } else {
+                status = parse_ctce(pctx, &lex);
+                if (status) lexseq_instail(defval, lex);
+                lt = parser_next(pctx, QL_NORMAL, 0);
+            }
+            if (!status) {
                 /* XXX error condition */
                 break;
             }
@@ -371,21 +389,26 @@ parse_paramlist (parse_ctx_t pctx, scopectx_t curscope,
             break;
         }
     }
+    parser_scope_end(pctx);
 
-    if (lt == closer) {
+    for (i = 0; i < ndelims && lt != delims[i]; i++);
+    if (i < ndelims) {
         *pcount = count;
         *ptable = pscope;
     } else {
         scope_end(pscope);
-        parser_skip_to_delim(pctx, closer);
+        parser_skip_to_delim(pctx, delims[0]);
         if (plist != 0) {
             macparams_free(*plist);
             *plist = 0;
         }
+        i = -1;
     }
-    return 1;
+    free(terms);
 
-} /* parse_paramlist */
+    return i;
+
+} /* macro_paramlist */
 
 /*
  * declare_macro
@@ -442,10 +465,10 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
         lexseq_init(&body);
         normcount = condcount = 0;
         if (lt == LEXTYPE_DELIM_LPAR) {
-            if (!parse_paramlist(pctx, scope, is_kwdmacro,
-                                 LEXTYPE_DELIM_RPAR, &ntbl,
+            if (macro_paramlist(pctx, scope, is_kwdmacro, 1,
+                                 closers, 1, &ntbl,
                                  (!is_kwdmacro ? &nlst : 0),
-                                 &normcount)) {
+                                 &normcount) < 0) {
                 skip_to_end = 1;
             }
             if (normcount == 0) {
@@ -462,9 +485,9 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
                 /* XXX error condition */
                 skip_to_end = 1;
             }
-            if (!parse_paramlist(pctx, scope, 0,
-                                 LEXTYPE_DELIM_RBRACK,
-                                 &ntbl, &clst, &condcount)) {
+            if (macro_paramlist(pctx, scope, 0, 1,
+                                 &closers[1], 1,
+                                 &ntbl, &clst, &condcount) < 0) {
                 skip_to_end = 1;
             }
             lt = parser_next(pctx, QL_NAME, 0);

@@ -20,7 +20,7 @@
     DOEXPTYPE(NOOP) \
     DOEXPTYPE(PRIM_LIT) DOEXPTYPE(PRIM_SEG) \
     DOEXPTYPE(PRIM_FLDREF) DOEXPTYPE(PRIM_RTNCALL) \
-    DOEXPTYPE(PRIM_BLK) \
+    DOEXPTYPE(PRIM_SEGNAME) DOEXPTYPE(PRIM_BLK) \
     DOEXPTYPE(OPERATOR) \
     DOEXPTYPE(EXECFUN) DOEXPTYPE(CTRL_COND) \
     DOEXPTYPE(CTRL_CASE) \
@@ -127,6 +127,11 @@ struct expr_sel_s {
     struct expr_node_s  *sequence; // of selectors
 };
 
+struct expr_seg_s {
+    seg_t           *base_seg;
+    long            offset;
+};
+
 struct expr_node_s {
     // for freelist tracking and sequences in blocks
     struct expr_node_s *next;
@@ -134,7 +139,8 @@ struct expr_node_s {
     textpos_t           textpos;
     union {
         long            litval;
-        seg_t           *segval;
+        name_t          *segname;
+        struct expr_seg_s  segdata;
         struct expr_blk_s  blkdata;
         struct expr_fldref_s flddata;
         struct expr_oper_s opdata;
@@ -203,11 +209,24 @@ static inline __unused void expr_litval_set(expr_node_t *node, long value) {
     node->data.litval = value;
 }
 // PRIM_SEG
-static inline __unused seg_t *expr_segval(expr_node_t *node) {
-    return node->data.segval;
+static inline __unused seg_t *expr_seg_base(expr_node_t *node) {
+    return node->data.segdata.base_seg;
 }
-static inline __unused void expr_segval_set(expr_node_t *node, seg_t *segval) {
-    node->data.segval = segval;
+static inline __unused void expr_seg_base_set(expr_node_t *node, seg_t *segval) {
+    node->data.segdata.base_seg = segval;
+}
+static inline __unused long expr_seg_offset(expr_node_t *node) {
+    return node->data.segdata.offset;
+}
+static inline __unused void expr_seg_offset_set(expr_node_t *node, long offset) {
+    node->data.segdata.offset = offset;
+}
+// PRIM_SEGNAME
+static inline __unused name_t *expr_segname(expr_node_t *node) {
+    return node->data.segname;
+}
+static inline __unused void expr_segname_set(expr_node_t *node, name_t *np) {
+    node->data.segname = np;
 }
 // PRIM_FLDREF
 static inline __unused expr_node_t *expr_fldref_addr(expr_node_t *node) {

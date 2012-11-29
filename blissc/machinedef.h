@@ -9,11 +9,15 @@
 #ifndef blissc_machinedef_h
 #define blissc_machinedef_h
 
+// Maximum number of registers on any supported platform
+#define MACH_K_MAXREGS  32
+
 struct machinedef_s {
     unsigned int    bpunit, bpval, bpaddr;
     int             addr_signed; // true if addresses are sign-extended
     int             signext_supported;
-    int             max_align; // maximum allowed for ALIGN attribute
+    unsigned int    max_align; // maximum # of bits for ALIGN() attribute
+    unsigned int    reg_count;
 };
 
 typedef struct machinedef_s machinedef_t;
@@ -30,6 +34,8 @@ siu int machine_signext_supported(machinedef_t *mach) { return mach->signext_sup
 siu unsigned int machine_unit_maxbytes(machinedef_t *mach) { return mach->bpunit/8; }
 siu unsigned int machine_scalar_maxbytes(machinedef_t *mach) { return mach->bpval/8; }
 siu unsigned int machine_addr_maxbytes(machinedef_t *mach) { return mach->bpaddr/8; }
+siu unsigned int machine_register_count(machinedef_t *mach) { return mach->reg_count; }
+siu unsigned int machine_align_max(machinedef_t *mach) { return mach->max_align; }
 #undef siu
 
 #endif

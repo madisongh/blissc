@@ -30,7 +30,7 @@ struct parse_ctx_s {
     condstate_t     condstate[64];
     int             condlevel;
     int             no_eof;
-    int             declarations_ok;
+    int             indecl;
     textpos_t       curpos;
     unsigned long   valmask;
 };
@@ -209,7 +209,6 @@ parser_init (scopectx_t kwdscope, void *cctx, machinedef_t *mach)
 
     pctx->mach = mach;
     pctx->valmask = (1UL << machine_scalar_bits(mach)) - 1;
-    pctx->declarations_ok = 1; /* XXX for now */
 
     return pctx;
 
@@ -261,6 +260,17 @@ parser_get_cctx (parse_ctx_t pctx) {
     return pctx->cctx;
 } /* parser_get_cctx */
 
+void
+parser_set_indecl (parse_ctx_t pctx, int yes)
+{
+    pctx->indecl = yes;
+}
+
+int
+parser_in_declaration (parse_ctx_t pctx)
+{
+    return pctx->indecl;
+}
 /*
  * parser_insert
  *
@@ -413,6 +423,7 @@ parser_scope_begin (parse_ctx_t pctx)
 {
     pctx->curscope = scope_begin(pctx->curscope);
     return pctx->curscope;
+
 } /* parser_scope_begin */
 
 /*
@@ -423,8 +434,10 @@ parser_scope_begin (parse_ctx_t pctx)
 scopectx_t
 parser_scope_end (parse_ctx_t pctx)
 {
-    return scope_end(pctx->curscope);
-}
+    pctx->curscope = scope_end(pctx->curscope);
+    return pctx->curscope;
+
+} /* parser_scope_end */
 
 /*
  * parser_incr/decr_erroneof

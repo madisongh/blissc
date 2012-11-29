@@ -226,7 +226,7 @@ test_expr (int argc, const char *argv[])
     int linewidth;
     char *delim;
     machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32,
-        .signext_supported=1, .max_align=2 };
+        .signext_supported=1, .max_align=2, .reg_count = 16 };
 
     mainscope = scope_begin(0);
     stg = storage_init(&machdef);

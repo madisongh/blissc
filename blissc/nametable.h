@@ -102,6 +102,8 @@ void name_insert(scopectx_t scope, name_t *name);
 void name_free(name_t *name);
 name_t *name_declare(scopectx_t scope, const char *id,
                      size_t len, lextype_t type, textpos_t pos);
+name_t *name_declare_nocheck(scopectx_t scope, const char *id,
+                             size_t len, lextype_t type, textpos_t pos);
 scopectx_t scope_begin(scopectx_t parent);
 scopectx_t scope_end(scopectx_t scope);
 scopectx_t scope_copy(scopectx_t src, scopectx_t newparent);

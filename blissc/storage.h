@@ -27,7 +27,8 @@ typedef struct stgctx_s *stgctx_t;
 #undef DOSEGTYPE
 #define DOSEGTYPES \
     DOSEGTYPE(STATIC) DOSEGTYPE(STACK) \
-    DOSEGTYPE(LITERAL)
+    DOSEGTYPE(EXTERNAL) DOSEGTYPE(LITERAL) \
+    DOSEGTYPE(REGISTER)
 #define DOSEGTYPE(t_) SEGTYPE_##t_,
 typedef enum {
     DOSEGTYPES
@@ -45,12 +46,16 @@ typedef struct seg_s seg_t;
 
 
 seg_t *seg_alloc_static(stgctx_t ctx, textpos_t defpos, psect_t *psect);
+seg_t *seg_alloc_external(stgctx_t ctx, textpos_t defpos, strdesc_t *sym);
 seg_t *seg_alloc_stack(stgctx_t ctx, textpos_t defpos, int stackonly);
+seg_t *seg_alloc_register(stgctx_t ctx, textpos_t defpos);
 seg_t *seg_alloc_literal(stgctx_t ctx, textpos_t defpos, unsigned long value);
 void seg_free(stgctx_t ctx, seg_t *seg);
 int seg_initval_set(stgctx_t ctx, seg_t *seg, initval_t *ivlist);
 void seg_static_psect_set(stgctx_t ctx, seg_t *seg, psect_t *psect);
 psect_t *seg_static_psect(stgctx_t ctx, seg_t *seg);
+strdesc_t *seg_ext_symbol(stgctx_t ctx, seg_t *seg);
+void seg_ext_symbol_set(stgctx_t ctx, seg_t *seg, strdesc_t *sym);
 frame_t *seg_stack_frame(stgctx_t ctx, seg_t *seg);
 unsigned long seg_size(stgctx_t ctx, seg_t *seg);
 void seg_size_set(stgctx_t ctx, seg_t *seg, unsigned long size);
@@ -60,6 +65,7 @@ unsigned int seg_flags(stgctx_t ctx, seg_t *seg);
 void seg_flags_set(stgctx_t ctx, seg_t *seg, unsigned int flags);
 int seg_commit(stgctx_t ctx, seg_t *seg);
 int seg_has_storage(stgctx_t ctx, seg_t *seg);
+segtype_t seg_type(seg_t *seg);
 
 frame_t *frame_begin(stgctx_t ctx, textpos_t defpos, frame_t *parent);
 void frame_end(stgctx_t ctx, frame_t *fr);

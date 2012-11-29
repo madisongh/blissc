@@ -40,4 +40,6 @@ int parser_expect_oneof(parse_ctx_t pctx, quotelevel_t ql,
                               lexeme_t **lex, int pboe);
 machinedef_t *parser_get_machinedef(parse_ctx_t pctx);
 textpos_t parser_curpos(parse_ctx_t pctx);
+int parser_in_declaration(parse_ctx_t pctx);
+void parser_set_indecl(parse_ctx_t pctx, int yes);
 #endif

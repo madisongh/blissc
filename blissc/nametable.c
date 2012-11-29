@@ -341,10 +341,9 @@ name_search (scopectx_t curscope, const char *id, size_t len, int do_create)
             i = hash(id, len);
             for (np = scope->hashtable[i]; np != 0;
                  np = np->next) {
-                if (np->nametype != LEXTYPE_NAME &&
-                    len == np->namelen &&
+                if (len == np->namelen &&
                     memcmp(id, np->name, len) == 0) {
-                    return np;
+                    return (do_create || np->nametype != LEXTYPE_NAME) ? np : 0;
                 }
             }
         }
@@ -381,9 +380,9 @@ name_insert (scopectx_t scope, name_t *np)
  *
  * Adds a name to a name table, with the specified type and data.
  */
-name_t *
-name_declare (scopectx_t scope, const char *id, size_t len,
-              lextype_t type, textpos_t pos)
+static name_t *
+name_declare_internal (scopectx_t scope, const char *id, size_t len,
+                       lextype_t type, textpos_t pos, int rescheck)
 {
     name_t *np;
 
@@ -391,18 +390,30 @@ name_declare (scopectx_t scope, const char *id, size_t len,
         len = NAME_SIZE-1;
     }
 
-    np = name_search(scope, id, len, 0);
-    if (np != 0) {
+    np = name_search(scope, id, len, 1);
+    if (!rescheck && np != 0) {
+        // with the override, we go ahead and define
+        // the name in the local scope, regardless
+        // of outer definitions, but we still
+        // check for redefs within the current scope
+        if (np->namescope != scope) {
+            np = 0;
+        } else if (np->nametype != LEXTYPE_NAME &&
+                   (!(np->nameflags & NAME_M_NODCLCHK))) {
+            return 0;
+        }
+    } else if (np != 0) {
         if (np->namescope == scope && np->nametype != LEXTYPE_NAME &&
             !(np->nameflags & NAME_M_NODCLCHK)) {
             /* XXX error condition - redeclaration */
             return 0;
         }
-        if (np->nameflags & NAME_M_RESERVED) {
+        if ((np->nameflags & NAME_M_RESERVED) != 0) {
             /* XXX error condition - reserved word */
             return 0;
         }
-    } else {
+    }
+    if (np == 0) {
         np = name_alloc(id, len);
         name_insert(scope, np);
     }
@@ -414,4 +425,15 @@ name_declare (scopectx_t scope, const char *id, size_t len,
 
     return np;
 
-} /* name_declare */
+} /* name_declare_internal */
+
+name_t *
+name_declare (scopectx_t scope, const char *id, size_t len,
+              lextype_t type, textpos_t pos) {
+    return name_declare_internal(scope, id, len, type, pos, 1);
+}
+name_t *
+name_declare_nocheck (scopectx_t scope, const char *id, size_t len,
+                      lextype_t type, textpos_t pos) {
+    return name_declare_internal(scope, id, len, type, pos, 0);
+}

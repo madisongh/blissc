@@ -42,8 +42,10 @@ struct frame_s {
     struct psect_s  *psect;
     struct frame_s  *parent;
     struct seg_s    *segchain, *seglast;
+    struct seg_s    *registers[MACH_K_MAXREGS];
     textpos_t        defpos;
     unsigned long    size;
+    // XXX will need linkage and register info here
 };
 
 
@@ -69,14 +71,25 @@ struct seg_static_s {
     unsigned long    size;
     initval_t       *initializer, *iv_last;
 };
+struct seg_external_s {
+    strdesc_t       *symbol;
+};
 struct seg_stack_s {
     frame_t         *frame;
     unsigned long    offset;
     unsigned long    size;
     initval_t       *initializer, *iv_last;
 };
+struct seg_reg_s {
+    frame_t         *frame;
+    unsigned int     regnum;
+    unsigned long    size;
+    initval_t       *initializer, *iv_last;
+    int              regnum_set;
+};
 struct seg_literal_s {
     unsigned long    value;
+    int              has_value;
 };
 
 struct seg_s {
@@ -87,13 +100,13 @@ struct seg_s {
     unsigned int    flags;
     unsigned int    alignment;
     union {
-        struct seg_static_s staticinfo;
-        struct seg_stack_s  stackinfo;
+        struct seg_static_s  staticinfo;
+        struct seg_external_s   extinfo;
+        struct seg_stack_s   stackinfo;
+        struct seg_reg_s     reginfo;
         struct seg_literal_s litinfo;
     }               info;
 };
-
-
 
 stgctx_t
 storage_init (machinedef_t *mach)
@@ -259,8 +272,13 @@ seg_free (stgctx_t ctx, seg_t *seg)
             initval_freelist(ctx, seg->info.stackinfo.initializer);
             break;
         case SEGTYPE_STATIC:
-            initval_freelist(ctx, seg->info.stackinfo.initializer);
+            initval_freelist(ctx, seg->info.staticinfo.initializer);
             break;
+        case SEGTYPE_EXTERNAL:
+            string_free(seg->info.extinfo.symbol);
+            break;
+        case SEGTYPE_REGISTER:
+            initval_freelist(ctx, seg->info.reginfo.initializer);
     }
     memset(seg, 0x7a, sizeof(seg_t));
     seg->next = ctx->freesegs;
@@ -308,7 +326,7 @@ seg_storage_commit (stgctx_t ctx, seg_t *seg)
             }
             seg->flags |= SEG_M_ALLOCATED;
         }
-    } else {
+    } else if (seg->type == SEGTYPE_STACK) {
         if (seg->info.stackinfo.size == 0) {
             return;
         }
@@ -325,6 +343,21 @@ seg_storage_commit (stgctx_t ctx, seg_t *seg)
             }
             seg->flags |= SEG_M_ALLOCATED;
         }
+    } else if (seg->type == SEGTYPE_REGISTER) {
+        seg->info.reginfo.frame = ctx->curframe;
+        if (seg->info.reginfo.frame != 0) {
+            frame_t *frame = seg->info.reginfo.frame;
+            if (seg->info.reginfo.regnum_set) {
+                frame->registers[seg->info.reginfo.regnum] = seg;
+            }
+        }
+        if (seg->info.reginfo.size == 0) {
+            seg->info.reginfo.size = machine_scalar_units(ctx->mach);
+        }
+
+        // XXX - need to handle registers here
+
+        seg->flags |= SEG_M_ALLOCATED;
     }
 
 } /* seg_storage_commit */
@@ -351,7 +384,24 @@ seg_stack_frame (stgctx_t ctx, seg_t *seg)
 {
     return (seg->type == SEGTYPE_STACK ?
             seg->info.stackinfo.frame :
-            0);
+            (seg->type == SEGTYPE_REGISTER ?
+             seg->info.reginfo.frame : 0));
+}
+
+strdesc_t *
+seg_ext_symbol (stgctx_t ctx, seg_t *seg)
+{
+    return (seg->type == SEGTYPE_EXTERNAL ?
+            seg->info.extinfo.symbol : 0);
+}
+
+void
+seg_ext_symbol_set (stgctx_t ctx, seg_t *seg, strdesc_t *sym)
+{
+    if (seg->type != SEGTYPE_EXTERNAL) {
+        return;
+    }
+    seg->info.extinfo.symbol = string_copy(0, sym);
 }
 
 unsigned long
@@ -411,6 +461,30 @@ seg_flags_set (stgctx_t ctx, seg_t *seg, unsigned int flags)
 {
     seg->flags = (seg->flags & ~SEG_M_USERFLAGS) |
     (flags & SEG_M_USERFLAGS);
+}
+
+segtype_t
+seg_type (seg_t *seg) {
+    return seg->type;
+}
+
+int
+seg_register_number_set (stgctx_t ctx, seg_t *seg, unsigned int regnum)
+{
+    frame_t *frame = ctx->curframe;
+
+    if (seg->flags & SEG_M_ALLOCATED) {
+        return 0;
+    }
+    if (regnum >= machine_register_count(ctx->mach)) {
+        return 0;
+    }
+    if (frame->registers[regnum] != 0) {
+        return 0;
+    }
+    seg->info.reginfo.regnum = regnum;
+    seg->info.reginfo.regnum_set = 1;
+    return 1;
 }
 
 int
@@ -715,6 +789,19 @@ seg_alloc_stack (stgctx_t ctx, textpos_t defpos, int stackonly)
 }
 
 seg_t *
+seg_alloc_register (stgctx_t ctx, textpos_t defpos)
+{
+    seg_t *seg;
+
+    seg = seg_alloc(ctx, SEGTYPE_REGISTER, defpos);
+
+    if (seg == 0) {
+        return 0;
+    }
+    return seg;
+}
+
+seg_t *
 seg_alloc_literal (stgctx_t ctx, textpos_t defpos, unsigned long value)
 {
     seg_t *seg = seg_alloc(ctx, SEGTYPE_LITERAL, defpos);
@@ -724,6 +811,17 @@ seg_alloc_literal (stgctx_t ctx, textpos_t defpos, unsigned long value)
         seg->info.litinfo.value = value;
     }
 
+    return seg;
+}
+
+seg_t *
+seg_alloc_external (stgctx_t ctx, textpos_t defpos, strdesc_t *sym)
+{
+    seg_t *seg = seg_alloc(ctx, SEGTYPE_EXTERNAL, defpos);
+    if (seg != 0) {
+        seg->type = SEGTYPE_EXTERNAL;
+        seg->info.extinfo.symbol = string_copy(0, sym);
+    }
     return seg;
 }
 

@@ -117,6 +117,7 @@ static int parse_incrdecr(void *pctx, quotelevel_t ql,
                           quotemodifier_t qm, lextype_t lt, condstate_t cs,
                           lexeme_t *orig, lexseq_t *result);
 static int get_ctce(parse_ctx_t pctx, stgctx_t stg, long *valp);
+static int name_is_ltc(name_t *np, seg_t **segp);
 
 const char *
 exprtype_name (exprtype_t type) {
@@ -189,6 +190,7 @@ expr_node_free (expr_node_t *node, stgctx_t stg) {
     }
     switch (expr_type(node)) {
         case EXPTYPE_PRIM_SEG:
+        case EXPTYPE_PRIM_SEGNAME:
             break;
         case EXPTYPE_OPERATOR:
             expr_node_free(expr_op_lhs(node), stg);
@@ -625,7 +627,11 @@ lex_to_expr (lextype_t lt, lexeme_t *lex)
         }
         case LEXTYPE_SEGMENT:
             exp = expr_node_alloc(EXPTYPE_PRIM_SEG, lexeme_textpos_get(lex));
-            expr_segval_set(exp, lexeme_ctx_get(lex));
+            expr_seg_base_set(exp, lexeme_ctx_get(lex));
+            break;
+        case LEXTYPE_NAME_DATA:
+            exp = expr_node_alloc(EXPTYPE_PRIM_SEGNAME, lexeme_textpos_get(lex));
+            expr_segname_set(exp, lexeme_ctx_get(lex));
             break;
         default:
             break;
@@ -749,7 +755,7 @@ parse_primary (parse_ctx_t pctx, lextype_t lt, lexeme_t *lex,
             return 0;
         }
     } else if (lt == LEXTYPE_NUMERIC || lt == LEXTYPE_SEGMENT ||
-               lt == LEXTYPE_STRING) {
+               lt == LEXTYPE_STRING || lt == LEXTYPE_NAME_DATA) {
         if (lt == LEXTYPE_STRING && lexeme_textlen(lex) > machine_scalar_maxbytes(mach)) {
             strdesc_t *text = lexeme_text(lex);
             if (!lstrok) {
@@ -872,20 +878,21 @@ parse_op_expr (parse_ctx_t pctx, optype_t curop, expr_node_t **expp)
 } /* parse_op_expr */
 
 void
-reduce_op_expr (stgctx_t stg, expr_node_t *node) {
-    expr_node_t *lhs, *rhs;
+reduce_op_expr (stgctx_t stg, expr_node_t **nodep) {
+    expr_node_t *node, *lhs, *rhs;
 
+    node = *nodep;
     if (!expr_is_opexp(node)) {
         return;
     }
 
     lhs = expr_op_lhs(node);
     if (expr_is_opexp(lhs)) {
-        reduce_op_expr(stg, lhs);
+        reduce_op_expr(stg, &lhs);
     }
     rhs = expr_op_rhs(node);
     if (expr_is_opexp(rhs)) {
-        reduce_op_expr(stg, rhs);
+        reduce_op_expr(stg, &rhs);
     }
     // Check for unary +/- of a CTCE
     if (expr_is_noop(lhs)) {
@@ -995,8 +1002,131 @@ reduce_op_expr (stgctx_t stg, expr_node_t *node) {
             expr_node_free(rhs, stg);
             expr_type_set(node, EXPTYPE_PRIM_LIT);
             expr_litval_set(node, result);
+            return;
         }
     }
+
+    // Not a CTCE.  See if it's add-to-zero.  If so,
+    // replace node with the other term.
+    // Also check for SEG+offset or offset+SEG,
+    // and create SEG expression with the offset included.
+    if (expr_op_type(node) == OPER_ADD) {
+        if (expr_type(lhs) == EXPTYPE_PRIM_LIT) {
+            if (expr_litval(lhs) == 0) {
+                expr_node_t *tmp = rhs;
+                expr_op_rhs_set(node, 0);
+                expr_node_free(node, stg);
+                *nodep = tmp;
+                return;
+            }
+            if (expr_type(rhs) == EXPTYPE_PRIM_SEG) {
+                expr_node_t *tmp = rhs;
+                expr_op_rhs_set(node, 0);
+                expr_seg_offset_set(tmp, expr_seg_offset(tmp)+expr_litval(lhs));
+                expr_node_free(node, stg);
+                *nodep = tmp;
+                return;
+            }
+            if (expr_type(rhs) == EXPTYPE_PRIM_SEGNAME) {
+                seg_t *seg;
+                if (name_is_ltc(expr_segname(rhs), &seg)) {
+                    expr_node_t *tmp = expr_node_alloc(EXPTYPE_PRIM_SEG,
+                                                       expr_textpos(rhs));
+                    expr_seg_base_set(tmp, seg);
+                    expr_seg_offset_set(tmp, expr_litval(lhs));
+                    expr_node_free(node, stg);
+                    *nodep = tmp;
+                    return;
+                }
+            }
+        }
+        if (expr_type(rhs) == EXPTYPE_PRIM_LIT) {
+            if (expr_litval(rhs) == 0) {
+                expr_node_t *tmp = lhs;
+                expr_op_lhs_set(node, 0);
+                expr_node_free(node, stg);
+                *nodep = tmp;
+                return;
+            }
+            if (expr_type(lhs) == EXPTYPE_PRIM_SEG) {
+                expr_node_t *tmp = lhs;
+                expr_op_lhs_set(node, 0);
+                expr_seg_offset_set(tmp, expr_seg_offset(tmp)+expr_litval(rhs));
+                expr_node_free(node, stg);
+                *nodep = tmp;
+                return;
+            }
+            if (expr_type(lhs) == EXPTYPE_PRIM_SEGNAME) {
+                seg_t *seg;
+                if (name_is_ltc(expr_segname(lhs), &seg)) {
+                    expr_node_t *tmp = expr_node_alloc(EXPTYPE_PRIM_SEG,
+                                                       expr_textpos(lhs));
+                    expr_seg_base_set(tmp, seg);
+                    expr_seg_offset_set(tmp, expr_litval(rhs));
+                    expr_node_free(node, stg);
+                    *nodep = tmp;
+                    return;
+                }
+            }
+        }
+    }
+
+    // Now check for multiply-by-1, which again
+    // reduces to just the other term.
+    if (expr_op_type(node) == OPER_MULT) {
+        if (expr_type(lhs) == EXPTYPE_PRIM_LIT &&
+            expr_litval(lhs) == 1) {
+            expr_node_t *tmp = rhs;
+            expr_op_rhs_set(node, 0);
+            expr_node_free(node, stg);
+            *nodep = tmp;
+            return;
+        }
+        if (expr_type(rhs) == EXPTYPE_PRIM_LIT &&
+            expr_litval(rhs) == 1) {
+            expr_node_t *tmp = lhs;
+            expr_op_lhs_set(node, 0);
+            expr_node_free(node, stg);
+            *nodep = tmp;
+            return;
+        }
+    }
+
+    // Now check for subtracting zero,
+    // and for segment - constant offset
+    if (expr_op_type(node) == OPER_SUBTRACT) {
+        if (expr_type(rhs) == EXPTYPE_PRIM_LIT) {
+            if (expr_litval(rhs) == 0) {
+                expr_node_t *tmp = lhs;
+                expr_op_lhs_set(node, 0);
+                expr_node_free(node, stg);
+                *nodep = tmp;
+                return;
+            }
+            if (expr_type(lhs) == EXPTYPE_PRIM_SEG) {
+                expr_node_t *tmp = lhs;
+                expr_op_lhs_set(node, 0);
+                expr_seg_offset_set(tmp, expr_seg_offset(tmp)-expr_litval(rhs));
+                expr_node_free(node, stg);
+                *nodep = tmp;
+                return;
+            }
+            if (expr_type(lhs) == EXPTYPE_PRIM_SEGNAME) {
+                seg_t *seg;
+                if (name_is_ltc(expr_segname(lhs), &seg)) {
+                    expr_node_t *tmp = expr_node_alloc(EXPTYPE_PRIM_SEG,
+                                                       expr_textpos(lhs));
+                    expr_seg_base_set(tmp, seg);
+                    expr_seg_offset_set(tmp, -expr_litval(rhs));
+                    expr_node_free(node, stg);
+                    *nodep = tmp;
+                    return;
+                }
+            }
+        }
+    }
+
+    // XXX also need to check for <ltce> relA|- <ltce>
 
 } /* reduce_op_expr */
 
@@ -1038,7 +1168,7 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp,
         lexeme_free(lex);
         status = parse_op_expr(pctx, op, expp);
         if (status && !recursed) {
-            reduce_op_expr(stg, *expp);
+            reduce_op_expr(stg, expp);
         }
         return status;
     }
@@ -1052,7 +1182,7 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp,
         }
         status = parse_op_expr(pctx, op, expp);
         if (status && !recursed) {
-            reduce_op_expr(stg, *expp);
+            reduce_op_expr(stg, expp);
         }
         return status;
     }
@@ -1089,12 +1219,11 @@ expr_parse_next (parse_ctx_t pctx, lexeme_t **lexp,
         (*lexp)->type = LEXTYPE_NUMERIC;
         string_free(str);
         expr_node_free(exp, stg);
-    } else if (expr_type(exp) == EXPTYPE_PRIM_SEG) {
-        strdesc_t dsc = STRDEF("<segment>");
-        *lexp = parser_lexeme_create(pctx, LEXTYPE_SEGMENT, &dsc);
-        lexeme_ctx_set(*lexp, expr_segval(exp));
-        (*lexp)->type = LEXTYPE_SEGMENT;
-        expr_node_free(exp, stg);
+    } else if (expr_type(exp) == EXPTYPE_PRIM_SEGNAME) {
+        strdesc_t *namedsc = name_string(expr_segname(exp));
+        *lexp = parser_lexeme_create(pctx, LEXTYPE_NAME_DATA, namedsc);
+        (*lexp)->type = LEXTYPE_NAME_DATA;
+        lexeme_ctx_set(*lexp, expr_segname(exp));
     } else {
         strdesc_t dsc = STRDEF("<expression>");
         *lexp = parser_lexeme_create(pctx, LEXTYPE_EXPRESSION, &dsc);
@@ -1162,6 +1291,41 @@ parse_ctce (parse_ctx_t pctx, lexeme_t **lexp)
 } /* parse_ctce */
 
 /*
+ * name_is_ltc
+ *
+ * NB: this checks strictly for link-time constants.
+ *     It does not grandfather in compile-time constants!
+ */
+static int
+name_is_ltc (name_t *np, seg_t **segp)
+{
+    nameinfo_t *ni;
+    nametype_t nt;
+
+    if (name_type(np) != LEXTYPE_NAME_DATA) {
+        return 0;
+    }
+    ni = name_data_ptr(np);
+    nt = nameinfo_type(ni);
+    switch (nt) {
+        case NAMETYPE_EXTLIT:
+        case NAMETYPE_GLOBLIT:
+            *segp = nameinfo_gxlit_seg(ni);
+            return 1;
+        case NAMETYPE_EXTERNAL:
+        case NAMETYPE_GLOBAL:
+        case NAMETYPE_OWN:
+        case NAMETYPE_FORWARD:
+            *segp = nameinfo_data_seg(ni);
+            return 1;
+        default:
+            break;
+    }
+    return 0;
+
+} /* name_is_ltc */
+
+/*
  * expr_parse_block
  *
  * External routine for parsing a block (specifically
@@ -1201,8 +1365,16 @@ expr_dumpinfo (expr_node_t *exp) {
         case EXPTYPE_PRIM_LIT:
             return string_printf(0, "LIT=%ld", expr_litval(exp));
         case EXPTYPE_PRIM_SEG: {
-            strdesc_t *str = string_from_chrs(0, "SEG:", 4);
-            return string_append(str, seg_dumpinfo(expr_segval(exp)));
+            strdesc_t *res;
+            strdesc_t *str = seg_dumpinfo(expr_seg_base(exp));
+            res = string_printf(0, "SEG: %-*.*s(%ld)", str->len, str->len,
+                                str->ptr, expr_seg_offset(exp));
+            string_free(str);
+            return res;
+        }
+        case EXPTYPE_PRIM_SEGNAME: {
+            strdesc_t *str = string_from_chrs(0, "SEGNAME:",8);
+            return string_append(str, name_string(expr_segname(exp)));
         }
         case EXPTYPE_OPERATOR:
             return string_printf(0, "OP:%s", oper_name(expr_op_type(exp)));
