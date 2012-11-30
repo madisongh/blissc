@@ -56,7 +56,10 @@ static name_t expr_names[] = {
     NAMEDEF("DECRU", LEXTYPE_CTRL_DECRU, NAME_M_RESERVED),
     NAMEDEF("WHILE", LEXTYPE_CTRL_WHILE, NAME_M_RESERVED),
     NAMEDEF("UNTIL", LEXTYPE_CTRL_UNTIL, NAME_M_RESERVED),
-    NAMEDEF("DO", LEXTYPE_CTRL_DO, NAME_M_RESERVED)
+    NAMEDEF("DO", LEXTYPE_CTRL_DO, NAME_M_RESERVED),
+    NAMEDEF("EXITLOOP", LEXTYPE_CTRL_EXITLOOP, NAME_M_RESERVED),
+    NAMEDEF("LEAVE", LEXTYPE_CTRL_LEAVE, NAME_M_RESERVED),
+    NAMEDEF("WITH", LEXTYPE_KWD_WITH, NAME_M_RESERVED)
 };
 
 #undef OPMAP
@@ -101,6 +104,8 @@ static const struct {
 #define DOOPTYPE(t_) "OPER_" #t_,
 static const char *oper_names[] = { DOOPTYPES };
 #undef DOOPTYPE
+
+static void *fake_label_ptr = (void *)0xffeeeeff;
 
 static int parse_expr(parse_ctx_t pctx, expr_node_t **expp,
                       int recursed, int lstrok);
@@ -189,9 +194,6 @@ expr_node_free (expr_node_t *node, stgctx_t stg) {
         return;
     }
     switch (expr_type(node)) {
-        case EXPTYPE_PRIM_SEG:
-        case EXPTYPE_PRIM_SEGNAME:
-            break;
         case EXPTYPE_OPERATOR:
             expr_node_free(expr_op_lhs(node), stg);
             expr_node_free(expr_op_rhs(node), stg);
@@ -279,8 +281,14 @@ expr_node_free (expr_node_t *node, stgctx_t stg) {
             break;
         }
 
+        case EXPTYPE_CTRL_EXIT:
+            expr_node_free(expr_exit_value(node), stg);
+            break;
+
         case EXPTYPE_PRIM_LIT:
         case EXPTYPE_NOOP:
+        case EXPTYPE_PRIM_SEG:
+        case EXPTYPE_PRIM_SEGNAME:
         case EXPTYPE_EXECFUN: // TBD XXX
             break;
     }
@@ -303,9 +311,6 @@ expr_node_copy (expr_node_t *node)
     memcpy(dst, node, sizeof(expr_node_t));
 
     switch (expr_type(node)) {
-        case EXPTYPE_PRIM_SEG:
-        case EXPTYPE_PRIM_SEGNAME:
-            break;
         case EXPTYPE_OPERATOR:
             expr_op_lhs_set(dst, expr_node_copy(expr_op_lhs(node)));
             expr_op_rhs_set(dst, expr_node_copy(expr_op_rhs(node)));
@@ -432,10 +437,15 @@ expr_node_copy (expr_node_t *node)
             }
             break;
         }
+        case EXPTYPE_CTRL_EXIT:
+            expr_exit_value_set(dst, expr_node_copy(expr_exit_value(node)));
+            break;
             
         case EXPTYPE_PRIM_LIT:
         case EXPTYPE_NOOP:
         case EXPTYPE_EXECFUN: // TBD XXX
+        case EXPTYPE_PRIM_SEG:
+        case EXPTYPE_PRIM_SEGNAME:
             break;
     }
 
@@ -527,17 +537,37 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
     lexeme_t *lex;
     scopectx_t scope = 0;
     expr_node_t *exp = 0;
-    expr_node_t *seq, *last;
+    expr_node_t *seq, *last, *valexp;
     int expr_count;
     textpos_t endpos;
     lextype_t closer = (curlt == LEXTYPE_EXP_DELIM_BEGIN ?
                         LEXTYPE_EXP_DELIM_END : LEXTYPE_DELIM_RPAR);
 
 
+    // Set a special value for the labels so that
+    // LEAVE processing will know that the labels are OK
+    for (lex = lexseq_head(labels); lex != 0; lex = lexeme_next(lex)) {
+        if (lexeme_ctx_get(lex) != 0) {
+            name_t *np = lexeme_ctx_get(lex);
+            if (np == 0 || name_data_ptr(np) != 0) {
+                /* XXX error condition */
+            } else {
+                name_data_set_ptr(np, fake_label_ptr);
+            }
+        }
+    }
+    while ((lex = lexseq_remhead(labels))) {
+        name_t *np = lexeme_ctx_get(lex);
+        if (name_data_ptr(np) != 0) {
+            /* XXX error condition */
+        }
+        name_data_set_ptr(np, exp);
+        lexeme_free(lex);
+    }
     lt = parser_next(pctx, QL_NORMAL, &lex);
 
     expr_count = 0;
-    seq = last = 0;
+    valexp = seq = last = 0;
     while (1) {
         if (lt == closer) {
             endpos = lexeme_textpos_get(lex);
@@ -569,6 +599,7 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
             break;
         }
         expr_count += 1;
+        valexp = exp;
         if (seq == 0) {
             last = seq = exp;
         } else {
@@ -577,7 +608,7 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
         }
         lt = parser_next(pctx, QL_NORMAL, &lex);
         if (lt == LEXTYPE_DELIM_SEMI) {
-            // discard the expression's value
+            valexp = 0;
             lexeme_free(lex);
             lt = parser_next(pctx, QL_NORMAL, &lex);
         }
@@ -596,12 +627,13 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
     exp = expr_node_alloc(EXPTYPE_PRIM_BLK, endpos);
     expr_blk_scope_set(exp, scope);
     expr_blk_seq_set(exp, seq);
+    expr_blk_valexp_set(exp, valexp);
     expr_blk_codecomment_set(exp, codecomment);
     *expp = exp;
     // Now point the labels at us
     while ((lex = lexseq_remhead(labels))) {
         name_t *np = lexeme_ctx_get(lex);
-        if (name_data_ptr(np) != 0) {
+        if (np == 0 || name_data_ptr(np) != fake_label_ptr) {
             /* XXX error condition */
         }
         name_data_set_ptr(np, exp);
@@ -611,6 +643,55 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
     return 1;
 
 } /* parse_block */
+
+static int
+parse_leave (parse_ctx_t pctx, expr_node_t **expp)
+{
+
+    expr_node_t *exp, *valexp;
+    lexeme_t *lex;
+    strdesc_t *label;
+    name_t *lp;
+
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NAME_LABEL, &lex, 1)) {
+        /* XXX error condition */
+    }
+    label = lexeme_text(lex);
+    lp = lexeme_ctx_get(lex);
+    if (lp == 0 || name_data_ptr(lp) != fake_label_ptr) {
+        /* XXX error condition */
+    }
+    valexp = 0;
+    if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_WITH, 0, 1)) {
+        if (!parse_expr(pctx, &valexp, 0, 0)) {
+            /* XXX error condition */
+        }
+    }
+    exp = expr_node_alloc(EXPTYPE_CTRL_EXIT, lexeme_textpos_get(lex));
+    expr_exit_label_set(exp, lp);
+    expr_exit_value_set(exp, valexp);
+    expr_has_value_set(exp, (valexp != 0));
+    return 1;
+
+} /* parse_leave */
+
+static int
+parse_exitloop (parse_ctx_t pctx, expr_node_t **expp)
+{
+    expr_node_t *exp, *valexp;
+
+    if (parser_loopdepth(pctx) == 0) {
+        /* XXX error condition */
+    }
+    exp = expr_node_alloc(EXPTYPE_CTRL_EXIT, parser_curpos(pctx));
+    valexp = 0;
+    if (parse_expr(pctx, &valexp, 0, 0)) {
+        expr_exit_value_set(exp, valexp);
+        expr_has_value_set(exp, 1);
+    }
+    return 1;
+
+} /* parse_exitloop */
 
 static int
 parse_wu_loop (parse_ctx_t pctx, lextype_t opener, expr_node_t **expp)
@@ -626,15 +707,20 @@ parse_wu_loop (parse_ctx_t pctx, lextype_t opener, expr_node_t **expp)
         /* XXX error condition */
         return 0;
     }
+    parser_loopdepth_incr(pctx);
     if (!parse_expr(pctx, &body, 0, 0)) {
+        parser_loopdepth_decr(pctx);
         /* XXX error condition */
         return 0;
     }
-
+    parser_loopdepth_decr(pctx);
+    
     exp = expr_node_alloc(EXPTYPE_CTRL_LOOPWU, parser_curpos(pctx));
     expr_wuloop_test_set(exp, test);
     expr_wuloop_type_set(exp, LOOP_PRETEST);
     expr_wuloop_body_set(exp, body);
+    // XXX should evaluate the loop exits for values
+    expr_has_value_set(exp, 1);
     *expp = exp;
 
     return 1;
@@ -649,10 +735,14 @@ parse_do_loop (parse_ctx_t pctx, lextype_t opener, expr_node_t **expp)
     expr_node_t *body, *test, *exp;
 
     body = test = 0;
+    parser_loopdepth_incr(pctx);
     if (!parse_expr(pctx, &body, 0, 0)) {
+        parser_loopdepth_decr(pctx);
         /* XXX error condition */
         return 0;
     }
+    parser_loopdepth_decr(pctx);
+
     lt = parser_next(pctx, QL_NORMAL, &lex);
     if (lt != LEXTYPE_CTRL_WHILE && lt != LEXTYPE_CTRL_UNTIL) {
         /* XXX error condition */
@@ -670,6 +760,8 @@ parse_do_loop (parse_ctx_t pctx, lextype_t opener, expr_node_t **expp)
     expr_wuloop_test_set(exp, test);
     expr_wuloop_type_set(exp, LOOP_POSTTEST);
     expr_wuloop_body_set(exp, body);
+    // XXX should evaluate the loop exits for values
+    expr_has_value_set(exp, 1);
     *expp = exp;
     return 1;
 
@@ -792,6 +884,7 @@ lex_to_expr (lextype_t lt, lexeme_t *lex)
             break;
     }
 
+    expr_has_value_set(exp, 1);
     return exp;
 
 } /* lex_to_expr */
@@ -832,6 +925,7 @@ parse_fldref (parse_ctx_t pctx, stgctx_t stg, expr_node_t **expp) {
     expr_fldref_pos_set(exp, pos);
     expr_fldref_size_set(exp, size);
     expr_fldref_signext_set(exp, (signext != 0));
+    expr_has_value_set(exp, 1);
     *expp = exp;
     return 1;
 
@@ -850,10 +944,11 @@ parse_primary (parse_ctx_t pctx, lextype_t lt, lexeme_t *lex,
     lexseq_init(&labels);
     if (lt == LEXTYPE_EXPRESSION) {
         exp = lexeme_ctx_get(lex);
-        lexeme_free(lex);
-        if (!expr_is_primary(exp)) {
+        if (expr_is_primary(exp)) { // XXX or is an execfunc call??
+            lexeme_free(lex);
             *expp = exp;
-            return 1;
+        } else {
+            return 0;
         }
     } else if (lt == LEXTYPE_KWD_CODECOMMENT) {
         lexeme_free(lex);
@@ -1018,12 +1113,14 @@ parse_op_expr (parse_ctx_t pctx, optype_t curop, expr_node_t **expp)
         expr_op_type_set(thisnode, curop);
         expr_op_lhs_set(thisnode, lhs);
         expr_op_rhs_set(thisnode, rhs);
+        expr_has_value_set(thisnode, 1);
         *expp = thisnode;
     } else {
         thisnode = expr_node_alloc(EXPTYPE_OPERATOR, expr_textpos(rhs));
         expr_op_type_set(thisnode, curop);
         expr_op_rhs_set(thisnode, expr_op_lhs(rhs));
         expr_op_lhs_set(rhs, thisnode);
+        expr_has_value_set(thisnode, 1);
         *expp = rhs;
     }
 
@@ -1322,6 +1419,14 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp,
         lexeme_free(lex);
         return parse_do_loop(pctx, lt, expp);
     }
+    if (lt == LEXTYPE_CTRL_LEAVE) {
+        lexeme_free(lex);
+        return parse_leave(pctx, expp);
+    }
+    if (lt == LEXTYPE_CTRL_EXITLOOP) {
+        lexeme_free(lex);
+        return parse_exitloop(pctx, expp);
+    }
 
     if (check_unary_op(lt, &op)) {
         lexeme_free(lex);
@@ -1346,6 +1451,18 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp,
         return status;
     }
 
+    // Note that parse_primary also checks for LEXTYPE_EXPRESSION,
+    // and handles it if it's a primary (to check for field refs).
+    // So we do this check here *after* the parse_primary check.
+    if (lt == LEXTYPE_EXPRESSION) {
+        *expp = lexeme_ctx_get(lex);
+        lexeme_free(lex);
+        return 1;
+    }
+
+    // Found something that isn't an expression, put it back
+    parser_insert(pctx, lex);
+
     return status;
 
 } /* parse_expr */
@@ -1357,50 +1474,94 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp,
  * Automatically binds literals and segments
  * to appropriate lexemes.
  */
-lextype_t
+int
 expr_parse_next (parse_ctx_t pctx, lexeme_t **lexp,
                  int lstrok) {
 
-    stgctx_t stg = parser_get_cctx(pctx);
     expr_node_t *exp = 0;
+    lexeme_t *lex = 0;
 
     if (!parse_expr(pctx, &exp, 0, lstrok)) {
-        return parser_next(pctx, QL_NORMAL, lexp);
+        return 0;
     }
-
-    // Bind a CTCE to its value,
-    // bind a segment reference to its value
-    // otherwise, return an EXPRESSION lexeme
-    if (expr_type(exp) == EXPTYPE_PRIM_LIT) {
-        strdesc_t *str = string_printf(0, "%ld", expr_litval(exp));
-        *lexp = parser_lexeme_create(pctx, LEXTYPE_NUMERIC, str);
-        lexeme_val_setsigned(*lexp, expr_litval(exp));
-        (*lexp)->type = LEXTYPE_NUMERIC;
-        string_free(str);
-        expr_node_free(exp, stg);
-    } else if (expr_type(exp) == EXPTYPE_PRIM_SEGNAME) {
-        if (expr_segname(exp) != 0) {
-            strdesc_t *namedsc = name_string(expr_segname(exp));
-            *lexp = parser_lexeme_create(pctx, LEXTYPE_NAME_DATA, namedsc);
-            (*lexp)->type = LEXTYPE_NAME_DATA;
-            lexeme_ctx_set(*lexp, expr_segname(exp));
-        } else {
-            /* XXX error condition */
-            strdesc_t dsc = STRDEF("<expression>");
-            *lexp = parser_lexeme_create(pctx, LEXTYPE_EXPRESSION, &dsc);
-            lexeme_ctx_set(*lexp, exp);
-            (*lexp)->type = LEXTYPE_EXPRESSION;
-        }
-    } else {
-        strdesc_t dsc = STRDEF("<expression>");
-        *lexp = parser_lexeme_create(pctx, LEXTYPE_EXPRESSION, &dsc);
-        lexeme_ctx_set(*lexp, exp);
-        (*lexp)->type = LEXTYPE_EXPRESSION;
+    if (!expr_setlex(pctx, &lex, exp)) {
+        return 0;
     }
-
+    *lexp = lex;
     return 1;
 }
 
+int
+expr_setlex (parse_ctx_t pctx, lexeme_t **lexp, expr_node_t *exp)
+{
+    stgctx_t stg = parser_get_cctx(pctx);
+    lexeme_t *lex = *lexp;
+    static strdesc_t exprstr = STRDEF("<expression>");
+
+    // Bind a CTCE to its value,
+    if (expr_type(exp) == EXPTYPE_PRIM_LIT) {
+        strdesc_t *str = string_printf(0, "%ld", expr_litval(exp));
+        if (lex == 0) {
+            lex = parser_lexeme_create(pctx, LEXTYPE_NUMERIC, str);
+        } else {
+            lexeme_text_set(lex, str);
+            lex->boundtype = LEXTYPE_NUMERIC;
+        }
+        lexeme_val_setsigned(lex, expr_litval(exp));
+        lex->type = LEXTYPE_NUMERIC;
+        string_free(str);
+        expr_node_free(exp, stg);
+        *lexp = lex;
+        return 1;
+    }
+
+    // Segment names OK to put into a lexeme, too
+    if (expr_type(exp) == EXPTYPE_PRIM_SEGNAME && expr_segname(exp) != 0) {
+        strdesc_t *namedsc = name_string(expr_segname(exp));
+        if (lex == 0) {
+            lex = parser_lexeme_create(pctx, LEXTYPE_NAME_DATA, namedsc);
+        } else {
+            lexeme_text_set(lex, namedsc);
+            lex->boundtype = LEXTYPE_NAME_DATA;
+        }
+        lex->type = LEXTYPE_NAME_DATA;
+        lexeme_ctx_set(lex, expr_segname(exp));
+        expr_node_free(exp, stg);
+        *lexp = lex;
+        return 1;
+    }
+
+    if (lex == 0) {
+        lex = parser_lexeme_create(pctx, LEXTYPE_EXPRESSION, &exprstr);
+    }
+    lex->type = lex->boundtype = LEXTYPE_EXPRESSION;
+    lexeme_ctx_set(lex, exp);
+
+    *lexp = lex;
+    return 1;
+}
+
+int
+expr_parse_seq (parse_ctx_t pctx, lexseq_t *seq, expr_node_t **expp)
+{
+    strdesc_t nullstr = STRDEF("");
+    int status;
+
+    parser_insert(pctx, lexeme_create(LEXTYPE_MARKER, &nullstr));
+    parser_insert_seq(pctx, seq);
+    *expp = 0;
+    status = parse_expr(pctx, expp, 0, 0);
+    if (status) {
+        status = parser_expect(pctx, QL_NORMAL, LEXTYPE_MARKER, 0, 1);
+    }
+    if (!status) {
+        lexeme_t *lex;
+        while (parser_next(pctx, QL_NORMAL, &lex) != LEXTYPE_MARKER) {
+            lexseq_instail(seq, lex);
+        }
+    }
+    return status;
+}
 /*
  * parse_ctce
  *
@@ -1605,6 +1766,7 @@ parse_condexp (void *pctx, quotelevel_t ql, quotemodifier_t qm,
         expr_cond_test_set(exp, test);
         expr_cond_consequent_set(exp, cons);
         expr_cond_alternative_set(exp, alt);
+        expr_has_value_set(exp, (alt != 0));
     }
     orig->type = orig->boundtype = LEXTYPE_EXPRESSION;
     lexeme_ctx_set(orig, exp);
@@ -1652,6 +1814,7 @@ parse_case (void *pctx, quotelevel_t ql, quotemodifier_t qm,
     long lo, hi, ncases, i;
     int saw_inrange, saw_outrange, status;
     int unique_actions;
+    int every_case_has_value = 1;
 
     if (cs == COND_AWC || cs == COND_CWA) {
         lexeme_free(orig);
@@ -1768,6 +1931,9 @@ parse_case (void *pctx, quotelevel_t ql, quotemodifier_t qm,
             status = -1;
             break;
         }
+        if (!expr_has_value(exp)) {
+            every_case_has_value = 0;
+        }
         if (is_outrange) {
             if (outrange != 0) {
                 /* XXX error condition - repeats not allowed */
@@ -1807,6 +1973,7 @@ parse_case (void *pctx, quotelevel_t ql, quotemodifier_t qm,
         expr_case_outrange_set(exp, outrange);
         expr_case_actions_set(exp, cases);
         expr_case_index_set(exp, caseidx);
+        expr_has_value_set(exp, every_case_has_value);
         orig->type = orig->boundtype = LEXTYPE_EXPRESSION;
         lexeme_ctx_set(lex, exp);
     } else {
@@ -1839,6 +2006,9 @@ parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
     machinedef_t *mach = parser_get_machinedef(pctx);
     expr_node_t *si, *exp, *lo, *hi;
     expr_node_t *selseq, *seqlast, *selectors, *sellast, *sel;
+    int every_selector_has_value = 1;
+    int is_selectone;
+    int need_default_otherwise = 1;
 
     si = 0;
     if (!parse_expr(pctx, &si, 0, 0)) {
@@ -1852,6 +2022,9 @@ parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
         /* XXX error condition */
     }
     selseq = seqlast = 0;
+    is_selectone = (curlt == LEXTYPE_CTRL_SELECTONE
+                    || curlt == LEXTYPE_CTRL_SELECTONEU
+                    || curlt == LEXTYPE_CTRL_SELECTONEA);
     while (1) {
         selectors = sellast = 0;
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_TES, 0, 1)) {
@@ -1867,8 +2040,11 @@ parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
             lo = hi = 0;
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_OTHERWISE, 0, 1)) {
                 expr_selector_otherwise_set(sel, 1);
-            } else if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_ALWAYS, 0, 1)) {
+                need_default_otherwise = 0;
+            } else if (!is_selectone &&
+                       parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_ALWAYS, 0, 1)) {
                 expr_selector_always_set(sel, 1);
+                need_default_otherwise = 0;
             } else if (parse_expr(pctx, &lo, 0, 0)) {
                 if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_TO, 0, 1)) {
                     if (!parse_expr(pctx, &hi, 0, 0)) {
@@ -1907,6 +2083,9 @@ parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
             expr_node_free(exp, stg);
         } else {
             expr_selector_action_set(selectors, exp);
+            if (!expr_has_value(exp)) {
+                every_selector_has_value = 0;
+            }
             if (selseq == 0) {
                 selseq = seqlast = selectors;
             } else {
@@ -1919,6 +2098,24 @@ parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
         }
     } /* outer loop */
 
+    // Spec says that if nothing matches, the value of the
+    // expression should be set to -1, so fill in a default
+    // OTHERWISE here to do that, if we haven't seen an OTHERWISE
+    // or ALWAYS.
+    if (need_default_otherwise) {
+        sel = expr_node_alloc(EXPTYPE_SELECTOR, parser_curpos(pctx));
+        expr_selector_otherwise_set(sel, 1);
+        exp = expr_node_alloc(EXPTYPE_PRIM_LIT, parser_curpos(pctx));
+        expr_litval_set(exp, -1);
+        expr_selector_action_set(sel, exp);
+        if (selseq == 0) {
+            selseq = seqlast = sel;
+        } else {
+            expr_next_set(seqlast, sel);
+            seqlast = sel;
+        }
+    }
+
     if (selseq == 0) {
         /* XXX error condition */
         expr_node_free(si, stg);
@@ -1927,11 +2124,7 @@ parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
 
     exp = expr_node_alloc(EXPTYPE_CTRL_SELECT, parser_curpos(pctx));
     expr_sel_index_set(exp, si);
-    if (curlt == LEXTYPE_CTRL_SELECTONE ||
-        curlt == LEXTYPE_CTRL_SELECTONEU ||
-        curlt == LEXTYPE_CTRL_SELECTONEA) {
-        expr_sel_oneonly_set(exp, 1);
-    }
+    expr_sel_oneonly_set(exp, is_selectone);
     switch (curlt) {
         case LEXTYPE_CTRL_SELECT:
         case LEXTYPE_CTRL_SELECTONE:
@@ -1950,6 +2143,7 @@ parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
             break;
     }
     expr_sel_selectors_set(exp, selseq);
+    expr_has_value_set(exp, every_selector_has_value);
     orig->type = orig->boundtype = LEXTYPE_EXPRESSION;
     lexeme_ctx_set(orig, exp);
 
@@ -1968,7 +2162,12 @@ parse_incrdecr (void *pctx, quotelevel_t ql, quotemodifier_t qm,
     machinedef_t *mach = parser_get_machinedef(pctx);
     expr_node_t *fromexp, *toexp, *byexp, *body, *exp;
     lexeme_t *lex;
+    strdesc_t *indexname;
+    name_t *np;
+    nameinfo_t *ni;
+    scalar_attr_t scattr;
     scopectx_t scope;
+    seg_t *seg;
 
     fromexp = toexp = byexp = 0;
     scope = parser_scope_begin(pctx);
@@ -1979,7 +2178,24 @@ parse_incrdecr (void *pctx, quotelevel_t ql, quotemodifier_t qm,
         parser_insert(pctx, lex);
         return -1;
     }
-    // XXX need to declare the name LOCAL here
+
+    // Implicit declaration of the index name as LOCAL
+    indexname = lexeme_text(lex);
+    np = name_declare(scope, indexname->ptr, indexname->len,
+                      LEXTYPE_NAME_DATA, lexeme_textpos_get(lex));
+    ni = nameinfo_alloc(NAMETYPE_LOCAL);
+    seg = seg_alloc_stack(stg, lexeme_textpos_get(lex), 0);
+    if (np == 0 || ni == 0 || seg == 0) {
+        /* XXX error condition */
+        return -1;
+    }
+    scattr.signext = 0;
+    scattr.units = machine_scalar_units(mach);
+    nameinfo_data_scattr_set(ni, &scattr);
+    seg_size_set(stg, seg, scattr.units);
+    nameinfo_data_seg_set(ni, seg);
+    name_data_set_ptr(np, ni);
+
     if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_FROM, 0, 1)) {
         if (!parse_expr(pctx, &fromexp, 0, 0)) {
             /* XXX error condition */
@@ -1999,13 +2215,16 @@ parse_incrdecr (void *pctx, quotelevel_t ql, quotemodifier_t qm,
         /* XXX error condition */
     }
     body = 0;
+    parser_loopdepth_incr(pctx);
     if (!parse_expr(pctx, &body, 0, 0)) {
+        parser_loopdepth_decr(pctx);
         expr_node_free(fromexp, stg);
         expr_node_free(toexp, stg);
         expr_node_free(byexp, stg);
         parser_scope_end(pctx);
         return -1;
     }
+    parser_loopdepth_decr(pctx);
     parser_scope_end(pctx);
     exp = expr_node_alloc(EXPTYPE_CTRL_LOOPID, parser_curpos(pctx));
     expr_idloop_scope_set(exp, scope);
@@ -2042,6 +2261,9 @@ parse_incrdecr (void *pctx, quotelevel_t ql, quotemodifier_t qm,
         default:
             break;
     }
+    // XXX Really should validate that all exits have values,
+    //     but not sure we can do this until a later processing stage
+    expr_has_value_set(exp, 1);
     orig->type = orig->boundtype = LEXTYPE_EXPRESSION;
     lexeme_ctx_set(orig, exp);
     return 0;

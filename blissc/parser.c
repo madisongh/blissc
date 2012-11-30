@@ -33,6 +33,7 @@ struct parse_ctx_s {
     int             indecl;
     textpos_t       curpos;
     unsigned long   valmask;
+    unsigned int    loopdepth;
 };
 
 typedef int (*lexfunc_t)(parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt);
@@ -136,27 +137,39 @@ name_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
 {
     parse_ctx_t pctx = ctx;
     strdesc_t *ltext = lexeme_text(lex);
-    name_t *np = name_search(pctx->curscope, ltext->ptr, ltext->len, 1);
+    name_t *np = name_search(pctx->curscope, ltext->ptr, ltext->len, 0);
     lextype_t nt;
 
-    if (np == 0) {
-        // XXX error condition
-        return -1;
+    if (np != 0) {
+        nt = name_type(np);
     }
-
-    nt = name_type(np);
 
     // Check for lexical conditional skips
     if (cs == COND_CWA) {
-        if (nt != LEXTYPE_LXF_ELSE && nt != LEXTYPE_LXF_FI) {
+        if (np == 0 || (nt != LEXTYPE_LXF_ELSE && nt != LEXTYPE_LXF_FI)) {
             lexeme_free(lex);
             return 1;
         }
     } else if (cs == COND_AWC) {
-        if (nt != LEXTYPE_LXF_FI) {
+        if (np == 0 || nt != LEXTYPE_LXF_FI) {
             lexeme_free(lex);
             return 1;
         }
+    }
+
+    if (qm == QM_QUOTE) {
+        lex->type = LEXTYPE_UNBOUND;
+        return 0;
+    }
+
+    if (np == 0) {
+        np = name_search(pctx->curscope, ltext->ptr, ltext->len,
+                         (qm == QM_NONE && ql < QL_MACRO));
+        if (np == 0) {
+            lex->boundtype = LEXTYPE_NAME;
+            return 0;
+        }
+        nt = name_type(np);
     }
 
     lex->boundtype = nt;
@@ -412,6 +425,14 @@ parser_scope_get (parse_ctx_t pctx)
     
 } /* parser_scope_get */
 
+scopectx_t
+parser_scope_set (parse_ctx_t pctx, scopectx_t newscope)
+{
+    scope_setparent(newscope, pctx->curscope);
+    pctx->curscope = newscope;
+    return newscope;
+}
+
 /*
  * parser_scope_begin
  *
@@ -447,6 +468,9 @@ parser_scope_end (parse_ctx_t pctx)
 void parser_incr_erroneof (parse_ctx_t pctx) { pctx->no_eof += 1; }
 void parser_decr_erroneof (parse_ctx_t pctx) { pctx->no_eof -= 1; }
 
+void parser_loopdepth_incr (parse_ctx_t pctx) { pctx->loopdepth += 1; }
+void parser_loopdepth_decr (parse_ctx_t pctx) { pctx->loopdepth -= 1; }
+unsigned int parser_loopdepth (parse_ctx_t pctx) { return pctx->loopdepth; }
 /*
  * parser_expect
  *
@@ -459,24 +483,10 @@ int
 parser_expect (parse_ctx_t pctx, quotelevel_t ql, lextype_t expected_lt,
                lexeme_t **lexp, int putbackonerr)
 {
-    lextype_t lt;
-    lexeme_t *lex;
-
-    lt = parser_next(pctx, ql, &lex);
-    if (lt == expected_lt) {
-        if (lexp != 0) {
-            *lexp =  lex;
-        } else {
-            lexeme_free(lex);
-        }
-        return 1;
+    if (parser_expect_oneof(pctx, ql, &expected_lt, 1, lexp, putbackonerr) < 0) {
+        return 0;
     }
-    if (putbackonerr) {
-        lexer_insert(pctx->lexctx, lex);
-    } else {
-        lexeme_free(lex);
-    }
-    return 0;
+    return 1;
     
 } /* parser_expect */
 
@@ -544,19 +554,23 @@ parse_lexeme_seq (parse_ctx_t pctx, lexseq_t *seq, quotelevel_t ql,
     hit_term = 0;
     private_seq = (seq != 0);
 
+    if (private_seq) {
+        if (lexseq_length(seq) == 0) {
+            if (term) *term = LEXTYPE_MARKER;
+            return 1;
+        }
+        parser_insert(pctx, lexeme_create(LEXTYPE_MARKER, &nullstr));
+        parser_insert_seq(pctx, seq);
+    }
+
     while (status) {
-        if (private_seq) {
-            if (lexseq_length(seq) == 0) {
-                if (term != 0) *term = LEXTYPE_END;
-                break;
-            }
-            lex = lexseq_remhead(seq);
-            lt = lexeme_boundtype(lex);
-        } else {
-            lt = parser_next(pctx, ql, &lex);
+        lt = parser_next(pctx, ql, &lex);
+        if (lt == LEXTYPE_MARKER) {
+            if (term != 0) *term = lt;
+            break;
         }
         if (lt == LEXTYPE_END) {
-            // NB this would never happen with a private sequence
+            // NB this *should* never happen with a private sequence
             lexer_insert(pctx->lexctx, lex);
             status = 0;
             break;
@@ -587,6 +601,15 @@ parse_lexeme_seq (parse_ctx_t pctx, lexseq_t *seq, quotelevel_t ql,
             }
         }
         lexseq_instail(result, lex);
+    }
+
+    // Return any remaining private sequence lexemes
+    // to the caller
+    if (private_seq && lt != LEXTYPE_MARKER) {
+        while (parser_next(pctx, ql, &lex) != LEXTYPE_MARKER) {
+            lexseq_instail(seq, lex);
+        }
+        lexeme_free(lex);
     }
 
     return status;
@@ -1321,6 +1344,7 @@ parse_IDENTICAL (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 static int
 parse_ISSTRING (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 {
+    lexeme_t *lex;
     lextype_t lt;
     int allstr = 1;
     int hit_error = 0;
@@ -1331,7 +1355,12 @@ parse_ISSTRING (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     }
 
     while (1) {
-        lt = expr_parse_next(pctx, 0, 1);
+        if (expr_parse_next(pctx, &lex, 1)) {
+            lt = lexeme_type(lex);
+            lexeme_free(lex);
+        } else {
+            lt = parser_next(pctx, QL_NORMAL, 0);
+        }
         if (lt == LEXTYPE_END || lt == LEXTYPE_NONE) {
             /* XXX error condition */
             hit_error = 1;

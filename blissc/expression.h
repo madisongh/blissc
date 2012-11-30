@@ -23,7 +23,7 @@
     DOEXPTYPE(PRIM_SEGNAME) DOEXPTYPE(PRIM_BLK) \
     DOEXPTYPE(OPERATOR) \
     DOEXPTYPE(EXECFUN) DOEXPTYPE(CTRL_COND) \
-    DOEXPTYPE(CTRL_CASE) \
+    DOEXPTYPE(CTRL_CASE) DOEXPTYPE(CTRL_EXIT) \
     DOEXPTYPE(CTRL_SELECT) DOEXPTYPE(SELECTOR) \
     DOEXPTYPE(CTRL_LOOPWU) DOEXPTYPE(CTRL_LOOPID)
 #define DOEXPTYPE(t_) EXPTYPE_##t_,
@@ -59,6 +59,7 @@ struct expr_node_s;
 
 struct expr_blk_s {
     struct expr_node_s *blkseq;
+    struct expr_node_s *blkval;
     scopectx_t          blkscope;
     strdesc_t          *codecomment;
 };
@@ -132,11 +133,17 @@ struct expr_seg_s {
     long            offset;
 };
 
+struct expr_exit_s {
+    struct expr_node_s  *exitval;
+    name_t              *exitlabel;
+};
+
 struct expr_node_s {
     // for freelist tracking and sequences in blocks
     struct expr_node_s *next;
     exprtype_t          type;
     textpos_t           textpos;
+    int                 has_value;
     union {
         long            litval;
         name_t          *segname;
@@ -152,6 +159,7 @@ struct expr_node_s {
         struct expr_case_s  casedata;
         struct expr_sel_s   seldata;
         struct expr_selector_s slctrdata;
+        struct expr_exit_s  exitdata;
     } data;
 };
 typedef struct expr_node_s expr_node_t;
@@ -202,6 +210,13 @@ static inline __unused textpos_t expr_textpos(expr_node_t *node) {
 static inline __unused void expr_textpos_set(expr_node_t *node, textpos_t pos) {
     node->textpos = pos;
 }
+static inline __unused int expr_has_value(expr_node_t *node) {
+    return node->has_value;
+}
+static inline __unused void expr_has_value_set(expr_node_t *node, int v) {
+    node->has_value = v;
+}
+
 // PRIM_LIT
 static inline __unused long expr_litval(expr_node_t *node) {
     return node->data.litval;
@@ -261,6 +276,12 @@ static inline __unused expr_node_t *expr_blk_seq(expr_node_t *node) {
 }
 static inline __unused void expr_blk_seq_set(expr_node_t *node, expr_node_t *seq) {
     node->data.blkdata.blkseq = seq;
+}
+static inline __unused expr_node_t *expr_blk_valexp(expr_node_t *node) {
+    return node->data.blkdata.blkval;
+}
+static inline __unused void expr_blk_valexp_set(expr_node_t *node, expr_node_t *val) {
+    node->data.blkdata.blkval = val;
 }
 static inline __unused scopectx_t expr_blk_scope(expr_node_t *node) {
     return node->data.blkdata.blkscope;
@@ -495,12 +516,26 @@ static inline __unused expr_node_t *expr_selector_next(expr_node_t *node) {
 static inline __unused void expr_selector_next_set(expr_node_t *node, expr_node_t *sel) {
     node->data.slctrdata.nextsel = sel;
 }
-
+// Exit expressions (EXITLOOP, LEAVE)
+static inline __unused expr_node_t *expr_exit_value(expr_node_t *node) {
+    return node->data.exitdata.exitval;
+}
+static inline __unused void expr_exit_value_set(expr_node_t *node, expr_node_t *val) {
+    node->data.exitdata.exitval = val;
+}
+static inline __unused name_t *expr_exit_label(expr_node_t *node) {
+    return node->data.exitdata.exitlabel;
+}
+static inline __unused void expr_exit_label_set(expr_node_t *node, name_t *np) {
+    node->data.exitdata.exitlabel = np;
+}
 
 void expr_init (scopectx_t kwdscope);
-lextype_t expr_parse_next(parse_ctx_t pctx, lexeme_t **lexp, int longstrings_ok);
+int expr_parse_next(parse_ctx_t pctx, lexeme_t **lexp, int longstrings_ok);
 int expr_parse_block(parse_ctx_t pctx, expr_node_t **blkexp);
 int parse_ctce(parse_ctx_t pctx, lexeme_t **lexp);
+int expr_parse_seq(parse_ctx_t pctx, lexseq_t *seq, expr_node_t **expp);
+int expr_setlex(parse_ctx_t pctx, lexeme_t **lexp, expr_node_t *exp);
 strdesc_t *expr_dumpinfo(expr_node_t *exp);
 
 #endif

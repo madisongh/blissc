@@ -25,6 +25,7 @@ void parser_insert(parse_ctx_t pctx, lexeme_t *lex);
 void parser_insert_seq(parse_ctx_t pctx, lexseq_t *seq);
 void parser_skip_to_delim(parse_ctx_t pctx, lextype_t delimtype);
 scopectx_t parser_scope_get(parse_ctx_t pctx);
+scopectx_t parser_scope_set(parse_ctx_t pctx, scopectx_t newscope);
 scopectx_t parser_scope_begin(parse_ctx_t pctx);
 scopectx_t parser_scope_end(parse_ctx_t pctx);
 void parser_incr_erroneof(parse_ctx_t pctx);
@@ -42,4 +43,7 @@ machinedef_t *parser_get_machinedef(parse_ctx_t pctx);
 textpos_t parser_curpos(parse_ctx_t pctx);
 int parser_in_declaration(parse_ctx_t pctx);
 void parser_set_indecl(parse_ctx_t pctx, int yes);
+unsigned int parser_loopdepth(parse_ctx_t pctx);
+void parser_loopdepth_incr(parse_ctx_t pctx);
+void parser_loopdepth_decr(parse_ctx_t pctx);
 #endif

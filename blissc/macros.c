@@ -501,8 +501,7 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
             }
 
             parser_incr_erroneof(pctx);
-            lexeme_free(lex);
-
+            parser_scope_begin(pctx);
             for (lt = parser_next(pctx, QL_MACRO, &lex);
                  lt != LEXTYPE_LXF_DELIM_PERCENT;
                  lt = parser_next(pctx, QL_MACRO, &lex)) {
@@ -514,6 +513,7 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
                 lex->next = 0;
                 lexseq_instail(&body, lex);
             }
+            parser_scope_end(pctx);
             parser_decr_erroneof(pctx);
         }
 

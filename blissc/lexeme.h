@@ -31,6 +31,7 @@ typedef enum {
 #define DOLEXTYPES \
     DOLEXTYPE(NONE) \
     DOLEXTYPE(END) \
+    DOLEXTYPE(MARKER) \
     DOLEXTYPE(UNBOUND) \
     DOLEXTYPE(NUMERIC) \
     DOLEXTYPE(STRING) \
@@ -115,6 +116,7 @@ typedef enum {
     DOLEXTYPE(CTRL_SELECTONEU) DOLEXTYPE(CTRL_SELECTONEA) \
     DOLEXTYPE(CTRL_INCR) DOLEXTYPE(CTRL_INCRA) DOLEXTYPE(CTRL_INCRU) \
     DOLEXTYPE(CTRL_DECR) DOLEXTYPE(CTRL_DECRA) DOLEXTYPE(CTRL_DECRU) \
+    DOLEXTYPE(CTRL_EXITLOOP) DOLEXTYPE(CTRL_LEAVE) \
     DOLEXTYPE(CTRL_WHILE) DOLEXTYPE(CTRL_UNTIL) DOLEXTYPE(CTRL_DO) \
     DOLEXTYPE(KWD_FROM) DOLEXTYPE(KWD_TO) DOLEXTYPE(KWD_OF) \
     DOLEXTYPE(KWD_BY) DOLEXTYPE(KWD_SET) DOLEXTYPE(KWD_TES) \
@@ -123,7 +125,8 @@ typedef enum {
     DOLEXTYPE(KWD_CODE) DOLEXTYPE(KWD_NODEFAULT) \
     DOLEXTYPE(KWD_WRITE) DOLEXTYPE(KWD_NOWRITE) \
     DOLEXTYPE(KWD_EXECUTE) DOLEXTYPE(KWD_NOEXECUTE) \
-    DOLEXTYPE(KWD_OVERLAY) DOLEXTYPE(KWD_CONCATENATE) DOLEXTYPE(KWD_REF)
+    DOLEXTYPE(KWD_OVERLAY) DOLEXTYPE(KWD_CONCATENATE) DOLEXTYPE(KWD_REF) \
+    DOLEXTYPE(KWD_WITH)
 
 #define DOLEXTYPE(lt) LEXTYPE_##lt,
 typedef enum {
@@ -216,6 +219,10 @@ static inline __unused void lexeme_val_setunsigned (lexeme_t *lex, unsigned long
 static inline __unused strdesc_t *lexeme_text (lexeme_t *lex) {
     return &lex->text;
 }
+static inline __unused void lexeme_text_set (lexeme_t *lex, strdesc_t *newtext)
+{
+    string_copy(&lex->text, newtext);
+}
 static inline __unused unsigned short lexeme_textlen(lexeme_t *lex) {
     return lex->text.len;
 }
@@ -254,7 +261,7 @@ static inline __unused int lexseq_empty (lexseq_t *seq) {
 }
 static inline __unused void lexseq_inshead (lexseq_t *seq, lexeme_t *l) {
     if (seq->count == 0) seq->tail = l;
-    l->next = seq->head; seq->head = seq->tail = l; seq->count += 1;
+    l->next = seq->head; seq->head = l; seq->count += 1;
 }
 static inline __unused void lexseq_instail (lexseq_t *seq, lexeme_t *l) {
     if (seq->count == 0) lexseq_inshead(seq, l);

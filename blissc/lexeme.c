@@ -218,7 +218,8 @@ lexseq_free (lexseq_t *seq)
 /*
  * lexseq_copy
  *
- * Returns a duplicate of a lexeme sequence.
+ * Returns a duplicate of a lexeme sequence,
+ * appended to the destination.
  */
 int
 lexseq_copy (lexseq_t *dst, lexseq_t *src)

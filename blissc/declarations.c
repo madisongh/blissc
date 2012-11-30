@@ -429,10 +429,19 @@ declare_literal (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
         } else {
             seg_t *seg;
             if (decltype == DCL_GLOBAL) {
-                seg = seg_alloc_literal(stg, pos,
-                                        getvalue(val, range, is_signed));
+                seg = seg_globalsym_search(stg, namestr);
+                if (seg != 0) {
+                    if (seg_type(seg) != SEGTYPE_LITERAL ||
+                        (seg_litval_valid(seg) &&
+                         seg_litval(seg) != getvalue(val, range, is_signed))) {
+                        /* XXX error condition */
+                    }
+                } else {
+                    seg = seg_alloc_literal(stg, pos, namestr, 0,
+                                            getvalue(val, range, is_signed));
+                }
             } else {
-                seg = seg_alloc_external(stg, pos, namestr);
+                seg = seg_alloc_literal(stg, pos, namestr, 1, 0);
             }
             nameinfo_gxlit_seg_set(ni, seg);
             nameinfo_gxlit_valwidth_set(ni, range);
@@ -776,7 +785,7 @@ define_plit (parse_ctx_t pctx, stgctx_t stg, lextype_t curlt)
                                         machine_scalar_bits(mach), 0);
     }
 
-    seg = seg_alloc_static(stg, parser_curpos(pctx), psect);
+    seg = seg_alloc_static(stg, parser_curpos(pctx), psect, 0, 0);
     if (!seg_initval_set(stg, seg, ivlist)) {
         /* XXX error conditon */
         seg_free(stg, seg);
@@ -942,6 +951,9 @@ handle_data_attrs (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
     } while (which < 0);
 
     parser_set_indecl(pctx, 0);
+
+    // XXX need to compare attributes for FORWARD/EXTERNAL against
+    //     their actual OWN/GLOBALs
     
     if (saw_psect > 0) seg_static_psect_set(stg, seg, psect);
     if (saw_align > 0) seg_alignment_set(stg, seg, align);
@@ -1012,10 +1024,10 @@ declare_data (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
             seg = seg_alloc_stack(stg, pos, stackonly);
         } else if (st == SEGTYPE_REGISTER) {
             seg = seg_alloc_register(stg, pos);
-        } else if (st == SEGTYPE_EXTERNAL) {
-            seg = seg_alloc_external(stg, pos, namestr);
         } else {
-            seg = seg_alloc_static(stg, pos, psect);
+            seg = seg_alloc_static(stg, pos, psect, (dt == DCL_EXTERNAL),
+                                   (dt == DCL_EXTERNAL||dt == DCL_GLOBAL ?
+                                    namestr : 0));
         }
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
             status = handle_data_attrs(pctx, scope, stg, mach, dt, seg, ni);
@@ -1184,12 +1196,10 @@ parse_declaration (parse_ctx_t pctx)
     switch (lt) {
         case LEXTYPE_DCL_GLOBAL:
         case LEXTYPE_DCL_OWN:
+        case LEXTYPE_DCL_EXTERNAL:
+        case LEXTYPE_DCL_FORWARD:
             status = declare_data(pctx, scope, stg, mach, SEGTYPE_STATIC,
                                   lt, dtypes[which]);
-            break;
-        case LEXTYPE_DCL_EXTERNAL:
-            status = declare_data(pctx, scope, stg, mach, SEGTYPE_EXTERNAL,
-                                  lt, DCL_EXTERNAL);
             break;
         case LEXTYPE_DCL_STACKLOCAL:
         case LEXTYPE_DCL_LOCAL:
