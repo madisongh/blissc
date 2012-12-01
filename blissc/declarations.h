@@ -140,7 +140,8 @@ siu void nameinfo_routine_stack_set(nameinfo_t *ni, frame_t *stk) { ni->data.rtn
 nameinfo_t *nameinfo_alloc(nametype_t type);
 void nameinfo_free(nameinfo_t *ni, stgctx_t stg);
 
-void declarations_init(scopectx_t kwdscope, stgctx_t stg,
+void declarations_init(parse_ctx_t pctx,
+                       scopectx_t kwdscope, stgctx_t stg,
                        machinedef_t *mach);
 seg_t *define_plit(parse_ctx_t pctx, stgctx_t stg, lextype_t curlt);
 int parse_decl_name(parse_ctx_t pctx, scopectx_t scope,

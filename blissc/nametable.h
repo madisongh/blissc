@@ -30,6 +30,7 @@ typedef struct scopectx_s *scopectx_t;
 
 #define NAME_M_RESERVED (1<<0) // error if the name is redefined
 #define NAME_M_DECLARED (1<<1) // set if explicitly declared
+#define NAME_M_FLAGMASK (0xFFFF) // others are reserved for internal use
 
 struct name_s {
     struct name_s       *next;
@@ -65,7 +66,10 @@ static inline __unused scopectx_t name_scope(name_t *name) {
     return name->namescope;
 }
 static inline __unused unsigned int name_flags(name_t *name) {
-    return name->nameflags;
+    return (name->nameflags & NAME_M_FLAGMASK);
+}
+static inline __unused void name_flags_set(name_t *name, unsigned int f) {
+    name->nameflags = (name->nameflags & ~NAME_M_FLAGMASK) | (f & NAME_M_FLAGMASK);
 }
 static inline __unused strdesc_t *name_string(name_t *name) {
     return string_from_chrs(0, name->name, name->namelen);;
@@ -113,4 +117,5 @@ void scope_sclass_psectname_set(scopectx_t scope, storageclass_t cl, name_t *np)
 void scope_setparent(scopectx_t scope, scopectx_t newparent);
 void nametype_dataop_register(lextype_t lt, name_datafree_fn fn,
                               name_datacopy_fn);
+int name_undeclare(scopectx_t scope, name_t *np);
 #endif

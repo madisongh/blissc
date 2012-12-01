@@ -11,6 +11,7 @@
 
 #include "nametable.h"
 #include "lexeme.h"
+#include "scanner.h"
 #include "machinedef.h"
 
 struct parse_ctx_s;
@@ -18,6 +19,7 @@ typedef struct parse_ctx_s *parse_ctx_t;
 
 parse_ctx_t parser_init(scopectx_t mainscope, void *cctx, machinedef_t *mach);
 int parser_fopen(parse_ctx_t pctx, const char *fname, size_t fnlen);
+int parser_popen(parse_ctx_t pctx, scan_input_fn infn, void *fnctx);
 void parser_finish(parse_ctx_t pctx);
 void *parser_get_cctx(parse_ctx_t pctx);
 lextype_t parser_next(parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lex);

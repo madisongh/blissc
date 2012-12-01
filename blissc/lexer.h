@@ -11,6 +11,7 @@
 
 #include "lexeme.h"
 #include "nametable.h"
+#include "scanner.h"
 #include "strings.h"
 
 struct lexer_ctx_s;
@@ -19,6 +20,7 @@ typedef struct lexer_ctx_s *lexer_ctx_t;
 lexer_ctx_t lexer_init(scopectx_t kwdscope);
 strdesc_t *lexer_filename(lexer_ctx_t lctx, int filename_index);
 int lexer_fopen(lexer_ctx_t ctx, const char *fname, size_t fnlen);
+int lexer_popen(lexer_ctx_t ctx, scan_input_fn infn, void *fnctx);
 void lexer_finish(lexer_ctx_t ctx);
 lexeme_t *lexer_next(lexer_ctx_t ctx, int erroneof);
 lexeme_t *lexer_peek(lexer_ctx_t ctx, int erroneof);

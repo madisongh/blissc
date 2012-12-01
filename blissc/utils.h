@@ -46,7 +46,7 @@ static inline __unused int textpos_colnum(textpos_t t) {
 long bits_needed(unsigned long);
 
 static inline __unused long getvalue(long val, unsigned int width, int signext) {
-    long result = labs(val) & ((1UL<<width)-(signext == 0 ? 0 : 1));
+    long result = labs(val) & ((1UL<<(width-(signext == 0 ? 0 : 1)))-1);
     return (signext && (val < 0) ? -result : result);
 }
 static inline __unused long getmvalue(long val, unsigned long mask, int signext) {

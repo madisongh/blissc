@@ -53,6 +53,7 @@ static name_t decl_names[] = {
     NAMEDEF("PSECT", LEXTYPE_DCL_PSECT, NAME_M_RESERVED),
     NAMEDEF("BUILTIN", LEXTYPE_DCL_BUILTIN, NAME_M_RESERVED),
     NAMEDEF("UNDECLARE", LEXTYPE_DCL_UNDECLARE, NAME_M_RESERVED),
+    NAMEDEF("REQUIRE", LEXTYPE_DCL_REQUIRE, NAME_M_RESERVED),
     NAMEDEF("SIGNED", LEXTYPE_ATTR_SIGNED, NAME_M_RESERVED),
     NAMEDEF("UNSIGNED", LEXTYPE_ATTR_UNSIGNED, NAME_M_RESERVED),
     NAMEDEF("VOLATILE", LEXTYPE_ATTR_VOLATILE, NAME_M_RESERVED),
@@ -1150,6 +1151,68 @@ declare_map (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
 
     return 1;
 }
+
+/*
+ * declare_require
+ */
+static int
+declare_require (parse_ctx_t pctx)
+{
+    lexeme_t *lex;
+    strdesc_t *str;
+
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_STRING, &lex, 1)) {
+        /* XXX error condition */
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1)) {
+        /* XXX errror condition */
+    }
+    str = lexeme_text(lex);
+    if (!parser_fopen(pctx, str->ptr, str->len)) {
+        /* XXX error condition */
+    }
+    lexeme_free(lex);
+    return 1;
+
+} /* declare_require */
+
+/*
+ * undeclare
+ */
+static int
+undeclare (parse_ctx_t pctx, scopectx_t scope)
+{
+    lexeme_t *lex;
+    strdesc_t *str;
+    name_t *np;
+
+    while (1) {
+        if (!parser_expect(pctx, QL_NAME, LEXTYPE_NAME, &lex, 1)) {
+            /* XXX error condition */
+        } else {
+            str = lexeme_text(lex);
+            np = name_search(scope, str->ptr, str->len, 0);
+            // nonexistent, or reserved, or already undeclared,
+            // or not an actual name, or not DECLAREd
+            if (np == 0 || name_type(np) < LEXTYPE_NAME_MIN+1
+                || name_type(np) > LEXTYPE_NAME_MAX
+                || (name_flags(np) & NAME_M_RESERVED) != 0
+                || (name_flags(np) & NAME_M_DECLARED) == 0 ||
+                !name_undeclare(scope, np)) {
+                /* XXX error condition */
+            }
+        }
+        lexeme_free(lex);
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
+            break;
+        }
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1)) {
+        /* XXX error condition */
+    }
+    return 1;
+    
+} /* undeclare */
 /*
  * bind_data
  */
@@ -1254,9 +1317,12 @@ psects_init (scopectx_t kwdscope, stgctx_t stg, machinedef_t *mach) {
  * Initialization routine.
  */
 void
-declarations_init (scopectx_t kwdscope, stgctx_t stg, machinedef_t *mach)
+declarations_init (parse_ctx_t pctx,
+                   scopectx_t kwdscope, stgctx_t stg, machinedef_t *mach)
 {
     int i;
+    name_t *np;
+    nameinfo_t *ni;
     for (i = 0; i < sizeof(decl_names)/sizeof(decl_names[0]); i++) {
         name_insert(kwdscope, &decl_names[i]);
     }
@@ -1266,7 +1332,51 @@ declarations_init (scopectx_t kwdscope, stgctx_t stg, machinedef_t *mach)
     lextype_register(LEXTYPE_NAME_DATA, bind_data);
     macros_init(kwdscope);
     psects_init(kwdscope, stg, mach);
-    structures_init();
+    np = name_declare(kwdscope, "%BPUNIT", 7, LEXTYPE_NAME_LITERAL, 0);
+    if (np != 0) {
+        name_flags_set(np, NAME_M_RESERVED);
+        ni = nameinfo_alloc(NAMETYPE_LITERAL);
+        if (ni != 0) {
+            nameinfo_lit_signextend_set(ni, 0);
+            nameinfo_lit_valwidth_set(ni, machine_scalar_bits(mach));
+            nameinfo_lit_val_set(ni, machine_unit_bits(mach));
+            name_data_set_ptr(np, ni);
+        }
+    }
+    np = name_declare(kwdscope, "%BPADDR", 7, LEXTYPE_NAME_LITERAL, 0);
+    if (np != 0) {
+        name_flags_set(np, NAME_M_RESERVED);
+        ni = nameinfo_alloc(NAMETYPE_LITERAL);
+        if (ni != 0) {
+            nameinfo_lit_signextend_set(ni, 0);
+            nameinfo_lit_valwidth_set(ni, machine_scalar_bits(mach));
+            nameinfo_lit_val_set(ni, machine_addr_bits(mach));
+            name_data_set_ptr(np, ni);
+        }
+    }
+    np = name_declare(kwdscope, "%BPVAL", 6, LEXTYPE_NAME_LITERAL, 0);
+    if (np != 0) {
+        name_flags_set(np, NAME_M_RESERVED);
+        ni = nameinfo_alloc(NAMETYPE_LITERAL);
+        if (ni != 0) {
+            nameinfo_lit_signextend_set(ni, 0);
+            nameinfo_lit_valwidth_set(ni, machine_scalar_bits(mach));
+            nameinfo_lit_val_set(ni, machine_scalar_bits(mach));
+            name_data_set_ptr(np, ni);
+        }
+    }
+    np = name_declare(kwdscope, "%UPVAL", 6, LEXTYPE_NAME_LITERAL, 0);
+    if (np != 0) {
+        name_flags_set(np, NAME_M_RESERVED);
+        ni = nameinfo_alloc(NAMETYPE_LITERAL);
+        if (ni != 0) {
+            nameinfo_lit_signextend_set(ni, 0);
+            nameinfo_lit_valwidth_set(ni, machine_scalar_bits(mach));
+            nameinfo_lit_val_set(ni, machine_scalar_units(mach));
+            name_data_set_ptr(np, ni);
+        }
+    }
+    structures_init(pctx);
 
 } /* declarations_init */
 
@@ -1348,6 +1458,12 @@ parse_declaration (parse_ctx_t pctx)
             break;
         case LEXTYPE_DCL_FIELD:
             status = declare_field(pctx, scope);
+            break;
+        case LEXTYPE_DCL_REQUIRE:
+            status = declare_require(pctx);
+            break;
+        case LEXTYPE_DCL_UNDECLARE:
+            status = undeclare(pctx, scope);
             break;
         default:
             /* XXX error condition */

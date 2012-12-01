@@ -207,6 +207,9 @@ parser_init (scopectx_t kwdscope, void *cctx, machinedef_t *mach)
     parse_ctx_t pctx;
     int i;
 
+    if (kwdscope == 0) {
+        kwdscope = scope_begin(0);
+    }
     for (i = 0; i < sizeof(parser_names)/sizeof(parser_names[0]); i++) {
         name_insert(kwdscope, &parser_names[i]);
     }
@@ -216,8 +219,8 @@ parser_init (scopectx_t kwdscope, void *cctx, machinedef_t *mach)
     pctx = malloc(sizeof(struct parse_ctx_s));
     if (pctx != 0) {
         memset(pctx, 0, sizeof(struct parse_ctx_s));
-        pctx->kwdscope = (kwdscope == 0 ? scope_begin(0) : kwdscope);
-        pctx->curscope = pctx->kwdscope;
+        pctx->kwdscope = kwdscope;
+        pctx->curscope = scope_begin(kwdscope);
         pctx->lexctx = lexer_init(pctx->kwdscope);
         pctx->cctx = cctx;
     }
@@ -253,16 +256,20 @@ parser_finish (parse_ctx_t pctx)
 int
 parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen)
 {
-    pctx->curscope = scope_begin(pctx->curscope);
-    if (pctx->curscope == 0) {
-        return 0;
-    }
-    if (!lexer_fopen(pctx->lexctx, fname, fnlen)) {
-        pctx->curscope = scope_end(pctx->curscope);
-        return 0;
-    }
-    return 1;
+    return lexer_fopen(pctx->lexctx, fname, fnlen);
+
 } /* parser_fopen */
+
+/*
+ * parser_popen
+ *
+ * Begin parsing from a programmed source.
+ */
+int
+parser_popen (parse_ctx_t pctx, scan_input_fn inpfn, void *fnctx)
+{
+    return lexer_popen(pctx->lexctx, inpfn, fnctx);
+}
 
 /*
  * parser_get_cctx
@@ -286,6 +293,7 @@ parser_in_declaration (parse_ctx_t pctx)
 {
     return pctx->indecl;
 }
+
 /*
  * parser_insert
  *
@@ -1510,11 +1518,10 @@ parse_REQUIRE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         return 1;
     }
     str = lexeme_text(lex);
-    if (!lexer_fopen(pctx->lexctx, str->ptr, str->len)) {
+    if (!parser_fopen(pctx, str->ptr, str->len)) {
         /* XXX - error condition */
     }
     lexeme_free(lex);
-    string_free(str);
     return 1;
 
 } /* parse_REQUIRE */

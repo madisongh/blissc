@@ -7,6 +7,7 @@
 //
 
 #include <stdlib.h>
+#include <string.h>
 #include "nametable.h"
 #include "strings.h"
 #include "lexeme.h"
@@ -280,11 +281,17 @@ scope_getparent (scopectx_t scope) {
 void
 scope_setparent (scopectx_t scope, scopectx_t newparent)
 {
+    int i;
     if (scope == 0) {
         return;
     }
 
     scope->parent = newparent;
+    for (i = 0; i < SCLASS_COUNT; i++) {
+        if (scope->sclassnames[i] == 0) {
+            scope->sclassnames[i] = newparent->sclassnames[i];
+        }
+    }
 
 } /* scope_setparent */
 
@@ -294,7 +301,13 @@ scope_setparent (scopectx_t scope, scopectx_t newparent)
 name_t *
 scope_sclass_psectname (scopectx_t scope, storageclass_t cl)
 {
-    return scope->sclassnames[cl];
+    while (scope != 0) {
+        if (scope->sclassnames[cl]) {
+            return scope->sclassnames[cl];
+        }
+        scope = scope->parent;
+    }
+    return 0;
 
 } /* scope_sclass_psectname */
 
@@ -446,4 +459,24 @@ name_t *
 name_declare_nocheck (scopectx_t scope, const char *id, size_t len,
                       lextype_t type, textpos_t pos) {
     return name_declare_internal(scope, id, len, type, pos, 0);
+}
+int
+name_undeclare (scopectx_t scope, name_t *np)
+{
+    if (name_scope(np) == scope) {
+        np->nameflags &= ~NAME_M_DECLARED;
+        name_datafree_fn freefn = freedata[np->nametype-LEXTYPE_NAME_MIN];
+        if (freefn != 0) {
+            freefn(np);
+        } else {
+            memset(&np->nameunion, 0, sizeof(np->nameunion));
+        }
+        np->nametype = LEXTYPE_NAME;
+    } else {
+        name_t *unp = name_alloc(np->name, np->namelen);
+        if (unp != 0) {
+            name_insert(scope, unp);
+        }
+    }
+    return 1;
 }

@@ -17,7 +17,7 @@ typedef struct strudef_s strudef_t;
 
 struct nameinfo_s;
 
-void structures_init(void);
+void structures_init(parse_ctx_t pctx);
 int declare_structure(parse_ctx_t pctx, scopectx_t scope);
 int declare_field(parse_ctx_t pctx, scopectx_t scope);
 int structure_allocate(parse_ctx_t pctx, name_t *struname,

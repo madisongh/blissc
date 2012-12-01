@@ -20,6 +20,8 @@
 
 struct bufctx_s {
     filectx_t       fctx;
+    scan_input_fn   inpfn;
+    void            *fnctx;
     char            linebuf[SCAN_LINESIZE];
     size_t          linelen;
     size_t          curpos;
@@ -96,6 +98,26 @@ scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen)
         /* XXX error condition */
         return 0;
     }
+    ctx->bufstack[i].inpfn = 0;
+    ctx->bufstack[i].curline = 0;
+    ctx->bufstack[i].curpos = 0;
+    ctx->bufstack[i].linelen = 0;
+    ctx->curbuf = i;
+    return 1;
+}
+
+int
+scan_popen (scanctx_t ctx, scan_input_fn infn, void *fnctx)
+{
+    int i = ctx->curbuf;
+    if (i >= (SCAN_MAXFILES-1)) {
+        /* XXX error condition */
+        return 0;
+    }
+    i = i + 1;
+    ctx->bufstack[i].fctx = 0;
+    ctx->bufstack[i].inpfn = infn;
+    ctx->bufstack[i].fnctx = fnctx;
     ctx->bufstack[i].curline = 0;
     ctx->bufstack[i].curpos = 0;
     ctx->bufstack[i].linelen = 0;
@@ -121,10 +143,17 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
             curbuf->curpos = 0;
             *lineno = curbuf->curline;
             *column = 0;
-            rc = file_readline(curbuf->fctx, curbuf->linebuf,
+            if (curbuf->inpfn != 0) {
+                rc = (curbuf->inpfn)(curbuf->fnctx, curbuf->linebuf,
+                                     sizeof(curbuf->linebuf), &curbuf->linelen);
+            } else {
+                rc = file_readline(curbuf->fctx, curbuf->linebuf,
                                    sizeof(curbuf->linebuf), &curbuf->linelen);
+            }
             if (rc <= 0) {
-                file_close(curbuf->fctx);
+                if (curbuf->inpfn == 0) {
+                    file_close(curbuf->fctx);
+                }
                 ctx->curbuf -= 1;
                 if (rc < 0) {
                     /* XXX error condition */

@@ -231,6 +231,12 @@ strdesc_t *
 lexer_filename (lexer_ctx_t lctx, int filename_index)
 {
     struct saved_filename_s *sf;
+    static strdesc_t internalsrc = STRDEF("<Internal source>");
+
+    if (filename_index == -1) {
+        return &internalsrc;
+    }
+
     for (sf = lctx->saved_filenames; sf != 0; sf = sf->next) {
         if (sf->filename_index == filename_index) {
             return sf->filename;
@@ -270,6 +276,37 @@ lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen)
     return 1;
 
 } /* lexer_fopen */
+
+/*
+ * lexer_popen
+ * Insert a programmatic input source at the front of the stream.
+ */
+int
+lexer_popen (lexer_ctx_t ctx, scan_input_fn infn, void *fnctx)
+{
+    lexchain_t *chain = lexchain_alloc();
+
+    if (chain == 0) {
+        /* XXX error condition */
+        return 0;
+    }
+    chain->sctx = scan_init();
+    if (chain->sctx == 0) {
+        lexchain_free(chain);
+        return 0;
+    }
+    if (!scan_popen(chain->sctx, infn, fnctx)) {
+        scan_finish(chain->sctx);
+        chain->sctx = 0;
+        lexchain_free(chain);
+        return 0;
+    }
+    chain->filename_index = -1;
+    chain->nextchain = ctx->chain;
+    ctx->chain = chain;
+    return 1;
+
+} /* lexer_popen */
 
 /*
  * lexer_finish

@@ -25,12 +25,39 @@ struct strudef_s {
     int nacc, nallo;
 };
 
+struct pdclinfo_s {
+    char *lines[4];
+    int current;
+};
+
 static lextype_t delims[] = { LEXTYPE_DELIM_RBRACK, LEXTYPE_DELIM_SEMI };
 static lextype_t bodyends[] = { LEXTYPE_DELIM_COMMA, LEXTYPE_DELIM_SEMI };
 static strdesc_t leftparen = STRDEF("(");
 static strdesc_t rightparen = STRDEF(")");
 static strdesc_t dot = STRDEF(".");
 
+static char *predeclared_bitvector =
+    "STRUCTURE BITVECTOR[I;N] = "
+    "[(N+(%BPUNIT-1)/%BPUNIT](BITVECTOR+I/%BPUNIT)<I MOD %BPUNIT,1,0>;";
+static char *predeclared_vector_u_s =
+    "STRUCTURE VECTOR [I;N,UNIT=%UPVAL,EXT=0] ="
+    "[N*UNIT](VECTOR+I*UNIT)<0,%BPUNIT*UNIT,EXT>;";
+static char *predeclared_vector_u_ns =
+    "STRUCTURE VECTOR [I;N,UNIT=%UPVAL] = [N*UNIT](VECTOR+I*UNIT)<0,%BPUNIT*UNIT>;";
+static char *predeclared_vector_nu_ns =
+    "STRUCTURE VECTOR [I;N] = [N](VECTOR+I)<0,%BPUNIT>;";
+static char *predeclared_vector_nu_s =
+    "STRUCTURE VECTOR [I;N,EXT=0] = [N](VECTOR+I)<0,%BPUNIT,EXT>;";
+static char *predeclared_block_u =
+    "STRUCTURE BLOCK[O,P,S,E;BS,UNIT=%UPVAL] = [BS*UNIT](BLOCK+O*UNIT)<P,S,E>;";
+static char *predeclared_block_nu =
+    "STRUCTURE BLOCK[O,P,S,E;BS] = [BS](BLOCK+O)<P,S,E>;";
+static char *predeclared_blockvector_u =
+    "STRUCTURE BLOCKVECTOR[I,O,P,S,E;N,BS,UNIT=%UPVAL] = "
+    "[N*BS*UNIT](BLOCKVECTOR+(I*BS+O)*UNIT)<P,S,E>;";
+static char *predeclared_blockvector_nu =
+    "STRUCTURE BLOCKVECTOR[I,O,P,S,E;N,BS] = "
+    "[N*BS](BLOCKVECTOR+(I*BS+O)<P,S,E>;";
 
 /*
  * structure_bind
@@ -63,13 +90,54 @@ structure_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
 
 } /* structure_bind */
 
+static int
+predeclare_structures (void *myctx, char *buf, size_t bufsiz, size_t *lenp)
+{
+    struct pdclinfo_s *ctx = myctx;
+    size_t len;
+
+    if (ctx->current >= sizeof(ctx->lines)/sizeof(ctx->lines[0])
+        || ctx->lines[ctx->current] == 0) {
+        return 0; // EOF
+    }
+    len = strlen(ctx->lines[ctx->current]);
+    if (len >= bufsiz) {
+        len = bufsiz-1;
+    }
+    memcpy(buf, ctx->lines[ctx->current], len);
+    *lenp = len;
+    ctx->current += 1;
+    return 1;
+}
+
 /*
  * structures_init
  */
 void
-structures_init (void)
+structures_init (parse_ctx_t pctx)
 {
+    struct pdclinfo_s pdinfo;
+    machinedef_t *mach = parser_get_machinedef(pctx);
+    int nounits = (machine_scalar_units(mach) == 1);
+    int signext = machine_signext_supported(mach);
+    int i;
+
     lextype_register(LEXTYPE_NAME_STRUCTURE, structure_bind);
+    pdinfo.current = 0;
+    pdinfo.lines[0] = (nounits ? (signext ? predeclared_vector_nu_s
+                                  : predeclared_vector_nu_ns)
+                       : (signext ? predeclared_vector_u_s
+                          : predeclared_vector_u_ns));
+    pdinfo.lines[1] = predeclared_bitvector;
+    pdinfo.lines[2] = (nounits ? predeclared_block_nu
+                       : predeclared_block_u);
+    pdinfo.lines[3] = (nounits ? predeclared_blockvector_nu
+                       : predeclared_blockvector_u);
+
+    parser_popen(pctx, predeclare_structures, &pdinfo);
+    for (i = 0; i < 4; i++) {
+        parse_declaration(pctx);
+    }
 
 } /* structures_init */
 

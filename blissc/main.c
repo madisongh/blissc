@@ -182,11 +182,11 @@ test_parser (int argc, const char *argv[])
     mainscope = scope_begin(0);
     stg = storage_init(&machdef);
     pctx = parser_init(mainscope, stg, &machdef);
-    declarations_init(mainscope, stg, &machdef);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
     }
+    declarations_init(pctx, mainscope, stg, &machdef);
 //    linewidth = 0;
 //    delim = "";
     for (lt = parser_next(pctx, QL_NORMAL, &lex); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
@@ -232,11 +232,11 @@ test_expr (int argc, const char *argv[])
     stg = storage_init(&machdef);
     expr_init(mainscope);
     pctx = parser_init(mainscope, stg, &machdef);
-    declarations_init(mainscope, stg, &machdef);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
     }
+    declarations_init(pctx, mainscope, stg, &machdef);
 //    linewidth = 0;
 //    delim = "";
     if (!declare_module(pctx)) {
