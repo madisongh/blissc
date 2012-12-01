@@ -4,8 +4,21 @@ BEGIN
         BLK[O,P,S,E;BS,UNIT=4] =
             [BS*UNIT]
             (BLK+O*UNIT)<P,S,E>;
+    FIELD
+        DSC_FIELDS = 
+            SET
+            DSC$W_LENGTH = [0,0,16,0],
+            DSC$B_CLASS  = [2,0,8,0],
+            DSC$B_DTYPE  = [3,0,8,0],
+            DSC$A_POINTER= [4,0,32,0]
+            TES;
+    LITERAL
+        DSC$K_S_BLN = 8,
+        DSC$K_CLASS_S = 2,
+        DSC$K_DTYPE_T = 14;
     OWN
-        QQQ : BLK [8,BYTE];
+        QQQ : BLK [DSC$K_S_BLN,BYTE] FIELD (DSC_FIELDS),
+        QTEXT : BLK [64,BYTE];
         
     PSECT
         NODEFAULT = FARFEL (EXECUTE,OVERLAY),
@@ -34,12 +47,22 @@ BEGIN
 %PRINT('B is: ', %NUMBER(B))
 %PRINT('CTCE test: ',%NUMBER(%CTCE(A,B,T,Y,Z,%ASCII'HELLO')))
 %PRINT('CTCE test 2: ',%NUMBER(%CTCE('hi there',%string('go','away'))))
+%PRINT('DSC$W_LENGTH: ', %EXPLODE(%FIELDEXPAND(DSC$W_LENGTH)))
+%PRINT('DSC$A_POINTER.0:', %NUMBER(%FIELDEXPAND(DSC$A_POINTER,0)))
+%PRINT('DSC$A_POINTER.1:', %NUMBER(%FIELDEXPAND(DSC$A_POINTER,1)))
+%PRINT('DSC$A_POINTER.2:', %NUMBER(%FIELDEXPAND(DSC$A_POINTER,2)))
+%PRINT('DSC$A_POINTER.3:', %NUMBER(%FIELDEXPAND(DSC$A_POINTER,3)))
+%PRINT('ALLOCATION(QQQ):', %NUMBER(%ALLOCATION(QQQ)))
+%PRINT('SIZE(BLK[12]):', %NUMBER(%SIZE(BLK[12])))
 
     LABEL
         blklabel1, blklabel2;
         
     blklabel1:BEGIN
-                BLK[beta,0,8,8,0;1] = 99;
+                QQQ[DSC$W_LENGTH] = 64;
+                QQQ[DSC$B_DTYPE] = DSC$K_DTYPE_T;
+                QQQ[DSC$B_CLASS] = DSC$K_CLASS_S;
+                QQQ[DSC$A_POINTER] = QTEXT;
               END;
     CODECOMMENT 'hi there': blklabel2: BEGIN END;
     CODECOMMENT 'another': BEGIN END;
