@@ -61,7 +61,7 @@ struct ni_data_s {
     void            *ptr;    
     strudef_t       *struc;
     scopectx_t       struscope;
-    fieldset_t      *fields;
+    lexseq_t         fields;
     scalar_attr_t    attr;
     unsigned int     flags;
 };
@@ -115,8 +115,8 @@ siu strudef_t *nameinfo_data_struc(nameinfo_t *ni) {return ni->data.datainfo.str
 siu void nameinfo_data_struc_set(nameinfo_t *ni, strudef_t *s) { ni->data.datainfo.struc = s; }
 siu scopectx_t nameinfo_data_struscope(nameinfo_t *ni) {return ni->data.datainfo.struscope; }
 siu void nameinfo_data_struscope_set(nameinfo_t *ni, scopectx_t s) { ni->data.datainfo.struscope = s; }
-siu fieldset_t *nameinfo_data_fields(nameinfo_t *ni) { return ni->data.datainfo.fields; }
-siu void nameinfo_data_fields_set(nameinfo_t *ni, fieldset_t *f) { ni->data.datainfo.fields = f; }
+siu lexseq_t *nameinfo_data_fields(nameinfo_t *ni) { return &ni->data.datainfo.fields; }
+siu void nameinfo_data_fields_set(nameinfo_t *ni, lexseq_t *f) { lexseq_copy(&ni->data.datainfo.fields, f); }
 siu scalar_attr_t *nameinfo_data_scattr(nameinfo_t *ni) { return &ni->data.datainfo.attr; }
 siu void nameinfo_data_scattr_set(nameinfo_t *ni, scalar_attr_t *attr) { scattr_copy(&ni->data.datainfo.attr, attr); }
 siu unsigned int nameinfo_data_flags(nameinfo_t *ni) { return ni->data.datainfo.flags; }
@@ -125,8 +125,8 @@ siu expr_node_t *nameinfo_bind_expr(nameinfo_t *ni) { return ni->data.datainfo.p
 siu void nameinfo_bind_expr_set(nameinfo_t *ni, expr_node_t *exp) { ni->data.datainfo.ptr = exp; }
 siu strudef_t *nameinfo_bind_struc(nameinfo_t *ni) { return ni->data.datainfo.struc; }
 siu void nameinfo_bind_struc_set(nameinfo_t *ni, strudef_t *s) { ni->data.datainfo.struc = s; }
-siu fieldset_t *nameinfo_bind_fields(nameinfo_t *ni) { return ni->data.datainfo.fields; }
-siu void nameinfo_bind_fields_set(nameinfo_t *ni, fieldset_t *f) { ni->data.datainfo.fields = f; }
+siu lexseq_t *nameinfo_bind_fields(nameinfo_t *ni) { return &ni->data.datainfo.fields; }
+siu void nameinfo_bind_fields_set(nameinfo_t *ni, lexseq_t *f) { lexseq_copy(&ni->data.datainfo.fields, f); }
 siu scalar_attr_t *nameinfo_bind_scattr(nameinfo_t *ni) { return &ni->data.datainfo.attr; }
 siu void nameinfo_bind_scattr_set(nameinfo_t *ni, scalar_attr_t *a) { scattr_copy(&ni->data.datainfo.attr, a); }
 siu unsigned int nameinfo_bind_flags(nameinfo_t *ni) { return ni->data.datainfo.flags; }
@@ -143,6 +143,8 @@ void nameinfo_free(nameinfo_t *ni, stgctx_t stg);
 void declarations_init(scopectx_t kwdscope, stgctx_t stg,
                        machinedef_t *mach);
 seg_t *define_plit(parse_ctx_t pctx, stgctx_t stg, lextype_t curlt);
+int parse_decl_name(parse_ctx_t pctx, scopectx_t scope,
+                    strdesc_t **result, textpos_t *pos);
 int parse_declaration(parse_ctx_t pctx);
 int declare_module(parse_ctx_t pctx);
 #endif
