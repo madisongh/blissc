@@ -1,9 +1,5 @@
 MODULE test =
 BEGIN
-    STRUCTURE
-        BLK[O,P,S,E;BS,UNIT=4] =
-            [BS*UNIT]
-            (BLK+O*UNIT)<P,S,E>;
     FIELD
         DSC_FIELDS = 
             SET
@@ -15,10 +11,11 @@ BEGIN
     LITERAL
         DSC$K_S_BLN = 8,
         DSC$K_CLASS_S = 2,
-        DSC$K_DTYPE_T = 14;
+        DSC$K_DTYPE_T = 14,
+        TESTLIT = -7;
     OWN
-        QQQ : BLK [DSC$K_S_BLN,BYTE] FIELD (DSC_FIELDS),
-        QTEXT : BLK [64,BYTE];
+        QQQ : BLOCK [DSC$K_S_BLN,BYTE] FIELD (DSC_FIELDS),
+        QTEXT : BLOCK [64,BYTE];
         
     PSECT
         NODEFAULT = FARFEL (EXECUTE,OVERLAY),
@@ -53,7 +50,8 @@ BEGIN
 %PRINT('DSC$A_POINTER.2:', %NUMBER(%FIELDEXPAND(DSC$A_POINTER,2)))
 %PRINT('DSC$A_POINTER.3:', %NUMBER(%FIELDEXPAND(DSC$A_POINTER,3)))
 %PRINT('ALLOCATION(QQQ):', %NUMBER(%ALLOCATION(QQQ)))
-%PRINT('SIZE(BLK[12]):', %NUMBER(%SIZE(BLK[12])))
+%PRINT('SIZE(VECTOR[12]):', %NUMBER(%SIZE(VECTOR[12])))
+%PRINT('TESTLIT is:',%NUMBER(TESTLIT))
 
     LABEL
         blklabel1, blklabel2;
