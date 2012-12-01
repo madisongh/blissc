@@ -316,7 +316,7 @@ expr_node_copy (expr_node_t *node)
             expr_op_rhs_set(dst, expr_node_copy(expr_op_rhs(node)));
             break;
         case EXPTYPE_PRIM_BLK: {
-            expr_node_t *snode, *slast;
+            expr_node_t *snode, *slast = 0;
             expr_blk_seq_set(dst, 0);
             for (snode = expr_blk_seq(node); snode != 0; snode = expr_next(snode)) {
                 if (expr_blk_seq(dst) == 0) {
@@ -416,7 +416,7 @@ expr_node_copy (expr_node_t *node)
                                    expr_node_copy(expr_selector_high(node)));
             break;
         case EXPTYPE_CTRL_SELECT: {
-            expr_node_t *sel, *toplast, *sellast;
+            expr_node_t *sel, *toplast = 0, *sellast;
             expr_sel_index_set(dst, expr_node_copy(expr_sel_index(node)));
             expr_sel_selectors_set(dst, 0);
             for (sel = expr_sel_selectors(node); sel != 0; sel = expr_next(sel)) {
@@ -650,13 +650,11 @@ parse_leave (parse_ctx_t pctx, expr_node_t **expp)
 
     expr_node_t *exp, *valexp;
     lexeme_t *lex;
-    strdesc_t *label;
     name_t *lp;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NAME_LABEL, &lex, 1)) {
         /* XXX error condition */
     }
-    label = lexeme_text(lex);
     lp = lexeme_ctx_get(lex);
     if (lp == 0 || name_data_ptr(lp) != fake_label_ptr) {
         /* XXX error condition */
@@ -2112,7 +2110,6 @@ parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
             selseq = seqlast = sel;
         } else {
             expr_next_set(seqlast, sel);
-            seqlast = sel;
         }
     }
 

@@ -766,10 +766,9 @@ seg_alloc_static (stgctx_t ctx, textpos_t defpos, psect_t *psect,
             if (seg != 0) {
                 seg->info.staticinfo.is_external = is_external;
             }
-        } else {
-            if (seg_type(seg) != SEGTYPE_STATIC) {
-                return 0;
-            }
+            return seg;
+        } else if (seg_type(seg) != SEGTYPE_STATIC) {
+            return 0;
         }
         if (!is_external) {
             seg->info.staticinfo.psect = psect;
