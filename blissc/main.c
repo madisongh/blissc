@@ -131,6 +131,8 @@ void PRINTCR (void)
     delim = "";
 }
 
+void PRINTEXPR(expr_node_t *exp);
+
 void PRINTLEX(lexeme_t *lex)
 {
     lextype_t lt = lexeme_type(lex);
@@ -147,10 +149,9 @@ void PRINTLEX(lexeme_t *lex)
                             text->len, text->len, text->ptr);
         string_free(text);
     } else if (lt == LEXTYPE_EXPRESSION) {
-        text = expr_dumpinfo(lexeme_ctx_get(lex));
-        linewidth += printf("%sEXPR(%-*.*s)", delim,
-                            text->len, text->len, text->ptr);
-        string_free(text);
+        linewidth += printf("%sEXPR-BEGIN<<<\n", delim);
+        PRINTEXPR(lexeme_ctx_get(lex));
+        linewidth = printf(">>>END-EXPR");
     } else {
         linewidth += printf("%s%s<%-*.*s>", delim, typename,
                             text->len, text->len, text->ptr);
@@ -284,6 +285,11 @@ void PRINTEXPR_internal(int level, expr_node_t *exp)
             printf("%-*.*s{BLK:END}\n", level, level, pfx);
             break;
         }
+        case EXPTYPE_PRIM_STRUREF:
+            printf("%-*.*s{STRUREF<}\n", level, level, pfx);
+            PRINTEXPR_internal(level+1, expr_struref_accexpr(exp));
+            printf("%-*.*s{>STRUREF}\n", level, level, pfx);
+            break;
         case EXPTYPE_PRIM_LIT:
             printf("%-*.*s{LIT=%ld}\n", level, level, pfx, expr_litval(exp));
             break;

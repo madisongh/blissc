@@ -208,6 +208,9 @@ expr_node_free (expr_node_t *node, stgctx_t stg) {
             scope_end(expr_blk_scope(node));
             break;
         }
+        case EXPTYPE_PRIM_STRUREF:
+            expr_node_free(expr_struref_accexpr(node), stg);
+            break;
         case EXPTYPE_PRIM_FLDREF:
             expr_node_free(expr_fldref_addr(node), stg);
             expr_node_free(expr_fldref_pos(node), stg);
@@ -333,6 +336,9 @@ expr_node_copy (expr_node_t *node)
                                           scope_getparent(expr_blk_scope(node))));
             break;
         }
+        case EXPTYPE_PRIM_STRUREF:
+            expr_struref_accexpr_set(dst, expr_node_copy(expr_struref_accexpr(node)));
+            break;
         case EXPTYPE_PRIM_FLDREF:
             expr_fldref_addr_set(dst, expr_node_copy(expr_fldref_addr(node)));
             expr_fldref_pos_set(dst, expr_node_copy(expr_fldref_pos(node)));
@@ -611,12 +617,15 @@ parse_block (parse_ctx_t pctx, lextype_t curlt, expr_node_t **expp,
         }
     }
 
-    if (scope == 0 && codecomment == 0 && lexseq_empty(labels) &&
-        expr_count <= 1) {
-        *expp = (expr_count == 0 ?
-                 expr_node_alloc(EXPTYPE_NOOP, endpos) :
-                 seq);
-        return 1;
+    if (scope == 0 && codecomment == 0 && lexseq_empty(labels)) {
+        if (expr_count == 0) {
+            *expp = expr_node_alloc(EXPTYPE_NOOP, endpos);
+            return 1;
+        }
+        if (expr_count == 1) {
+            *expp = seq;
+            return 1;
+        }
     }
     if (scope != 0) {
         parser_scope_end(pctx);
@@ -1636,7 +1645,7 @@ parse_ltce (parse_ctx_t pctx, lexeme_t **lexp)
     expr_node_t *exp = 0;
     int status = 0;
 
-    if (!parse_expr(pctx, &exp, 0, 1)) {
+    if (!parse_expr(pctx, &exp, 0, 1) || exp == 0) {
         return 0;
     }
 
@@ -1672,6 +1681,8 @@ addrs_linktime_comparable (stgctx_t stg, expr_node_t *a, expr_node_t *b)
         }
     } else if (expr_type(a) == EXPTYPE_PRIM_SEG) {
         seg_a = expr_seg_base(a);
+    } else {
+        return 0;
     }
     if (expr_type(b) == EXPTYPE_PRIM_SEGNAME) {
         if (!name_is_ltc(expr_segname(b), &seg_b)) {
@@ -1679,6 +1690,8 @@ addrs_linktime_comparable (stgctx_t stg, expr_node_t *a, expr_node_t *b)
         }
     } else if (expr_type(b) == EXPTYPE_PRIM_SEG) {
         seg_b = expr_seg_base(b);
+    } else {
+        return 0;
     }
     if (seg_static_is_external(stg, seg_a) &&
         seg_static_is_external(stg, seg_b)) {
@@ -1709,6 +1722,15 @@ addrs_linktime_comparable (stgctx_t stg, expr_node_t *a, expr_node_t *b)
 int
 expr_is_ltc (stgctx_t stg, expr_node_t *exp)
 {
+    if (exp == 0) {
+        return 0;
+    }
+    if (expr_type(exp) == EXPTYPE_PRIM_STRUREF) {
+        exp = expr_struref_accexpr(exp);
+        if (exp == 0) {
+            return 0;
+        }
+    }
     switch (expr_type(exp)) {
         case EXPTYPE_PRIM_LIT:
             return 1;
@@ -1759,7 +1781,7 @@ name_is_ltc (name_t *np, seg_t **segp)
     nameinfo_t *ni;
     nametype_t nt;
 
-    if (name_type(np) != LEXTYPE_NAME_DATA) {
+    if (np == 0 || name_type(np) != LEXTYPE_NAME_DATA) {
         return 0;
     }
     ni = name_data_ptr(np);
@@ -1775,6 +1797,15 @@ name_is_ltc (name_t *np, seg_t **segp)
         case NAMETYPE_FORWARD:
             if (segp != 0) *segp = nameinfo_data_seg(ni);
             return 1;
+        case NAMETYPE_GLOBBIND:
+            if (segp != 0) *segp = nameinfo_data_seg(ni);
+            return 1;
+        case NAMETYPE_BIND:
+            if (seg_type(nameinfo_data_seg(ni)) == SEGTYPE_STATIC) {
+                if (segp != 0) *segp = nameinfo_data_seg(ni);
+                return 1;
+            }
+            break;
         default:
             break;
     }

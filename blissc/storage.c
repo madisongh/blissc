@@ -55,12 +55,13 @@ struct frame_s {
 struct initval_s {
     struct initval_s *next;
     struct initval_s *lastptr;
-    enum { IVTYPE_SCALAR, IVTYPE_LTCE_SEG, IVTYPE_LTCE_EXP,
+    enum { IVTYPE_SCALAR, IVTYPE_EXPR_SEG, IVTYPE_EXPR_EXP,
            IVTYPE_STRING, IVTYPE_LIST } type;
     unsigned int repcount;
+    void *preset_expr;
     union {
         struct {
-            void           *ltce;
+            void           *expr;
             long            value;
             unsigned int    width;
             int             signext;
@@ -509,12 +510,12 @@ initval_freelist (stgctx_t ctx, initval_t *iv)
             case IVTYPE_STRING:
                 string_free(iv->data.string);
                 break;
-            case IVTYPE_LTCE_EXP:
-                expr_node_free(iv->data.scalar.ltce, ctx);
+            case IVTYPE_EXPR_EXP:
+                expr_node_free(iv->data.scalar.expr, ctx);
             case IVTYPE_LIST:
                 initval_freelist(ctx, iv->data.listptr);
             case IVTYPE_SCALAR:
-            case IVTYPE_LTCE_SEG:
+            case IVTYPE_EXPR_SEG:
                 break;
         }
         iv->next = ctx->freeivs;
@@ -535,7 +536,7 @@ initval_scalar_add (stgctx_t ctx, initval_t *listhead, unsigned int reps,
     }
     iv->type = IVTYPE_SCALAR;
     iv->repcount = reps;
-    iv->data.scalar.ltce = 0;
+    iv->data.scalar.expr = 0;
     iv->data.scalar.value = val;
     iv->data.scalar.width = width;
     iv->data.scalar.signext = signext;
@@ -549,7 +550,31 @@ initval_scalar_add (stgctx_t ctx, initval_t *listhead, unsigned int reps,
 }
 
 initval_t *
-initval_ltce_add (stgctx_t ctx, initval_t *listhead, unsigned int reps,
+preset_scalar_add (stgctx_t ctx, initval_t *listhead, void *pexp, long val)
+{
+    initval_t *iv = initval_alloc(ctx);
+
+    if (iv == 0) {
+        return 0;
+    }
+    iv->type = IVTYPE_SCALAR;
+    iv->repcount = 0;
+    iv->preset_expr = pexp;
+    iv->data.scalar.expr = 0;
+    iv->data.scalar.value = val;
+    iv->data.scalar.width = 0;
+    iv->data.scalar.signext = 0;
+    if (listhead == 0) {
+        iv->lastptr = iv;
+        return iv;
+    }
+    listhead->lastptr->next = iv;
+    listhead->lastptr = iv;
+    return listhead;
+}
+
+initval_t *
+initval_expr_add (stgctx_t ctx, initval_t *listhead, unsigned int reps,
                   int is_expr, void *exp, unsigned int width, int signext)
 {
     initval_t *iv = initval_alloc(ctx);
@@ -557,11 +582,35 @@ initval_ltce_add (stgctx_t ctx, initval_t *listhead, unsigned int reps,
     if (iv == 0) {
         return 0;
     }
-    iv->type = (is_expr ? IVTYPE_LTCE_EXP : IVTYPE_LTCE_SEG);
+    iv->type = (is_expr ? IVTYPE_EXPR_EXP : IVTYPE_EXPR_SEG);
     iv->repcount = reps;
-    iv->data.scalar.ltce  = exp;
+    iv->data.scalar.expr  = exp;
     iv->data.scalar.width = width;
     iv->data.scalar.signext = signext;
+    if (listhead == 0) {
+        iv->lastptr = iv;
+        return iv;
+    }
+    listhead->lastptr->next = iv;
+    listhead->lastptr = iv;
+    return listhead;
+}
+
+initval_t *
+preset_expr_add (stgctx_t ctx, initval_t *listhead, void *pexp,
+                 int is_expr, void *exp)
+{
+    initval_t *iv = initval_alloc(ctx);
+
+    if (iv == 0) {
+        return 0;
+    }
+    iv->type = (is_expr ? IVTYPE_EXPR_EXP : IVTYPE_EXPR_SEG);
+    iv->repcount = 0;
+    iv->preset_expr = pexp;
+    iv->data.scalar.expr  = exp;
+    iv->data.scalar.width = 0;
+    iv->data.scalar.signext = 0;
     if (listhead == 0) {
         iv->lastptr = iv;
         return iv;
@@ -644,8 +693,8 @@ initval_size (stgctx_t ctx, initval_t *ivlist)
     for (iv = ivlist; iv != 0; iv = iv->next) {
         switch (iv->type) {
             case IVTYPE_SCALAR:
-            case IVTYPE_LTCE_SEG:
-            case IVTYPE_LTCE_EXP:
+            case IVTYPE_EXPR_SEG:
+            case IVTYPE_EXPR_EXP:
                 totsize += iv->repcount * iv->data.scalar.width;
                 break;
             case IVTYPE_STRING:
@@ -684,6 +733,15 @@ update_seg (seg_t *seg, initval_t *iv)
                 seg->info.stackinfo.iv_last = iv;
             }
             break;
+        case SEGTYPE_REGISTER:
+            if (seg->info.reginfo.initializer == 0) {
+                seg->info.reginfo.initializer =
+                seg->info.reginfo.iv_last = iv;
+            } else {
+                seg->info.reginfo.iv_last->next = iv;
+                seg->info.reginfo.iv_last = iv;
+            }
+            break;
 
         default:
             break;
@@ -708,13 +766,13 @@ seg_initval_add_scalar (stgctx_t ctx, seg_t *seg, unsigned int reps,
     iv->data.scalar.width    = width;
     iv->data.scalar.signext  = signext;
     iv->data.scalar.value    = value;
-    iv->data.scalar.ltce     = 0;
+    iv->data.scalar.expr     = 0;
     update_seg(seg, iv);
     return 1;
 }
 
 static int
-seg_initval_add_ltce (stgctx_t ctx, seg_t *seg, unsigned int reps,
+seg_initval_add_expr (stgctx_t ctx, seg_t *seg, unsigned int reps,
                       int is_expr, expr_node_t *exp, unsigned int width, int signext)
 {
     initval_t *iv = initval_alloc(ctx);
@@ -727,10 +785,10 @@ seg_initval_add_ltce (stgctx_t ctx, seg_t *seg, unsigned int reps,
         return 1;
     }
     iv->repcount = reps;
-    iv->type     = (is_expr ? IVTYPE_LTCE_EXP : IVTYPE_LTCE_SEG);
+    iv->type     = (is_expr ? IVTYPE_EXPR_EXP : IVTYPE_EXPR_SEG);
     iv->data.scalar.width    = width;
     iv->data.scalar.signext  = signext;
-    iv->data.scalar.ltce     = exp;
+    iv->data.scalar.expr     = exp;
     update_seg(seg, iv);
     return 1;
 }
@@ -778,11 +836,11 @@ seg_initval_add_ivlist (stgctx_t ctx, seg_t *seg, unsigned int reps,
                                            iv->data.scalar.width,
                                            iv->data.scalar.signext);
                     break;
-                case IVTYPE_LTCE_SEG:
-                case IVTYPE_LTCE_EXP:
-                    seg_initval_add_ltce(ctx, seg, iv->repcount,
-                                         (iv->type == IVTYPE_LTCE_EXP),
-                                         iv->data.scalar.ltce,
+                case IVTYPE_EXPR_SEG:
+                case IVTYPE_EXPR_EXP:
+                    seg_initval_add_expr(ctx, seg, iv->repcount,
+                                         (iv->type == IVTYPE_EXPR_EXP),
+                                         iv->data.scalar.expr,
                                          iv->data.scalar.width,
                                          iv->data.scalar.signext);
                     break;
@@ -816,6 +874,13 @@ seg_initval_set (stgctx_t ctx, seg_t *seg, initval_t *ivlist)
     return seg_initval_add_ivlist(ctx, seg, 1, ivlist);
 
 } /* seg_initval_set */
+
+int
+seg_preset_set (stgctx_t ctx, seg_t *seg, initval_t *ivlist)
+{
+    update_seg(seg, ivlist);
+    return 1;
+}
 
 int
 seg_commit (stgctx_t ctx, seg_t *seg)

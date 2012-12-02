@@ -24,8 +24,8 @@ int structure_allocate(parse_ctx_t pctx, name_t *struname,
                        strudef_t **strup, unsigned int *units,
                        scopectx_t *scopep);
 strdesc_t *structure_name(strudef_t *stru);
-int structure_reference(parse_ctx_t pctx,
-                        strudef_t *stru, struct nameinfo_s *ni,
+int structure_reference(parse_ctx_t pctx, strudef_t *stru,
+                        int ctce_accessors, struct nameinfo_s *ni,
                         lexeme_t *lex, lexseq_t *result);
 
 #endif

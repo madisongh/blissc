@@ -20,8 +20,8 @@
     DOEXPTYPE(NOOP) \
     DOEXPTYPE(PRIM_LIT) DOEXPTYPE(PRIM_SEG) \
     DOEXPTYPE(PRIM_FLDREF) DOEXPTYPE(PRIM_RTNCALL) \
-    DOEXPTYPE(PRIM_SEGNAME) DOEXPTYPE(PRIM_BLK) \
-    DOEXPTYPE(OPERATOR) \
+    DOEXPTYPE(PRIM_SEGNAME) DOEXPTYPE(PRIM_STRUREF) \
+    DOEXPTYPE(PRIM_BLK) DOEXPTYPE(OPERATOR) \
     DOEXPTYPE(EXECFUN) DOEXPTYPE(CTRL_COND) \
     DOEXPTYPE(CTRL_CASE) DOEXPTYPE(CTRL_EXIT) \
     DOEXPTYPE(CTRL_SELECT) DOEXPTYPE(SELECTOR) \
@@ -65,6 +65,9 @@ struct expr_blk_s {
     struct expr_node_s *blkval;
     scopectx_t          blkscope;
     strdesc_t          *codecomment;
+};
+struct expr_struref_s {
+    struct expr_node_s *accexpr;
 };
 struct expr_oper_s {
     struct expr_node_s *op_lhs, *op_rhs;
@@ -151,6 +154,7 @@ struct expr_node_s {
         long            litval;
         name_t          *segname;
         struct expr_seg_s  segdata;
+        struct expr_struref_s  srdata;
         struct expr_blk_s  blkdata;
         struct expr_fldref_s flddata;
         struct expr_oper_s opdata;
@@ -226,6 +230,14 @@ static inline __unused long expr_litval(expr_node_t *node) {
 }
 static inline __unused void expr_litval_set(expr_node_t *node, long value) {
     node->data.litval = value;
+}
+
+// PRIM_STRUREF
+static inline __unused expr_node_t *expr_struref_accexpr(expr_node_t *node) {
+    return node->data.srdata.accexpr;
+}
+static inline __unused void expr_struref_accexpr_set(expr_node_t *node, expr_node_t *e) {
+    node->data.srdata.accexpr = e;
 }
 // PRIM_SEG
 static inline __unused seg_t *expr_seg_base(expr_node_t *node) {

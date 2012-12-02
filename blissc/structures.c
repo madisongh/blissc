@@ -86,7 +86,7 @@ structure_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
         return 0;
     }
 
-    return structure_reference(pctx, stru, 0, lex, result);
+    return structure_reference(pctx, stru, 0, 0, lex, result);
 
 } /* structure_bind */
 
@@ -439,7 +439,7 @@ structure_allocate (parse_ctx_t pctx, name_t *struname,
  *
  */
 int
-structure_reference (parse_ctx_t pctx, strudef_t *stru,
+structure_reference (parse_ctx_t pctx, strudef_t *stru, int ctce_accessors,
                      nameinfo_t *ni, lexeme_t *curlex, lexseq_t *result)
 {
     scopectx_t curscope = parser_scope_get(pctx);
@@ -448,7 +448,7 @@ structure_reference (parse_ctx_t pctx, strudef_t *stru,
     scopectx_t myscope, fldscope;
     name_t *np;
     macparam_t *p;
-    expr_node_t *exp;
+    expr_node_t *exp, *resexp;
     int which;
     textpos_t pos = lexeme_textpos_get(curlex);
     lexeme_t *lex;
@@ -516,7 +516,9 @@ structure_reference (parse_ctx_t pctx, strudef_t *stru,
         strdesc_t *pname = name_string(p->np);
         lexseq_init(&seq);
         if (delim == LEXTYPE_DELIM_COMMA) {
-            if (expr_parse_next(pctx, &lex, 0)) {
+            int ok;
+            ok = (ctce_accessors ? parse_ctce(pctx, &lex) : expr_parse_next(pctx, &lex, 0));
+            if (ok) {
                 lexseq_instail(&seq, lex);
                 which = parser_expect_oneof(pctx, QL_NORMAL, delims, ndelims, 0, 1);
                 if (which < 0) {
@@ -525,7 +527,7 @@ structure_reference (parse_ctx_t pctx, strudef_t *stru,
                     delim = delims[which];
                 }
             } else if (!parse_lexeme_seq(pctx, 0, QL_NORMAL, delims, ndelims, &seq, &delim)) {
-                break;
+                break; 
             }
         }
         if (lexseq_length(&seq) == 0) {
@@ -572,12 +574,8 @@ structure_reference (parse_ctx_t pctx, strudef_t *stru,
         /* XXX error condition */
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RBRACK);
     }
-    // Enclose the result in parentheses so it is treated as a
-    // field-referenceable primary.
     lexseq_init(&seq);
-    lexseq_inshead(&seq, lexeme_create(LEXTYPE_DELIM_LPAR, &leftparen));
     lexseq_copy(&seq, &stru->accbody);
-    lexseq_instail(&seq, lexeme_create(LEXTYPE_DELIM_RPAR, &rightparen));
     parser_scope_set(pctx, myscope);
     if (!expr_parse_seq(pctx, &seq, &exp)) {
         /* XXX error condition */
@@ -587,7 +585,9 @@ structure_reference (parse_ctx_t pctx, strudef_t *stru,
     }
 
     parser_scope_end(pctx);
-    if (expr_setlex(pctx, &curlex, exp)) {
+    resexp = expr_node_alloc(EXPTYPE_PRIM_STRUREF, pos);
+    expr_struref_accexpr_set(resexp, exp);
+    if (expr_setlex(pctx, &curlex, resexp)) {
         return 0;
     }
     return -1;

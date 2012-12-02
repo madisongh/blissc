@@ -25,7 +25,6 @@ typedef enum {
     DCL_GLOBAL,
     DCL_EXTERNAL,
     DCL_FORWARD,
-    DCL_BIND,
     DCL_MAP
 } decltype_t;
 
@@ -620,6 +619,38 @@ declare_psect (parse_ctx_t pctx, scopectx_t scope)
 } /* declare_psect */
 
 static int
+name_data_value (name_t *np, seg_t **segp, expr_node_t **expp)
+{
+    nameinfo_t *ni;
+
+    if (np == 0 || name_type(np) != LEXTYPE_NAME_DATA) {
+        return 0;
+    }
+    ni = name_data_ptr(np);
+    switch (nameinfo_type(ni)) {
+        case NAMETYPE_GLOBAL:
+        case NAMETYPE_EXTERNAL:
+        case NAMETYPE_OWN:
+        case NAMETYPE_LOCAL:
+            *segp = nameinfo_data_seg(ni);
+            return 0;
+        case NAMETYPE_EXTLIT:
+        case NAMETYPE_GLOBLIT:
+            *segp = nameinfo_gxlit_seg(ni);
+            return 0;
+        case NAMETYPE_BIND:
+        case NAMETYPE_GLOBBIND:
+            *expp = nameinfo_bind_expr(ni);
+            return 1;
+        default:
+            break;
+    }
+
+    return -1;
+
+} /* name_data_value */
+
+static int
 attr_psect (parse_ctx_t pctx, stgctx_t stg, psect_t **psp)
 {
     psect_t *ps = 0;
@@ -732,10 +763,10 @@ plit_items (parse_ctx_t pctx, stgctx_t stg, int defau, machinedef_t *mach) {
                     }
                     ivlist = initval_scalar_add(stg, ivlist, 1, val, itemau, 0);
                 } else if (lexeme_type(lex) == LEXTYPE_SEGMENT) {
-                    ivlist = initval_ltce_add(stg, ivlist, 1, 0,
+                    ivlist = initval_expr_add(stg, ivlist, 1, 0,
                                               lexeme_ctx_get(lex), itemau, 0);
                 } else if (lexeme_type(lex) == LEXTYPE_EXPRESSION) {
-                    ivlist = initval_ltce_add(stg, ivlist, 1, 1,
+                    ivlist = initval_expr_add(stg, ivlist, 1, 1,
                                               lexeme_ctx_get(lex), itemau, 0);
                 } else {
                     /* XXX error condition */
@@ -915,14 +946,100 @@ attr_field (parse_ctx_t pctx, scopectx_t scope, lexseq_t *fldset)
 } /* attr_field */
 
 static int
+attr_preset (parse_ctx_t pctx, stgctx_t stg, name_t *np,
+             seg_t *seg, nameinfo_t *ni, strudef_t *stru,
+             initval_t **ivlistp)
+{
+    lexeme_t *lex;
+    initval_t *ivlist;
+    expr_node_t *pexp, *exp;
+
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_ATTR_PRESET, 0, 1)) {
+        return 0;
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
+        /* XXX error condition */
+    }
+    if (np == 0) {
+        /* previous error condition - just skip processing */
+        parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
+        return 1;
+    }
+    while (1) {
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LBRACK, 0, 1)) {
+            /* XXX error condition */
+        }
+        // We're essentially building an assignment expression that
+        // will get interpreted at a later stage.
+        lex = parser_lexeme_create(pctx, LEXTYPE_NAME_DATA, name_string(np));
+        lexeme_type_set(lex, LEXTYPE_NAME_DATA);
+        lexeme_ctx_set(lex, np);
+        if (structure_reference(pctx, stru, 1, ni, lex, 0) != 0) {
+            /* XXX error condition */
+        }
+        // Should now have a STRUREF expression
+        pexp = lexeme_ctx_get(lex);
+        lexeme_free(lex);
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 1)) {
+            /* XXX error condition */
+        }
+        lex = 0;
+        if (!expr_parse_next(pctx, &lex, 0)) {
+            /* XXX error condition */
+        }
+        switch (lexeme_type(lex)) {
+            case LEXTYPE_NUMERIC:
+                ivlist = preset_scalar_add(stg, ivlist, pexp, lexeme_signedval(lex));
+                exp = 0;
+                break;
+            case LEXTYPE_NAME_DATA:
+                exp = expr_node_alloc(EXPTYPE_PRIM_SEGNAME, lexeme_textpos_get(lex));
+                if (exp != 0) expr_segname_set(exp, lexeme_ctx_get(lex));
+                break;
+            case LEXTYPE_EXPRESSION:
+                exp = lexeme_ctx_get(lex);
+                break;
+            default:
+                /* XXX error condition */
+                exp = 0;
+                break;
+        }
+        lexeme_free(lex);
+        if (exp != 0) {
+            if (seg_type(seg) == SEGTYPE_STATIC && !expr_is_ltc(stg, exp)) {
+                /* XXX error condition */
+            }
+            if (expr_type(exp) == EXPTYPE_PRIM_SEGNAME) {
+                ivlist = preset_expr_add(stg, ivlist, pexp, 0, expr_segname(exp));
+                expr_node_free(exp, stg);
+            } else {
+                ivlist = preset_expr_add(stg, ivlist, pexp, 1, exp);
+            }
+        }
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
+            break;
+        }
+    } /* while */
+
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
+        /* XXX error condition */
+    }
+
+    *ivlistp = ivlist;
+    return 1;
+    
+} /* attr_preset */
+
+static int
 handle_data_attrs (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
                      machinedef_t *mach, decltype_t dt, seg_t *seg,
-                     nameinfo_t *ni) {
+                     nameinfo_t *ni, name_t *np) {
     int saw_au, saw_ext, saw_align, saw_init, saw_vol,
-        saw_alias, saw_psect, saw_stru, saw_field;
+        saw_alias, saw_psect, saw_stru, saw_field, saw_preset;
+    int did1;
     int which;
     int align;
-    unsigned int stru_units, niflags;
+    unsigned int stru_units;
     scalar_attr_t scattr;
     initval_t *ivlist;
     strudef_t *stru;
@@ -932,39 +1049,48 @@ handle_data_attrs (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
     static lextype_t delims[2] = { LEXTYPE_DELIM_SEMI, LEXTYPE_DELIM_COMMA };
 
     saw_au = saw_ext = saw_align = saw_init = saw_vol = saw_alias = saw_psect = 0;
-    saw_stru = saw_field = 0;
+    saw_stru = 0;
+    saw_field = saw_preset = -1; // not allowed until saw_stru
 
     scattr_units_set(&scattr, machine_scalar_units(mach));
     scattr_signed_set(&scattr, 0);
 
-    if (seg_type(seg) == SEGTYPE_REGISTER) {
-        saw_align = saw_vol = saw_alias = -1;
-    } else if (seg_type(seg) == SEGTYPE_STACK) {
-        saw_psect = -1;
+    if (nameinfo_type(ni) == NAMETYPE_BIND ||
+        nameinfo_type(ni) == NAMETYPE_GLOBBIND) {
+        saw_init = saw_psect = saw_align = -1;
+        saw_preset = -2;
     } else {
-        if (dt == DCL_FORWARD || dt == DCL_EXTERNAL) {
-            saw_align = saw_init = -1;
+        if (seg_type(seg) == SEGTYPE_REGISTER) {
+            saw_align = saw_vol = saw_alias = -1;
+        } else if (seg_type(seg) == SEGTYPE_STACK) {
+            saw_psect = -1;
+        } else {
+            if (dt == DCL_FORWARD || dt == DCL_EXTERNAL) {
+                saw_align = saw_init = -1;
+            }
         }
     }
 
+    nameinfo_data_seg_set(ni, seg);
+
     ivlist = 0;
-    niflags = 0;
     lexseq_init(&fldset);
     parser_set_indecl(pctx, 1);
 
     do {
+        did1 = 0;
         if (!saw_au) {
             saw_au = attr_allocunit(pctx, mach, (int *)&scattr.units);
-            if (saw_au) saw_stru = -1;
+            if (saw_au) { did1 = 1; saw_stru = -1; }
         }
         if (!saw_ext) {
             saw_ext = attr_extension(pctx, mach, &scattr.signext);
-            if (saw_ext) saw_stru = -1;
+            if (saw_ext) { did1 = 1; saw_stru = -1; }
         }
         if (!saw_stru) {
             lexeme_t *lex;
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_REF, 0, 1)) {
-                niflags |= NI_M_REF;
+                nameinfo_data_flags_set(ni, nameinfo_data_flags(ni) | NI_M_REF);
                 if (!parser_expect(pctx, QL_NORMAL,
                                    LEXTYPE_NAME_STRUCTURE, &lex, 1)) {
                     /* XXX error condition */
@@ -978,38 +1104,69 @@ handle_data_attrs (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
                 structure_allocate(pctx, lexeme_ctx_get(lex), &stru,
                                    &stru_units, &struscope);
                 saw_au = saw_ext = -1;
+                nameinfo_data_struc_set(ni, stru);
+                nameinfo_data_struscope_set(ni, struscope);
+                if (saw_preset == -1) saw_preset = 0;
+                if (saw_field == -1) saw_field = 0;
+                did1 = 1;
             }
         }
-        if (!saw_field) saw_field = attr_field(pctx, scope, &fldset);
-        if (!saw_align) saw_align = attr_align(pctx, mach, &align);
-        if (!saw_psect) saw_psect = attr_psect(pctx, stg, &psect);
+        if (!saw_field) {
+            saw_field = attr_field(pctx, scope, &fldset);
+            nameinfo_data_fields_set(ni, &fldset);
+            if (saw_field) did1 = 1;
+        }
+        if (!saw_align) {
+            saw_align = attr_align(pctx, mach, &align);
+            if (saw_align) did1 = saw_align;
+        }
+        if (!saw_psect) {
+            saw_psect = attr_psect(pctx, stg, &psect);
+            if (saw_psect) did1 = saw_psect;
+        }
         if (!saw_init) {
             if (attr_initial(pctx, stg, scattr_units(&scattr), mach, &ivlist)) {
                 saw_init = 1;
+                saw_preset = -1;
+                did1 = 1;
                 if (saw_au == 0) saw_au = -1; // INITIAL must come after allocation-unit
+            }
+        }
+        if (!saw_preset) {
+            if (attr_preset(pctx, stg, np, seg, ni, stru, &ivlist)) {
+                saw_preset = 1;
+                saw_init = -1;
+                did1 = 1;
             }
         }
         if (!saw_vol) {
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_ATTR_VOLATILE, 0, 1)) {
+                did1 = 1;
                 saw_vol = 1;
                 saw_alias = -1;
                 seg_flags_set(stg, seg, SEG_M_VOLATILE);
-                niflags |= NI_M_VOLATILE;
+                nameinfo_data_flags_set(ni, nameinfo_data_flags(ni) | NI_M_VOLATILE);
             }
         }
         if (!saw_alias) {
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_ATTR_ALIAS, 0, 1)) {
+                did1 = 1;
                 saw_vol = -1;
                 saw_alias = 1;
                 seg_flags_set(stg, seg, SEG_M_ALIAS);
-                niflags |= NI_M_ALIAS;
+                nameinfo_data_flags_set(ni, nameinfo_data_flags(ni) | NI_M_ALIAS);
             }
         }
         which = parser_expect_oneof(pctx, QL_NORMAL, delims, 2, 0, 1);
 
-    } while (which < 0);
+    } while (which < 0 && did1);
 
     parser_set_indecl(pctx, 0);
+
+    if (which < 0) {
+        /* XXX error condition - unknown attribute */
+        return -1;
+    }
 
     // XXX need to compare attributes for FORWARD/EXTERNAL against
     //     their actual OWN/GLOBALs
@@ -1017,19 +1174,14 @@ handle_data_attrs (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
     if (saw_psect > 0) seg_static_psect_set(stg, seg, psect);
     if (saw_align > 0) seg_alignment_set(stg, seg, align);
     if (saw_init > 0) seg_initval_set(stg, seg, ivlist);
+    if (saw_preset > 0) seg_preset_set(stg, seg, ivlist);
 
-    nameinfo_data_seg_set(ni, seg);
 
     if (saw_stru > 0) {
-        nameinfo_data_struc_set(ni, stru);
-        nameinfo_data_struscope_set(ni, struscope);
-        if (niflags & NI_M_REF) {
+        if (nameinfo_data_flags(ni) & NI_M_REF) {
             seg_size_set(stg, seg, machine_scalar_units(mach));
         } else {
             seg_size_set(stg, seg, stru_units);
-        }
-        if (saw_field > 0) {
-            nameinfo_data_fields_set(ni, &fldset);
         }
     } else {
         if (saw_field > 0) {
@@ -1039,7 +1191,6 @@ handle_data_attrs (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
         if (saw_au > 0) seg_size_set(stg, seg, scattr.units);
         nameinfo_data_scattr_set(ni, &scattr);
     }
-    nameinfo_data_flags_set(ni, niflags);
 
     return which;
 
@@ -1086,6 +1237,12 @@ declare_data (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
             return 0;
         }
         ni = nameinfo_alloc(nametype);
+        np = name_declare(scope, namestr->ptr, namestr->len, LEXTYPE_NAME_DATA, pos);
+        if (np == 0) {
+            /* XXX error condition */
+        } else {
+            name_data_set_ptr(np, ni);
+        }
         if (st == SEGTYPE_STACK) {
             seg = seg_alloc_stack(stg, pos, stackonly);
         } else if (st == SEGTYPE_REGISTER) {
@@ -1096,29 +1253,146 @@ declare_data (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
                                     namestr : 0));
         }
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
-            status = handle_data_attrs(pctx, scope, stg, mach, dt, seg, ni);
+            status = handle_data_attrs(pctx, scope, stg, mach, dt, seg, ni, np);
         } else {
             status = parser_expect_oneof(pctx, QL_NORMAL, delims, 2, 0, 1);
         }
         if (status < 0) {
             nameinfo_free(ni, stg);
+            seg_free(stg, seg);
             string_free(namestr);
+            if (np != 0) name_undeclare(scope, np);
             /* XXX error condition */
             break;
         }
-        np = name_declare(scope, namestr->ptr, namestr->len, LEXTYPE_NAME_DATA, pos);
-        if (np == 0) {
-            /* XXX error condition */
-        } else {
-            seg_commit(stg, seg);
-            name_data_set_ptr(np, ni);
-        }
+        seg_commit(stg, seg);
         string_free(namestr);
     }
 
     return 1;
 }
 
+/*
+ * declare_bind
+ */
+static int
+declare_bind (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
+              machinedef_t *mach, lextype_t lt, decltype_t dt)
+{
+    strdesc_t *namestr;
+    textpos_t pos;
+    name_t *np;
+    seg_t *seg;
+    initval_t *ivlist;
+    lexeme_t *lex;
+    int status = 1;
+    int is_ltce;
+    nametype_t nametype;
+    unsigned int upval = machine_scalar_units(mach);
+    int signext = machine_addr_signed(mach);
+    static lextype_t delims[2] = { LEXTYPE_DELIM_SEMI, LEXTYPE_DELIM_COMMA };
+
+    nametype = (dt == DCL_GLOBAL? NAMETYPE_GLOBBIND : NAMETYPE_BIND);
+
+    while (status != 0) {
+        nameinfo_t *ni;
+        if (!parse_decl_name(pctx, scope, &namestr, &pos)) {
+            /* XXX error condition */
+            return 0;
+        }
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 1)) {
+            /* XXX error condition */
+            return 0;
+        }
+        if (!expr_parse_next(pctx, &lex, 0)) {
+            /* XXX error condition */
+            return 0;
+        }
+        // XXX manual says allowed LTCEs are more restrictive
+        //     than in other contexts?
+        is_ltce = (lexeme_type(lex) != LEXTYPE_EXPRESSION ||
+                   expr_is_ltc(stg, lexeme_ctx_get(lex)));
+        if (dt == DCL_GLOBAL && !is_ltce) {
+            /* XXX error condition */
+        }
+        ni = nameinfo_alloc(nametype);
+        // Allocate storage for the BIND pointer.  If we're bound
+        // to an LTCE, make it static storage (with a global symbol
+        // if it's a GLOBAL BIND).  Otherwise, it's local storage.
+        if (is_ltce) {
+            psect_t *psect = 0;
+            if (dt != DCL_GLOBAL) {
+                np = scope_sclass_psectname(scope, SCLASS_PLIT);
+                psect = name_data_ptr(np);
+            }
+            seg = seg_alloc_static(stg, pos, psect, 0,
+                                   (dt == DCL_GLOBAL ? namestr : 0));
+        } else {
+            seg = seg_alloc_stack(stg, pos, 0);
+        }
+        switch (lexeme_type(lex)) {
+            case LEXTYPE_NUMERIC:
+                ivlist = initval_scalar_add(stg, 0, 1,
+                                            (signext ? lexeme_signedval(lex)
+                                             : lexeme_unsignedval(lex)),
+                                            upval, signext);
+                break;
+            case LEXTYPE_SEGMENT:
+                ivlist = initval_expr_add(stg, 0, 1, 0, lexeme_ctx_get(lex), upval, signext);
+                break;
+            case LEXTYPE_NAME_DATA: {
+                expr_node_t *exp;
+                int status = name_data_value(lexeme_ctx_get(lex), &seg, &exp);
+                if (status < 0) {
+                    /* XXX error condition */
+                    ivlist = initval_scalar_add(stg, 0, 1, 0, upval, signext);
+                } else if (status == 0) {
+                    ivlist = initval_expr_add(stg, 0, 1, 0, seg, upval, signext);
+                } else {
+                    ivlist = initval_expr_add(stg, 0, 1, 1, exp, upval, signext);
+                }
+                break;
+            }
+            case LEXTYPE_EXPRESSION:
+                ivlist = initval_expr_add(stg, 0, 1, 1, lexeme_ctx_get(lex), upval, signext);
+                break;
+            default:
+                /* XXX error condition */
+                ivlist = initval_scalar_add(stg, 0, 1, 0, upval, signext);
+                break;
+        }
+        seg_initval_set(stg, seg, ivlist);
+
+        np = name_declare(scope, namestr->ptr, namestr->len, LEXTYPE_NAME_DATA, pos);
+        if (np == 0) {
+            /* XXX error condition */
+        } else {
+            name_data_set_ptr(np, ni);
+        }
+        if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
+            status = handle_data_attrs(pctx, scope, stg, mach, dt, seg, ni, np);
+        } else {
+            status = parser_expect_oneof(pctx, QL_NORMAL, delims, 2, 0, 1);
+        }
+        if (status < 0) {
+            nameinfo_free(ni, stg);
+            string_free(namestr);
+            seg_free(stg, seg);
+            if (np != 0) name_undeclare(scope, np);
+            /* XXX error condition */
+            break;
+        }
+        seg_commit(stg, seg);
+        string_free(namestr);
+    }
+
+    return 1;
+    
+} /* declare_bind */
+
+/*
+ * declare_map
+ */
 static int
 declare_map (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
               machinedef_t *mach)
@@ -1147,7 +1421,7 @@ declare_map (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
             name_data_set_ptr(np, ni);
         }
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
-            status = handle_data_attrs(pctx, scope, stg, mach, DCL_MAP, 0, ni);
+            status = handle_data_attrs(pctx, scope, stg, mach, DCL_MAP, 0, ni, np);
         } else {
             /* XXX error condition */
             status = parser_expect_oneof(pctx, QL_NORMAL, delims, 2, 0, 1);
@@ -1161,7 +1435,8 @@ declare_map (parse_ctx_t pctx, scopectx_t scope, stgctx_t stg,
     }
 
     return 1;
-}
+    
+} /* declare_map */
 
 /*
  * declare_require
@@ -1269,7 +1544,7 @@ bind_data (void *ctx, quotelevel_t ql, quotemodifier_t qm,
             strudef_t *stru = nameinfo_data_struc(ni);
             if (stru != 0 &&
                 parser_expect(pctx, ql, LEXTYPE_DELIM_LBRACK, 0, 1)) {
-                return structure_reference(ctx, stru, ni, lex, result);
+                return structure_reference(ctx, stru, 0, ni, lex, result);
             }
             break;
         }
@@ -1279,7 +1554,7 @@ bind_data (void *ctx, quotelevel_t ql, quotemodifier_t qm,
             strudef_t *stru = nameinfo_bind_struc(ni);
             if (stru != 0 &&
                 parser_expect(pctx, ql, LEXTYPE_DELIM_LBRACK, 0, 1)) {
-                return structure_reference(ctx, stru, ni, lex, result);
+                return structure_reference(ctx, stru, 0, ni, lex, result);
             }
             break;
         }
@@ -1291,6 +1566,7 @@ bind_data (void *ctx, quotelevel_t ql, quotemodifier_t qm,
     return 0; /* just leave it as is */
 
 } /* bind_data */
+
 
 
 /*
@@ -1411,15 +1687,13 @@ parse_declaration (parse_ctx_t pctx)
     int status;
     stgctx_t stg = parser_get_cctx(pctx);
     machinedef_t *mach = parser_get_machinedef(pctx);
-    static lextype_t pfx[] = { LEXTYPE_DCL_GLOBAL, LEXTYPE_DCL_EXTERNAL,
-        LEXTYPE_DCL_FORWARD, LEXTYPE_DCL_BIND };
-    decltype_t  dtypes[] = { DCL_NORMAL, DCL_GLOBAL, DCL_EXTERNAL, DCL_FORWARD,
-        DCL_BIND };
     int which;
-    static lextype_t allowed[4][4] = {
+    static lextype_t pfx[] = { LEXTYPE_DCL_GLOBAL, LEXTYPE_DCL_EXTERNAL,
+                               LEXTYPE_DCL_FORWARD };
+    static decltype_t  dtypes[] = { DCL_NORMAL, DCL_GLOBAL, DCL_EXTERNAL, DCL_FORWARD };
+    static lextype_t allowed[3][4] = {
         { LEXTYPE_DCL_LITERAL, LEXTYPE_DCL_ROUTINE, LEXTYPE_DCL_REGISTER, LEXTYPE_DCL_BIND },
         { LEXTYPE_DCL_LITERAL, LEXTYPE_DCL_ROUTINE, LEXTYPE_DCL_REGISTER },
-        { LEXTYPE_DCL_ROUTINE },
         { LEXTYPE_DCL_ROUTINE }
     };
     static int count[3] = { 4, 3, 1 };
@@ -1440,6 +1714,13 @@ parse_declaration (parse_ctx_t pctx)
     }
 
     switch (lt) {
+        case LEXTYPE_DCL_BIND:
+            if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DCL_ROUTINE, 0, 1)) {
+                // do {GLOBAL} BIND ROUTINE
+            } else {
+                status = declare_bind(pctx, scope, stg, mach, lt, dtypes[which]);
+            }
+            break;
         case LEXTYPE_DCL_GLOBAL:
         case LEXTYPE_DCL_OWN:
         case LEXTYPE_DCL_EXTERNAL:
@@ -1487,6 +1768,9 @@ parse_declaration (parse_ctx_t pctx)
         case LEXTYPE_DCL_UNDECLARE:
             status = undeclare(pctx, scope);
             break;
+        case LEXTYPE_DCL_ROUTINE:
+//            status = declare_routine(pctx, scope, lt, dtypes[which], extra);
+//            break;
         default:
             /* XXX error condition */
             status = 0;

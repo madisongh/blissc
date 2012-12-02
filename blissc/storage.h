@@ -56,6 +56,7 @@ seg_t *seg_alloc_literal(stgctx_t ctx, textpos_t defpos,
 void seg_free(stgctx_t ctx, seg_t *seg);
 seg_t *seg_globalsym_search(stgctx_t ctx, strdesc_t *namestr);
 int seg_initval_set(stgctx_t ctx, seg_t *seg, initval_t *ivlist);
+int seg_preset_set(stgctx_t ctx, seg_t *seg, initval_t *ivlist);
 void seg_static_psect_set(stgctx_t ctx, seg_t *seg, psect_t *psect);
 psect_t *seg_static_psect(stgctx_t ctx, seg_t *seg);
 int seg_static_is_external(stgctx_t ctx, seg_t *seg);
@@ -80,7 +81,7 @@ psect_t *psect_create(stgctx_t ctx, strdesc_t *name, textpos_t defpos, unsigned 
 
 initval_t *initval_scalar_add(stgctx_t ctx, initval_t *head, unsigned int reps,
                               long val, unsigned int width, int signext);
-initval_t *initval_ltce_add(stgctx_t ctx, initval_t *head, unsigned int reps,
+initval_t *initval_expr_add(stgctx_t ctx, initval_t *head, unsigned int reps,
                             int is_expr, void *exp, unsigned int width, int signext);
 initval_t *initval_scalar_prepend(stgctx_t ctx, initval_t *head, unsigned int reps,
                                   long val, unsigned int width, int signext);
@@ -90,6 +91,9 @@ initval_t *initval_ivlist_add(stgctx_t ctx, initval_t *head, unsigned int reps,
                               initval_t *sublist);
 void initval_freelist(stgctx_t ctx, initval_t *iv);
 unsigned long initval_size(stgctx_t ctx, initval_t *ivlist);
+initval_t *preset_scalar_add(stgctx_t ctx, initval_t *head, void *pexp, long val);
+initval_t *preset_expr_add(stgctx_t ctx, initval_t *head, void *pexp,
+                           int is_expr, void *exp);
 
 stgctx_t storage_init(machinedef_t *mach);
 void storage_finish(stgctx_t ctx);
