@@ -44,6 +44,9 @@ typedef enum {
     DOOPTYPE(CMP_EQLU) DOOPTYPE(CMP_NEQU) \
     DOOPTYPE(CMP_LSSU) DOOPTYPE(CMP_LEQU) \
     DOOPTYPE(CMP_GTRU) DOOPTYPE(CMP_GEQU) \
+    DOOPTYPE(CMP_EQLA) DOOPTYPE(CMP_NEQA) \
+    DOOPTYPE(CMP_LSSA) DOOPTYPE(CMP_LEQA) \
+    DOOPTYPE(CMP_GTRA) DOOPTYPE(CMP_GEQA) \
     DOOPTYPE(NOT) DOOPTYPE(AND) DOOPTYPE(OR) \
     DOOPTYPE(EQV) DOOPTYPE(XOR) \
     DOOPTYPE(ASSIGN)
@@ -168,7 +171,7 @@ const char *exprtype_name(exprtype_t type);
 expr_node_t *expr_node_alloc(exprtype_t type, textpos_t pos);
 void expr_node_free(expr_node_t *node, stgctx_t stg);
 expr_node_t *expr_node_copy(expr_node_t *src);
-
+const char *oper_name(optype_t op);
 
 static inline __unused int expr_is_noop(expr_node_t *node) {
     return (node == 0 ? 1 : node->type == EXPTYPE_NOOP);
@@ -534,6 +537,8 @@ void expr_init (scopectx_t kwdscope);
 int expr_parse_next(parse_ctx_t pctx, lexeme_t **lexp, int longstrings_ok);
 int expr_parse_block(parse_ctx_t pctx, expr_node_t **blkexp);
 int parse_ctce(parse_ctx_t pctx, lexeme_t **lexp);
+int parse_ltce(parse_ctx_t pctx, lexeme_t **lexp);
+int expr_is_ltc(stgctx_t stg, expr_node_t *exp);
 int expr_parse_seq(parse_ctx_t pctx, lexseq_t *seq, expr_node_t **expp);
 int expr_setlex(parse_ctx_t pctx, lexeme_t **lexp, expr_node_t *exp);
 strdesc_t *expr_dumpinfo(expr_node_t *exp);

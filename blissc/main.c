@@ -265,3 +265,58 @@ test_expr (int argc, const char *argv[])
     scope_end(mainscope);
     return 0;
 }
+
+void PRINTEXPR_internal(int level, expr_node_t *exp)
+{
+    static char pfx[] = "                    +";
+    if (level >= sizeof(pfx)) level = sizeof(pfx)-1;
+    if (exp == 0) return;
+    switch (expr_type(exp)) {
+        case EXPTYPE_NOOP:
+            printf("%-*.*s{NOOP}\n", level, level, pfx);
+            break;
+        case EXPTYPE_PRIM_BLK: {
+            expr_node_t *e;
+            printf("%-*.*s{BLK:BEGIN}\n", level, level, pfx);
+            for (e = expr_blk_seq(exp); e != 0; e = expr_next(e)) {
+                PRINTEXPR_internal(level+1, e);
+            }
+            printf("%-*.*s{BLK:END}\n", level, level, pfx);
+            break;
+        }
+        case EXPTYPE_PRIM_LIT:
+            printf("%-*.*s{LIT=%ld}\n", level, level, pfx, expr_litval(exp));
+            break;
+        case EXPTYPE_PRIM_SEG: {
+            printf("%-*.*s{SEG:%p(%lx)}\n",
+                   level, level, pfx, expr_seg_base(exp), expr_seg_offset(exp));
+            break;
+        }
+        case EXPTYPE_PRIM_SEGNAME: {
+            strdesc_t *str = name_string(expr_segname(exp));
+            printf("%-*.*s{SEGNAME:%-*.*s}\n", level, level, pfx,
+                   str->len, str->len, str->ptr);
+            break;
+        }
+        case EXPTYPE_PRIM_FLDREF:
+            printf("%-*.*s{FLDREF<}\n", level, level, pfx);
+            PRINTEXPR_internal(level+1, expr_fldref_addr(exp));
+            PRINTEXPR_internal(level+1, expr_fldref_pos(exp));
+            PRINTEXPR_internal(level+1, expr_fldref_size(exp));
+            printf("%-*.*s{>FLDREF}\n", level, level, pfx);
+            break;
+        case EXPTYPE_OPERATOR:
+            printf("%-*.*s{%s<}\n", level, level, pfx, oper_name(expr_op_type(exp)));
+            PRINTEXPR_internal(level+1, expr_op_lhs(exp));
+            PRINTEXPR_internal(level+1, expr_op_rhs(exp));
+            printf("%-*.*s{>%s}\n", level, level, pfx, oper_name(expr_op_type(exp)));
+            break;
+        default:
+            printf("%-*.*s{EXPTYPE:%d}\n", level, level, pfx, expr_type(exp));
+            break;
+    }
+}
+void PRINTEXPR(expr_node_t *exp) {
+    PRINTEXPR_internal(0, exp);
+}
+

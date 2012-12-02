@@ -61,7 +61,8 @@ typedef int (*lexfunc_t)(parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt);
     DODEF(ASSIGN, parse_ASSIGN) DODEF(DECLARED, parse_DECLARED) \
     DODEF(NUMBER, parse_NUMBER) DODEF(NBITS, parse_nbits_func) \
     DODEF(NBITSU, parse_nbits_func) DODEF(PRINT, parse_msgfunc) \
-    DODEF(CTCE, parse_CTCE) DODEF(FIELDEXPAND, parse_FIELDEXPAND) \
+    DODEF(CTCE, parse_xTCE) DODEF(LTCE, parse_xTCE) \
+    DODEF(FIELDEXPAND, parse_FIELDEXPAND) \
     DODEF(ALLOCATION, parse_ALLOCATION) DODEF(SIZE, parse_SIZE)
 
 #define DODEF(name_, rtn_) static int rtn_ (parse_ctx_t, quotelevel_t, lextype_t);
@@ -1754,12 +1755,15 @@ parse_msgfunc (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 } /* parse_msg_func */
 
 /*
- * parse_CTCE
+ * parse_xTCE
  *
  * %CTCE(exp,..)
+ * %LTCE(exp,..)
+ *
+ * Return 1 if the expression(s) are CTCEs/LTCEs.
  */
 static int
-parse_CTCE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
+parse_xTCE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 {
     lextype_t lt;
     int allctce = 1;
@@ -1769,8 +1773,14 @@ parse_CTCE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         return 1;
     }
     while (1) {
-        if (!parse_ctce(pctx, 0)) {
-            allctce = 0;
+        if (curlt == LEXTYPE_LXF_CTCE) {
+            if (!parse_ctce(pctx, 0)) {
+                allctce = 0;
+            }
+        } else {
+            if (!parse_ltce(pctx, 0)) {
+                allctce = 0;
+            }
         }
         lt = parser_next(pctx, QL_NORMAL, 0);
         if (lt == LEXTYPE_DELIM_RPAR) {
@@ -1786,7 +1796,7 @@ parse_CTCE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 
     return 1;
     
-} /* parse_CTCE */
+} /* parse_xTCE */
 
 /*
  * parse_FIELDEXPAND

@@ -76,9 +76,9 @@ static name_t expr_names[] = {
     OPMAP(EQLU,CMP_EQLU) OPMAP(NEQU,CMP_NEQU) \
     OPMAP(LSSU,CMP_LSSU) OPMAP(LEQU,CMP_LEQU) \
     OPMAP(GTRU,CMP_GTRU) OPMAP(GEQU,CMP_GEQU) \
-    OPMAP(EQLA,COUNT) OPMAP(NEQA,COUNT) \
-    OPMAP(LSSA,COUNT) OPMAP(LEQA,COUNT) \
-    OPMAP(GTRA,COUNT) OPMAP(GEQA,COUNT)
+    OPMAP(EQLA,CMP_EQLA) OPMAP(NEQA,CMP_NEQA) \
+    OPMAP(LSSA,CMP_LSSA) OPMAP(LEQA,CMP_LEQA) \
+    OPMAP(GTRA,CMP_GTRA) OPMAP(GEQA,CMP_GEQA)
 #define OPMAP(l_,o_) [LEXTYPE_OP_##l_-LEXTYPE_OP_MIN] = OPER_##o_,
 static const optype_t opmap[] = {
     OPMAPS
@@ -173,6 +173,7 @@ expr_node_alloc (exprtype_t type, textpos_t pos)
         if (freenodes == 0) {
             return 0;
         }
+        memset(freenodes, 0x66, ALLOC_QTY*sizeof(expr_node_t));
         for (i = 0, node = freenodes; i < ALLOC_QTY-1; i++, node++) {
             expr_next_set(node, node+1);
         }
@@ -454,14 +455,10 @@ expr_node_copy (expr_node_t *node)
 } /* expr_node_copy */
 
 static optype_t
-lextype_to_optype (lextype_t lt, int addr_signed)
+lextype_to_optype (lextype_t lt)
 {
     if (lt < LEXTYPE_OP_MIN || lt > LEXTYPE_OP_MAX) {
         return OPER_NONE;
-    }
-    // XXX This routine assumes a particular ordering of lextypes!
-    if (lt >= LEXTYPE_OP_EQLA && lt <= LEXTYPE_OP_GEQA) {
-        lt = lt - (addr_signed ? 12 : 6);
     }
     return opmap[lt-LEXTYPE_OP_MIN];
 }
@@ -1059,6 +1056,7 @@ parse_op_expr (parse_ctx_t pctx, optype_t curop, expr_node_t **expp)
     optype_t op;
     int normal;
 
+
     if (expr_is_noop(lhs)) {
         if (!op_is_unary(curop)) {
             /* XXX error condition */
@@ -1380,8 +1378,6 @@ reduce_op_expr (stgctx_t stg, expr_node_t **nodep) {
         }
     }
 
-    // XXX also need to check for <ltce> relA|- <ltce>
-
 } /* reduce_op_expr */
 
 /*
@@ -1404,7 +1400,6 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp,
     lexeme_t *lex;
     lextype_t lt;
     optype_t op;
-    machinedef_t *mach = parser_get_machinedef(pctx);
     stgctx_t stg = parser_get_cctx(pctx);
     int status = 0;
 
@@ -1437,7 +1432,7 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp,
 
     if (parse_primary(pctx, lt, lex, expp, lstrok)) {
         lt = parser_next(pctx, QL_NORMAL, &lex);
-        op = lextype_to_optype(lt, machine_addr_signed(mach));
+        op = lextype_to_optype(lt);
         if (op == OPER_NONE) {
             parser_insert(pctx, lex);
             return 1;
@@ -1617,6 +1612,142 @@ parse_ctce (parse_ctx_t pctx, lexeme_t **lexp)
 } /* parse_ctce */
 
 /*
+ * parse_ltce
+ *
+ * Parses a link-time constant expression.
+ * Can be called in places where an LTCE is expected,
+ * as well as by the %LTCE lexical function.
+ *
+ * If lexp is non-NULL, we assume the caller needs
+ * a lexeme, even if we don't have a LTCE here, so
+ * we signal an error and insert a zero value so that
+ * parsing can continue.
+ *
+ * If lexp is NULL, this is just a call from %LTCE,
+ * where we just need to test, and status can be zero.
+ *
+ * We always return zero if there is an error
+ * parsing the expression. XXX
+ */
+int
+parse_ltce (parse_ctx_t pctx, lexeme_t **lexp)
+{
+    stgctx_t stg = parser_get_cctx(pctx);
+    expr_node_t *exp = 0;
+    int status = 0;
+
+    if (!parse_expr(pctx, &exp, 0, 1)) {
+        return 0;
+    }
+
+    if (expr_is_ltc(stg, exp)) {
+        if (lexp != 0) expr_setlex(pctx, lexp, exp);
+        status = 1;
+    }
+    if (!status && lexp != 0) {
+        strdesc_t dsc = STRDEF("0");
+        /* XXX error condition */
+        *lexp = parser_lexeme_create(pctx, LEXTYPE_NUMERIC, &dsc);
+        lexeme_val_setsigned(*lexp, 0);
+        (*lexp)->type = LEXTYPE_NUMERIC;
+        expr_node_free(exp, stg);
+        status = 1;
+    }
+    return status;
+
+} /* parse_ltce */
+
+/*
+ * Given two LTCEs, see if the base addresses are
+ * relative to the same PSECT or external symbol.
+ */
+static int
+addrs_linktime_comparable (stgctx_t stg, expr_node_t *a, expr_node_t *b)
+{
+    seg_t *seg_a, *seg_b;
+
+    if (expr_type(a) == EXPTYPE_PRIM_SEGNAME) {
+        if (!name_is_ltc(expr_segname(a), &seg_a)) {
+            return 0;
+        }
+    } else if (expr_type(a) == EXPTYPE_PRIM_SEG) {
+        seg_a = expr_seg_base(a);
+    }
+    if (expr_type(b) == EXPTYPE_PRIM_SEGNAME) {
+        if (!name_is_ltc(expr_segname(b), &seg_b)) {
+            return 0;
+        }
+    } else if (expr_type(b) == EXPTYPE_PRIM_SEG) {
+        seg_b = expr_seg_base(b);
+    }
+    if (seg_static_is_external(stg, seg_a) &&
+        seg_static_is_external(stg, seg_b)) {
+        strdesc_t *sym_a, *sym_b;
+        int result;
+        sym_a = seg_static_globalsym(stg, seg_a);
+        sym_b = seg_static_globalsym(stg, seg_b);
+        result = strings_eql(sym_a, sym_b);
+        string_free(sym_a);
+        string_free(sym_b);
+        return result;
+    } else if (!seg_static_is_external(stg, seg_a) &&
+               !seg_static_is_external(stg, seg_b)) {
+        return (seg_static_psect(stg, seg_a) ==
+                seg_static_psect(stg, seg_b));
+    }
+
+    return 0;
+    
+} /* addrs_linktime_comparable */
+
+/*
+ * expr_is_ltc
+ *
+ * Returns 1 if the expression is link-time constant
+ * (including compile-time constant), 0 otherwise.
+ */
+int
+expr_is_ltc (stgctx_t stg, expr_node_t *exp)
+{
+    switch (expr_type(exp)) {
+        case EXPTYPE_PRIM_LIT:
+            return 1;
+        case EXPTYPE_PRIM_SEG: {
+            seg_t *seg = expr_seg_base(exp);
+            return (seg_type(seg) == SEGTYPE_LITERAL ||
+                    seg_type(seg) == SEGTYPE_STATIC);
+        }
+        case EXPTYPE_PRIM_SEGNAME:
+            return name_is_ltc(expr_segname(exp), 0);
+        case EXPTYPE_PRIM_FLDREF:
+            return expr_is_ltc(stg, expr_fldref_addr(exp));
+        case EXPTYPE_OPERATOR: {
+            optype_t op = expr_op_type(exp);
+            if ((op == OPER_ADD || op == OPER_SUBTRACT)
+                && expr_type(expr_op_rhs(exp)) == EXPTYPE_PRIM_LIT
+                && expr_is_ltc(stg, expr_op_lhs(exp))) {
+                return 1;
+            }
+            // XXX assmption about the OPER_CMP_xxx enum here
+            if (((op >= OPER_CMP_EQLA && op <= OPER_CMP_GEQA)
+                 || (op == OPER_SUBTRACT))
+                && expr_is_ltc(stg, expr_op_lhs(exp))
+                && expr_is_ltc(stg, expr_op_rhs(exp))
+                && addrs_linktime_comparable(stg, expr_op_lhs(exp),
+                                             expr_op_rhs(exp))) {
+                    return 1;
+                }
+            break;
+        }
+        default:
+            break;
+    }
+
+    return 0;
+
+} /* expr_is_ltc */
+
+/*
  * name_is_ltc
  *
  * NB: this checks strictly for link-time constants.
@@ -1636,13 +1767,13 @@ name_is_ltc (name_t *np, seg_t **segp)
     switch (nt) {
         case NAMETYPE_EXTLIT:
         case NAMETYPE_GLOBLIT:
-            *segp = nameinfo_gxlit_seg(ni);
+            if (segp != 0) *segp = nameinfo_gxlit_seg(ni);
             return 1;
         case NAMETYPE_EXTERNAL:
         case NAMETYPE_GLOBAL:
         case NAMETYPE_OWN:
         case NAMETYPE_FORWARD:
-            *segp = nameinfo_data_seg(ni);
+            if (segp != 0) *segp = nameinfo_data_seg(ni);
             return 1;
         default:
             break;
@@ -2001,7 +2132,6 @@ parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
                lextype_t curlt, condstate_t cs, lexeme_t *orig, lexseq_t *result)
 {
     stgctx_t stg = parser_get_cctx(pctx);
-    machinedef_t *mach = parser_get_machinedef(pctx);
     expr_node_t *si, *exp, *lo, *hi;
     expr_node_t *selseq, *seqlast, *selectors, *sellast, *sel;
     int every_selector_has_value = 1;
@@ -2133,8 +2263,7 @@ parse_select (void *pctx, quotelevel_t ql, quotemodifier_t qm,
             break;
         case LEXTYPE_CTRL_SELECTA:
         case LEXTYPE_CTRL_SELECTONEA:
-            expr_sel_cmptype_set(exp, (machine_addr_signed(mach) ?
-                                       OPER_CMP_EQL : OPER_CMP_EQLU));
+            expr_sel_cmptype_set(exp, OPER_CMP_EQLA);
             break;
         default:
             break;
@@ -2248,12 +2377,10 @@ parse_incrdecr (void *pctx, quotelevel_t ql, quotemodifier_t qm,
             expr_idloop_cmptype_set(exp, OPER_CMP_LEQU);
             break;
         case LEXTYPE_CTRL_DECRA:
-            expr_idloop_cmptype_set(exp, (machine_addr_signed(mach) ?
-                                          OPER_CMP_GEQ : OPER_CMP_GEQU));
+            expr_idloop_cmptype_set(exp, OPER_CMP_GEQA);
             break;
         case LEXTYPE_CTRL_INCRA:
-            expr_idloop_cmptype_set(exp, (machine_addr_signed(mach) ?
-                                          OPER_CMP_LEQ : OPER_CMP_LEQU));
+            expr_idloop_cmptype_set(exp, OPER_CMP_LEQA);
             break;
         default:
             break;

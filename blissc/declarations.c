@@ -25,6 +25,7 @@ typedef enum {
     DCL_GLOBAL,
     DCL_EXTERNAL,
     DCL_FORWARD,
+    DCL_BIND,
     DCL_MAP
 } decltype_t;
 
@@ -682,7 +683,7 @@ static initval_t *
 plit_items (parse_ctx_t pctx, stgctx_t stg, int defau, machinedef_t *mach) {
 
     initval_t *ivlist, *iv;
-    int itemau;
+    int itemau = defau;
     lexeme_t *lex;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
@@ -719,17 +720,27 @@ plit_items (parse_ctx_t pctx, stgctx_t stg, int defau, machinedef_t *mach) {
                 ivlist = initval_ivlist_add(stg, ivlist, 1, iv);
             }
         } else {
+            lex = 0;
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_STRING, &lex, 1)) {
                 ivlist = initval_string_add(stg, ivlist, 1, lexeme_text(lex));
                 lexeme_free(lex);
-            } else if (parser_expect(pctx, QL_NORMAL, LEXTYPE_NUMERIC, &lex, 1)) {
-                long val = lexeme_signedval(lex);
-                if (bits_needed(val) > itemau<<3) {
+            } else if (parse_ltce(pctx, &lex)) {
+                if (lexeme_type(lex) == LEXTYPE_NUMERIC) {
+                    long val = lexeme_signedval(lex);
+                    if (bits_needed(val) > itemau<<3) {
+                        /* XXX error condition */
+                    }
+                    ivlist = initval_scalar_add(stg, ivlist, 1, val, itemau, 0);
+                } else if (lexeme_type(lex) == LEXTYPE_SEGMENT) {
+                    ivlist = initval_ltce_add(stg, ivlist, 1, 0,
+                                              lexeme_ctx_get(lex), itemau, 0);
+                } else if (lexeme_type(lex) == LEXTYPE_EXPRESSION) {
+                    ivlist = initval_ltce_add(stg, ivlist, 1, 1,
+                                              lexeme_ctx_get(lex), itemau, 0);
+                } else {
                     /* XXX error condition */
                 }
-                ivlist = initval_scalar_add(stg, ivlist, 1, val, itemau<<3, 0);
                 lexeme_free(lex);
-                /* XXX LTCE also allowed here */
             } else {
                 /* XXX error condition */
                 initval_freelist(stg, ivlist);
@@ -1263,6 +1274,15 @@ bind_data (void *ctx, quotelevel_t ql, quotemodifier_t qm,
             break;
         }
 
+        case NAMETYPE_BIND:
+        case NAMETYPE_GLOBBIND: {
+            strudef_t *stru = nameinfo_bind_struc(ni);
+            if (stru != 0 &&
+                parser_expect(pctx, ql, LEXTYPE_DELIM_LBRACK, 0, 1)) {
+                return structure_reference(ctx, stru, ni, lex, result);
+            }
+            break;
+        }
         default:
             break;
     }
@@ -1392,12 +1412,14 @@ parse_declaration (parse_ctx_t pctx)
     stgctx_t stg = parser_get_cctx(pctx);
     machinedef_t *mach = parser_get_machinedef(pctx);
     static lextype_t pfx[] = { LEXTYPE_DCL_GLOBAL, LEXTYPE_DCL_EXTERNAL,
-        LEXTYPE_DCL_FORWARD };
-    decltype_t  dtypes[] = { DCL_NORMAL, DCL_GLOBAL, DCL_EXTERNAL, DCL_FORWARD };
+        LEXTYPE_DCL_FORWARD, LEXTYPE_DCL_BIND };
+    decltype_t  dtypes[] = { DCL_NORMAL, DCL_GLOBAL, DCL_EXTERNAL, DCL_FORWARD,
+        DCL_BIND };
     int which;
-    static lextype_t allowed[3][4] = {
+    static lextype_t allowed[4][4] = {
         { LEXTYPE_DCL_LITERAL, LEXTYPE_DCL_ROUTINE, LEXTYPE_DCL_REGISTER, LEXTYPE_DCL_BIND },
         { LEXTYPE_DCL_LITERAL, LEXTYPE_DCL_ROUTINE, LEXTYPE_DCL_REGISTER },
+        { LEXTYPE_DCL_ROUTINE },
         { LEXTYPE_DCL_ROUTINE }
     };
     static int count[3] = { 4, 3, 1 };
