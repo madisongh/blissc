@@ -546,6 +546,7 @@ static inline __unused void expr_exit_label_set(expr_node_t *node, name_t *np) {
 }
 
 void expr_init (scopectx_t kwdscope);
+int expr_expr_next(parse_ctx_t pctx, expr_node_t **expp);
 int expr_parse_next(parse_ctx_t pctx, lexeme_t **lexp, int longstrings_ok);
 int expr_parse_block(parse_ctx_t pctx, expr_node_t **blkexp);
 int parse_ctce(parse_ctx_t pctx, lexeme_t **lexp);

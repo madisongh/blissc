@@ -1476,6 +1476,16 @@ parse_expr (parse_ctx_t pctx, expr_node_t **expp,
  * Automatically binds literals and segments
  * to appropriate lexemes.
  */
+int expr_expr_next (parse_ctx_t pctx, expr_node_t **expp)
+{
+    expr_node_t *exp = 0;
+    if (!parse_expr(pctx, &exp, 0, 0)) {
+        return 0;
+    }
+    *expp = exp;
+    return 1;
+}
+
 int
 expr_parse_next (parse_ctx_t pctx, lexeme_t **lexp,
                  int lstrok) {
@@ -1491,7 +1501,7 @@ expr_parse_next (parse_ctx_t pctx, lexeme_t **lexp,
     }
     *lexp = lex;
     return 1;
-}
+} /* expr_parse_next */
 
 int
 expr_setlex (parse_ctx_t pctx, lexeme_t **lexp, expr_node_t *exp)

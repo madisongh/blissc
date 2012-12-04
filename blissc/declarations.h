@@ -24,7 +24,9 @@ DONTYPE(OWN) DONTYPE(GLOBAL) DONTYPE(LOCAL) \
 DONTYPE(STACKLOCAL) DONTYPE(REGISTER) \
 DONTYPE(GLOBREG) DONTYPE(EXTREG) \
 DONTYPE(BIND) DONTYPE(GLOBBIND) \
-DONTYPE(FORWARD) DONTYPE(EXTERNAL)
+DONTYPE(FORWARD) DONTYPE(EXTERNAL) \
+DONTYPE(ARG) DONTYPE(ROUTINE) \
+DONTYPE(BINDRTN)
 
 #define DONTYPE(t_) NAMETYPE_##t_,
 typedef enum {
@@ -44,6 +46,13 @@ struct scalar_attr_s {
     int             signext;
 };
 typedef struct scalar_attr_s scalar_attr_t;
+
+#define ARGLIST_K_MAXARGS  16
+struct arglist_s {
+    name_t      *arg[ARGLIST_K_MAXARGS];
+    int          count;
+};
+typedef struct arglist_s arglist_t;
 
 struct ni_literal_s {
     unsigned long value;
@@ -69,6 +78,10 @@ struct ni_data_s {
 struct ni_routine_s {
     expr_node_t     *rtnexp;
     frame_t         *stack;
+    void            *ptr;
+    scopectx_t       argscope;
+    arglist_t        inpargs;
+    arglist_t        outargs;
     // also linkage
     unsigned int     flags;
 };
@@ -135,6 +148,14 @@ siu expr_node_t *nameinfo_routine_expr(nameinfo_t *ni) { return ni->data.rtninfo
 siu void nameinfo_routine_expr_set(nameinfo_t *ni, expr_node_t *exp) { ni->data.rtninfo.rtnexp = exp; }
 siu frame_t *nameinfo_routine_stack(nameinfo_t *ni) { return ni->data.rtninfo.stack; }
 siu void nameinfo_routine_stack_set(nameinfo_t *ni, frame_t *stk) { ni->data.rtninfo.stack = stk; }
+siu arglist_t *nameinfo_routine_inpargs(nameinfo_t *ni) { return &ni->data.rtninfo.inpargs; }
+siu arglist_t *nameinfo_routine_outargs(nameinfo_t *ni) { return &ni->data.rtninfo.outargs; }
+siu seg_t *nameinfo_routine_codeseg(nameinfo_t *ni) { return ni->data.rtninfo.ptr; }
+siu void nameinfo_routine_codeseg_set(nameinfo_t *ni, seg_t *seg) { ni->data.rtninfo.ptr = seg; }
+siu expr_node_t *nameinfo_routine_bindexpr(nameinfo_t *ni) { return ni->data.rtninfo.ptr; }
+siu void nameinfo_routine_bindexpr_set(nameinfo_t *ni, void *exp) { ni->data.rtninfo.ptr = exp; }
+siu scopectx_t nameinfo_routine_argscope(nameinfo_t *ni) { return ni->data.rtninfo.argscope; }
+siu void nameinfo_routine_argscope_set(nameinfo_t *ni, scopectx_t s) { ni->data.rtninfo.argscope = s; }
 #undef siu
 
 nameinfo_t *nameinfo_alloc(nametype_t type);

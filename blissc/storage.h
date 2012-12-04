@@ -74,9 +74,6 @@ segtype_t seg_type(seg_t *seg);
 long seg_litval(seg_t *seg);
 int seg_litval_valid(seg_t *seg);
 
-frame_t *frame_begin(stgctx_t ctx, textpos_t defpos, frame_t *parent);
-void frame_end(stgctx_t ctx, frame_t *fr);
-
 psect_t *psect_create(stgctx_t ctx, strdesc_t *name, textpos_t defpos, unsigned int attr);
 
 initval_t *initval_scalar_add(stgctx_t ctx, initval_t *head, unsigned int reps,
@@ -98,6 +95,9 @@ initval_t *preset_expr_add(stgctx_t ctx, initval_t *head, void *pexp,
 stgctx_t storage_init(machinedef_t *mach);
 void storage_finish(stgctx_t ctx);
 
+frame_t *frame_begin(stgctx_t ctx, textpos_t defpos, void *routine);
+frame_t *frame_end(stgctx_t ctx);
+frame_t *storage_curframe(stgctx_t ctx);
 strdesc_t *seg_dumpinfo(seg_t *seg);
 
 #undef SIU

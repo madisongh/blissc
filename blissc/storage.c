@@ -42,8 +42,8 @@ struct psect_s {
 };
 
 struct frame_s {
-    struct psect_s  *psect;
     struct frame_s  *parent;
+    void            *routine;
     struct seg_s    *segchain, *seglast;
     struct seg_s    *registers[MACH_K_MAXREGS];
     textpos_t        defpos;
@@ -132,6 +132,18 @@ storage_finish (stgctx_t ctx)
 
 } /* storage_finish */
 
+frame_t *
+storage_curframe (stgctx_t ctx)
+{
+    return ctx->curframe;
+}
+
+frame_t *
+storage_topframe (stgctx_t ctx)
+{
+    return ctx->topframe;
+}
+
 static psect_t *
 psect_alloc (stgctx_t ctx)
 {
@@ -186,7 +198,7 @@ psect_create (stgctx_t ctx, strdesc_t *name, textpos_t pos, unsigned int attr)
 }
 
 frame_t *
-frame_alloc (stgctx_t ctx, textpos_t pos)
+frame_begin (stgctx_t ctx, textpos_t pos, void *routine)
 {
     frame_t *frm;
 
@@ -203,49 +215,31 @@ frame_alloc (stgctx_t ctx, textpos_t pos)
     memset(frm, 0, sizeof(frame_t));
     frm->parent = ctx->curframe;
     frm->defpos = pos;
+    frm->routine = routine;
     ctx->curframe = frm;
     if (ctx->topframe == 0) {
         ctx->topframe = frm;
     }
     return frm;
 
-} /* frame_alloc */
+} /* frame_begin */
 
-void
-frame_free (stgctx_t ctx, frame_t *frm)
+frame_t *
+frame_end (stgctx_t ctx)
 {
+    frame_t *frm = ctx->curframe;
+
+    if (frm == 0) {
+        return 0;
+    }
     ctx->curframe = frm->parent;
     memset(frm, 0xe9, sizeof(frame_t));
     frm->parent = ctx->freeframes;
     ctx->freeframes = frm;
+    return ctx->curframe;
 
 } /* frame_free */
 
-frame_t *
-frame_create (stgctx_t ctx, textpos_t pos)
-{
-    frame_t *frm;
-
-    if (ctx->freeframes == 0) {
-        int i;
-        ctx->freeframes = malloc(sizeof(frame_t)*FRAME_ALLOCOUNT);
-        for (i = 0, frm = ctx->freeframes; i < FRAME_ALLOCOUNT-1; i++, frm++) {
-            frm->parent = frm + 1;
-        }
-        frm->parent = 0;
-    }
-    frm = ctx->freeframes;
-    ctx->freeframes = frm->parent;
-    memset(frm, 0, sizeof(frame_t));
-    frm->parent = ctx->curframe;
-    frm->defpos = pos;
-    ctx->curframe = frm;
-    if (ctx->topframe == 0) {
-        ctx->topframe = frm;
-    }
-    return frm;
-
-} /* frame_alloc */
 
 static seg_t *
 seg_alloc (stgctx_t ctx, segtype_t type, textpos_t defpos)
@@ -993,6 +987,7 @@ seg_alloc_literal (stgctx_t ctx, textpos_t defpos, strdesc_t *namestr,
 
     return seg;
 }
+
 
 int
 seg_litval_valid (seg_t *seg)
