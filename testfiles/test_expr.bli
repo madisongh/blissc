@@ -66,16 +66,23 @@ BEGIN
 %PRINT('LTCE test: ',%NUMBER(%LTCE(ALPHA EQLA BETA)))
 %PRINT('LTCE test: ',%NUMBER(%LTCE(BETA EQLA MU)))
 
+GLOBAL ROUTINE testrtn (ABC, DEF : REF BLOCK[,BYTE]) : NOVALUE =
+BEGIN
     LABEL
         blklabel1, blklabel2;
+    LOCAL
+        GHI : WORD;
+        
+    GHI = 64;
         
     blklabel1:BEGIN
-                QQQ[DSC$W_LENGTH] = 64;
-                QQQ[DSC$B_DTYPE] = DSC$K_DTYPE_T;
-                QQQ[DSC$B_CLASS] = DSC$K_CLASS_S;
-                QQQ[DSC$A_POINTER] = QTEXT;
+                DEF[DSC$W_LENGTH] = .GHI;
+                DEF[DSC$B_DTYPE] = DSC$K_DTYPE_T;
+                DEF[DSC$B_CLASS] = DSC$K_CLASS_S;
+                DEF[DSC$A_POINTER] = QTEXT;
               END;
     CODECOMMENT 'hi there': blklabel2: BEGIN END;
     CODECOMMENT 'another': BEGIN END;
+END;
 END
 ELUDOM
