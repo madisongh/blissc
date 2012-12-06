@@ -23,7 +23,7 @@
 
 struct parse_ctx_s {
     scopectx_t      kwdscope, curscope;
-    void            *cctx;
+    void            *expctx;
     machinedef_t    *mach;
     lexer_ctx_t     lexctx;
     int             lib_compile;
@@ -203,7 +203,7 @@ name_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
  * pointer to be stored in the block.
  */
 parse_ctx_t
-parser_init (scopectx_t kwdscope, void *cctx, machinedef_t *mach)
+parser_init (scopectx_t kwdscope, machinedef_t *mach)
 {
     parse_ctx_t pctx;
     int i;
@@ -223,7 +223,6 @@ parser_init (scopectx_t kwdscope, void *cctx, machinedef_t *mach)
         pctx->kwdscope = kwdscope;
         pctx->curscope = scope_begin(kwdscope);
         pctx->lexctx = lexer_init(pctx->kwdscope);
-        pctx->cctx = cctx;
     }
 
     pctx->mach = mach;
@@ -273,15 +272,21 @@ parser_popen (parse_ctx_t pctx, scan_input_fn inpfn, void *fnctx)
 }
 
 /*
- * parser_get_cctx
+ * parser_get_expctx
  *
- * Retrieves the 'cctx' pointer from the parsing
+ * Retrieves the 'expctx' pointer from the parsing
  * context block.
  */
 void *
-parser_get_cctx (parse_ctx_t pctx) {
-    return pctx->cctx;
-} /* parser_get_cctx */
+parser_get_expctx (parse_ctx_t pctx) {
+    return pctx->expctx;
+} /* parser_get_expctx */
+
+void
+parser_set_expctx (parse_ctx_t pctx, void *expctx)
+{
+    pctx->expctx = expctx;
+} /* parser_set_expctx */
 
 void
 parser_set_indecl (parse_ctx_t pctx, int yes)
@@ -934,7 +939,7 @@ parse_EXACTSTRING (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         /* XXX error condition */
         return 1;
     }
-    if (!parse_ctce(pctx, &lex)) {
+    if (!expr_parse_ctce(pctx->expctx, &lex)) {
         /* XXX error condition */
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
@@ -950,7 +955,7 @@ parse_EXACTSTRING (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
-    if (!parse_ctce(pctx, &lex)) {
+    if (!expr_parse_ctce(pctx->expctx, &lex)) {
         /* XXX error condition */
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
@@ -1062,7 +1067,7 @@ parse_CHAR (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     result = string_alloc(0, 0);
     INITSTR(chdsc, &ch, 1);
     while (1) {
-        if (!parse_ctce(pctx, &lex)) {
+        if (!expr_parse_ctce(pctx->expctx, &lex)) {
             hit_error = 1;
             skip_to_paren = 1;
             break;
@@ -1348,45 +1353,11 @@ parse_IDENTICAL (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 static int
 parse_ISSTRING (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 {
-    lexeme_t *lex;
-    lextype_t lt;
-    int allstr = 1;
-    int hit_error = 0;
+    int allstr, status;
 
-    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
-        /* XXX error condition */
-        return 1;
-    }
+    status = expr_parse_ISSTRING(pctx->expctx, &allstr);
 
-    while (1) {
-        if (expr_parse_next(pctx, &lex, 1)) {
-            lt = lexeme_type(lex);
-            lexeme_free(lex);
-        } else {
-            lt = parser_next(pctx, QL_NORMAL, 0);
-        }
-        if (lt == LEXTYPE_END || lt == LEXTYPE_NONE) {
-            /* XXX error condition */
-            hit_error = 1;
-            break;
-        }
-        if (lt != LEXTYPE_STRING && lt != LEXTYPE_CSTRING) {
-            allstr = 0;
-        }
-        if (lt != LEXTYPE_DELIM_RPAR && lt != LEXTYPE_DELIM_COMMA) {
-            lt = parser_next(pctx, QL_NORMAL, 0);
-        }
-        if (lt == LEXTYPE_DELIM_RPAR) {
-            break;
-        }
-        if (lt != LEXTYPE_DELIM_COMMA) {
-            /* XXX error condition */
-            hit_error = 1;
-            break;
-        }
-    }
-
-    if (!hit_error) {
+    if (status) {
         parser_lexeme_add(pctx, LEXTYPE_NUMERIC, (allstr ? &one : &zero));
     }
 
@@ -1427,7 +1398,7 @@ parse_IF (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     // nesting of instances in which hitting end-of-file is a no-no.
     pctx->no_eof += 1;
 
-    if (!parse_ctce(pctx, &lex)) {
+    if (!expr_parse_ctce(pctx->expctx, &lex)) {
         /* XXX error condition */
         pctx->no_eof -= 1;
         return 1;
@@ -1556,7 +1527,7 @@ parse_ASSIGN (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
-    if (!parse_ctce(pctx, &lex)) {
+    if (!expr_parse_ctce(pctx->expctx, &lex)) {
         /* XXX error condition */
     } else {
         name_data_set_int(np, lexeme_signedval(lex));
@@ -1591,24 +1562,21 @@ parse_NUMBER (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     }
     rlex = 0;
     lt = parser_next(pctx, QL_NORMAL, &lex);
-    switch (lt) {
-        case LEXTYPE_STRING:
-            if (!string_numval(lexeme_text(lex), 10, &val)) {
-                /* XXX error condition */
-                lexeme_free(lex);
-                break;
-            }
-            lexeme_val_setsigned(lex, val);
-            // FALLTHROUGH
-        case LEXTYPE_NUMERIC:
-            rlex = lex;
-            rlex->boundtype = LEXTYPE_NUMERIC;
-            rlex->type = LEXTYPE_UNBOUND;
-            break;
-        default:
+    if (lt == LEXTYPE_STRING) {
+        if (!string_numval(lexeme_text(lex), 10, &val)) {
             /* XXX error condition */
-            lexer_insert(pctx->lexctx, lex);
-            break;
+            lexeme_free(lex);
+            rlex = lexeme_create(LEXTYPE_STRING, &zero);
+        } else {
+            lexeme_val_setsigned(lex, val);
+            rlex = lex;
+        }
+    } else {
+        parser_insert(pctx, lex);
+        if (!expr_parse_ctce(pctx->expctx, &rlex)) {
+            rlex = lexeme_create(LEXTYPE_STRING, &zero);
+            /* XXX error condition*/
+        }
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
         /* XXX error condition */
@@ -1689,7 +1657,7 @@ parse_nbits_func (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         return 1;
     }
     while (1) {
-        if (!parse_ctce(pctx, &lex)) {
+        if (!expr_parse_ctce(pctx->expctx, &lex)) {
             /* XXX error condition */
             parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
             return 1;
@@ -1765,36 +1733,14 @@ parse_msgfunc (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 static int
 parse_xTCE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 {
-    lextype_t lt;
-    int allctce = 1;
+    int allok, status;
 
-    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
-        /* XXX error condition */
-        return 1;
-    }
-    while (1) {
-        if (curlt == LEXTYPE_LXF_CTCE) {
-            if (!parse_ctce(pctx, 0)) {
-                allctce = 0;
-            }
-        } else {
-            if (!parse_ltce(pctx, 0)) {
-                allctce = 0;
-            }
-        }
-        lt = parser_next(pctx, QL_NORMAL, 0);
-        if (lt == LEXTYPE_DELIM_RPAR) {
-            break;
-        }
-        if (lt != LEXTYPE_DELIM_COMMA) {
-            /* XXX error condition */
-            parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
-        }
+    status = expr_parse_xCTE(pctx->expctx, (curlt == LEXTYPE_LXF_LTCE), &allok);
+    if (status) {
+        parser_lexeme_add(pctx, LEXTYPE_NUMERIC, (allok ? &one : &zero));
     }
 
-    parser_lexeme_add(pctx, LEXTYPE_NUMERIC, (allctce ? &one : &zero));
-
-    return 1;
+    return status;
     
 } /* parse_xTCE */
 
@@ -1825,7 +1771,7 @@ parse_FIELDEXPAND (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     lexeme_free(lex);
     lex = 0;
     if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
-        if (!parse_ctce(pctx, &lex)) {
+        if (!expr_parse_ctce(pctx->expctx, &lex)) {
             /* XXX error condition */
         }
     }
@@ -1867,50 +1813,27 @@ parse_FIELDEXPAND (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 static int
 parse_ALLOCATION (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 {
-    stgctx_t stg = parser_get_cctx(pctx);
     lexeme_t *lex;
-    seg_t *seg;
-    unsigned long units = 0;
+    unsigned int units;
+    int status = 0;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
         /* XXX error condition */
-        return 1;
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NAME_DATA, &lex, 1)) {
         /* XXX error condition */
     } else {
-        name_t *np = lexeme_ctx_get(lex);
-        nameinfo_t *ni = (np == 0 ? 0 : name_data_ptr(np));
-        if (ni != 0) switch (nameinfo_type(ni)) {
-            case NAMETYPE_OWN:
-            case NAMETYPE_GLOBAL:
-            case NAMETYPE_FORWARD:
-            case NAMETYPE_LOCAL:
-            case NAMETYPE_STACKLOCAL:
-                seg = nameinfo_data_seg(ni);
-                if (seg == 0) {
-                    /* XXX error condition */
-                    units = 0;
-                } else {
-                    units = seg_size(stg, seg);
-                }
-                break;
-            case NAMETYPE_REGISTER:
-            case NAMETYPE_GLOBREG:
-            case NAMETYPE_EXTREG:
-                /* XXX to be filled in later */
-                break;
-            default:
-                /* XXX error condition */
-                break;
-        }
+        status = expr_get_allocation(pctx->expctx, lexeme_text(lex), &units);
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
         /* XXX error condition */
     }
-    parser_insert(pctx,
+
+    if (status) {
+        parser_insert(pctx,
                   parser_lexeme_create(pctx, LEXTYPE_NUMERIC,
                                        string_printf(0, "%lu", units)));
+    }
     return 1;
 
 } /* parse_ALLOCATION */
@@ -1927,28 +1850,14 @@ parse_ALLOCATION (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 static int
 parse_SIZE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 {
-    lexeme_t *lex;
-    strudef_t *stru;
-    unsigned int units = 0;
+    unsigned int units;
+    int status;
 
-    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
-        /* XXX error condition */
-        return 1;
+    status = expr_parse_SIZE(pctx->expctx, &units);
+    if (status) {
+        parser_insert(pctx, parser_lexeme_create(pctx, LEXTYPE_NUMERIC,
+                                                 string_printf(0, "%u", units)));
     }
-    parser_set_indecl(pctx, 1);
-    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NAME_STRUCTURE, &lex, 1)) {
-        /* XXX error condition */
-        return 1;
-    }
-    parser_set_indecl(pctx, 0);
-    if (!structure_allocate(pctx, lexeme_ctx_get(lex), &stru, &units, 0)) {
-        /* XXX error condition */
-    }
-    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
-        /* XXX error condition */
-    }
-    parser_insert(pctx, parser_lexeme_create(pctx, LEXTYPE_NUMERIC,
-                                             string_printf(0, "%u", units)));
-    return 1;
+    return status;
 
 } /* parse_SIZE */

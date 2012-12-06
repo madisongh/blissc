@@ -62,31 +62,18 @@ static char *predeclared_blockvector_nu =
 /*
  * structure_bind
  */
-static int
-structure_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
-                lextype_t lt, condstate_t cs, lexeme_t *lex,
-                lexseq_t *result)
+expr_node_t *
+structure_bind (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 {
-    parse_ctx_t pctx = ctx;
+    parse_ctx_t pctx = expr_parse_ctx(ctx);
     name_t *np = lexeme_ctx_get(lex);
     strudef_t *stru = name_data_ptr(np);
-    int indecl = parser_in_declaration(pctx);
-
-    if (cs == COND_CWA || cs == COND_AWC) {
-        lexeme_free(lex);
-        return 1;
-    }
-
-    if (indecl) {
-        lexeme_type_set(lex, lexeme_boundtype(lex));
-        return 0; /* just leave it as is */
-    }
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LBRACK, 0, 1)) {
         return 0;
     }
 
-    return structure_reference(pctx, stru, 0, 0, lex, result);
+    return structure_reference(ctx, stru, 0, 0, lex);
 
 } /* structure_bind */
 
@@ -114,15 +101,16 @@ predeclare_structures (void *myctx, char *buf, size_t bufsiz, size_t *lenp)
  * structures_init
  */
 void
-structures_init (parse_ctx_t pctx)
+structures_init (expr_ctx_t ctx)
 {
+    parse_ctx_t pctx = expr_parse_ctx(ctx);
     struct pdclinfo_s pdinfo;
-    machinedef_t *mach = parser_get_machinedef(pctx);
+    machinedef_t *mach = expr_machinedef(ctx);
     int nounits = (machine_scalar_units(mach) == 1);
     int signext = machine_signext_supported(mach);
     int i;
 
-    lextype_register(LEXTYPE_NAME_STRUCTURE, structure_bind);
+    expr_dispatch_register(ctx, LEXTYPE_NAME_STRUCTURE, structure_bind);
     pdinfo.current = 0;
     pdinfo.lines[0] = (nounits ? (signext ? predeclared_vector_nu_s
                                   : predeclared_vector_nu_ns)
@@ -136,7 +124,7 @@ structures_init (parse_ctx_t pctx)
 
     parser_popen(pctx, predeclare_structures, &pdinfo);
     for (i = 0; i < 4; i++) {
-        parse_declaration(pctx);
+        parse_declaration(ctx);
     }
 
 } /* structures_init */
@@ -151,8 +139,9 @@ structure_name (strudef_t *stru)
  * declare_structure
  */
 int
-declare_structure (parse_ctx_t pctx, scopectx_t scope)
+declare_structure (expr_ctx_t ctx, scopectx_t scope)
 {
+    parse_ctx_t pctx = expr_parse_ctx(ctx);
     lexeme_t *lex;
     lextype_t term = LEXTYPE_DELIM_COMMA;
     strudef_t *stru;
@@ -220,8 +209,9 @@ declare_structure (parse_ctx_t pctx, scopectx_t scope)
  * and field-sets.
  */
 static int
-parse_fields (parse_ctx_t pctx, scopectx_t scope, lexseq_t *setseq)
+parse_fields (expr_ctx_t ctx, scopectx_t scope, lexseq_t *setseq)
 {
+    parse_ctx_t pctx = expr_parse_ctx(ctx);
     strdesc_t *fldname;
     textpos_t fpos;
     lexseq_t fseq;
@@ -242,7 +232,7 @@ parse_fields (parse_ctx_t pctx, scopectx_t scope, lexseq_t *setseq)
         lexseq_init(&fseq);
         // Check for fieldset and recurse
         if (setseq == 0 && parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_SET, 0, 1)) {
-            if (!parse_fields(pctx, scope, &fseq)) {
+            if (!parse_fields(ctx, scope, &fseq)) {
                 /* XXX error condition */
                 return 0;
             }
@@ -267,7 +257,7 @@ parse_fields (parse_ctx_t pctx, scopectx_t scope, lexseq_t *setseq)
             /* XXX error condition */
         }
         while (1) {
-            if (parse_ctce(pctx, &lex)) {
+            if (expr_parse_ctce(ctx, &lex)) {
                 lexseq_instail(&fseq, lex);
             } else {
                 /* XXX error condition */
@@ -303,10 +293,10 @@ parse_fields (parse_ctx_t pctx, scopectx_t scope, lexseq_t *setseq)
  * declare_field
  */
 int
-declare_field (parse_ctx_t pctx, scopectx_t scope)
+declare_field (expr_ctx_t ctx, scopectx_t scope)
 {
-    if (parse_fields(pctx, scope, 0)) {
-        return parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1);
+    if (parse_fields(ctx, scope, 0)) {
+        return parser_expect(expr_parse_ctx(ctx), QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1);
     }
     return 0;
 
@@ -317,12 +307,13 @@ declare_field (parse_ctx_t pctx, scopectx_t scope)
  * structure_allocate
  */
 int
-structure_allocate (parse_ctx_t pctx, name_t *struname,
+structure_allocate (expr_ctx_t ctx, name_t *struname,
                     strudef_t **strup, unsigned int *nunits,
                     scopectx_t *scopep)
 {
+    parse_ctx_t pctx = expr_parse_ctx(ctx);
     strudef_t *stru = name_data_ptr(struname);
-    machinedef_t *mach = parser_get_machinedef(pctx);
+    machinedef_t *mach = expr_machinedef(ctx);
     int i;
     lexeme_t *lex;
     lexseq_t tmpseq;
@@ -381,7 +372,7 @@ structure_allocate (parse_ctx_t pctx, name_t *struname,
         name_t *rnp;
         strdesc_t *alloname = name_string(p->np);
         np = name_search(myscope, alloname->ptr, alloname->len, 0);
-        if (parse_ctce(pctx, &lex)) {
+        if (expr_parse_ctce(ctx, &lex)) {
             if (np == 0 || name_scope(np) != myscope) {
                 np = name_declare(myscope, alloname->ptr, alloname->len,
                                   LEXTYPE_NAME_COMPILETIME, lexeme_textpos_get(lex));
@@ -414,7 +405,7 @@ structure_allocate (parse_ctx_t pctx, name_t *struname,
     lexseq_init(&tmpseq);
     lexseq_copy(&tmpseq, &stru->allobody);
     parser_insert_seq(pctx, &tmpseq);
-    if (!parse_ctce(pctx, &lex)) {
+    if (!expr_parse_ctce(ctx, &lex)) {
         /* XXX error condition */
         return 0;
     }
@@ -438,10 +429,11 @@ structure_allocate (parse_ctx_t pctx, name_t *struname,
  * segment-name [ access-actual... ]
  *
  */
-int
-structure_reference (parse_ctx_t pctx, strudef_t *stru, int ctce_accessors,
-                     nameinfo_t *ni, lexeme_t *curlex, lexseq_t *result)
+expr_node_t *
+structure_reference (expr_ctx_t ctx, strudef_t *stru, int ctce_accessors,
+                     symbol_t *ni, lexeme_t *curlex)
 {
+    parse_ctx_t pctx = expr_parse_ctx(ctx);
     scopectx_t curscope = parser_scope_get(pctx);
     lextype_t delim;
     lexseq_t seq;
@@ -449,9 +441,7 @@ structure_reference (parse_ctx_t pctx, strudef_t *stru, int ctce_accessors,
     name_t *np;
     macparam_t *p;
     expr_node_t *exp, *resexp;
-    int which;
     textpos_t pos = lexeme_textpos_get(curlex);
-    lexeme_t *lex;
     static lextype_t delims[3] = { LEXTYPE_DELIM_RBRACK, LEXTYPE_DELIM_COMMA,
         LEXTYPE_DELIM_SEMI };
     int ndelims;
@@ -461,39 +451,35 @@ structure_reference (parse_ctx_t pctx, strudef_t *stru, int ctce_accessors,
     // If this is a general structure reference, get the
     // address expression
     if (ni == 0) {
+
+        //
+        //   XXX This needs fixing XXX
+        //
         ndelims = 3;
-        if (expr_parse_next(pctx, &lex, 0)) {
-            lexseq_instail(&seq, lex);
-            which = parser_expect_oneof(pctx, QL_NORMAL, delims, 3, 0, 1);
-            if (which < 0) {
-                return 0;
-            } else {
-                delim = delims[which];
-            }
-        } else if (!parse_lexeme_seq(pctx, 0, QL_NORMAL, delims, 3, &seq, &delim)) {
+        if (!parse_lexeme_seq(pctx, 0, QL_NORMAL, delims, 3, &seq, &delim)) {
             return 0;
         }
         myscope = scope_copy(stru->acctbl, 0);
     } else {
         lexeme_t *flex;
         name_t *fnorig, *fncopy;
-        if (nameinfo_data_flags(ni) & NI_M_REF) {
+        if (symbol_data_flags(ni) & SYM_M_REF) {
             lexseq_instail(&seq, lexeme_create(LEXTYPE_DELIM_LPAR, &leftparen));
             lexseq_instail(&seq, lexeme_create(LEXTYPE_OP_FETCH, &dot));
         }
         lexseq_instail(&seq, lexeme_copy(curlex));
-        if (nameinfo_data_flags(ni) & NI_M_REF) {
+        if (symbol_data_flags(ni) & SYM_M_REF) {
             lexseq_instail(&seq, lexeme_create(LEXTYPE_DELIM_RPAR, &rightparen));
         }
         // Semicolons (and allocation-formals) not allowed in this case
         ndelims = 2;
         delim = LEXTYPE_DELIM_COMMA;
-        myscope = scope_copy(nameinfo_data_struscope(ni), 0);
+        myscope = scope_copy(symbol_data_struscope(ni), 0);
         // Bring in the field names, so they can be used in the
         // the structure expression
-        if (lexseq_length(nameinfo_data_fields(ni)) > 0) {
+        if (lexseq_length(symbol_data_fields(ni)) > 0) {
             fldscope = scope_begin(0);
-            for (flex = lexseq_head(nameinfo_data_fields(ni)); flex != 0;
+            for (flex = lexseq_head(symbol_data_fields(ni)); flex != 0;
                  flex = lexeme_next(flex)) {
                 strdesc_t *fname = lexeme_text(flex);
                 fnorig = name_search(curscope, fname->ptr, fname->len, 0);
@@ -516,18 +502,22 @@ structure_reference (parse_ctx_t pctx, strudef_t *stru, int ctce_accessors,
         strdesc_t *pname = name_string(p->np);
         lexseq_init(&seq);
         if (delim == LEXTYPE_DELIM_COMMA) {
-            int ok;
-            ok = (ctce_accessors ? parse_ctce(pctx, &lex) : expr_parse_next(pctx, &lex, 0));
-            if (ok) {
-                lexseq_instail(&seq, lex);
-                which = parser_expect_oneof(pctx, QL_NORMAL, delims, ndelims, 0, 1);
-                if (which < 0) {
-                    return 0;
+            if (!parse_lexeme_seq(pctx, 0, QL_NORMAL, delims, ndelims,
+                                  &seq, &delim)) {
+                /* XXX error condition */
+                break;
+            }
+            if (ctce_accessors) {
+                lexseq_t testseq;
+                lexseq_init(&testseq);
+                lexseq_copy(&testseq, &seq);
+                if (!expr_parse_seq(ctx, &testseq, &exp) ||
+                    expr_type(exp) != EXPTYPE_PRIM_LIT) {
+                    /* XXX error condition */
                 } else {
-                    delim = delims[which];
+                    expr_node_free(ctx, exp);
                 }
-            } else if (!parse_lexeme_seq(pctx, 0, QL_NORMAL, delims, ndelims, &seq, &delim)) {
-                break; 
+                lexseq_free(&testseq);
             }
         }
         if (lexseq_length(&seq) == 0) {
@@ -548,15 +538,7 @@ structure_reference (parse_ctx_t pctx, strudef_t *stru, int ctce_accessors,
             strdesc_t *pname = name_string(p->np);
             lexseq_init(&seq);
             if (delim != LEXTYPE_DELIM_RBRACK) {
-                if (expr_parse_next(pctx, &lex, 0)) {
-                    lexseq_instail(&seq, lex);
-                    which = parser_expect_oneof(pctx, QL_NORMAL, delims, 3, 0, 1);
-                    if (which < 0) {
-                        return 0;
-                    } else {
-                        delim = delims[which];
-                    }
-                } else if (!parse_lexeme_seq(pctx, 0, QL_NORMAL, delims, 3, &seq, &delim)) {
+                if (!parse_lexeme_seq(pctx, 0, QL_NORMAL, delims, 3, &seq, &delim)) {
                     break;
                 }
             }
@@ -566,7 +548,8 @@ structure_reference (parse_ctx_t pctx, strudef_t *stru, int ctce_accessors,
                     lexseq_copy(&seq, name_data_lexseq(ap));
                 }
             }
-            np = name_declare(myscope, pname->ptr, pname->len, LEXTYPE_NAME_MAC_PARAM, pos);
+            np = name_declare(myscope, pname->ptr, pname->len,
+                              LEXTYPE_NAME_MAC_PARAM, pos);
             name_data_set_lexseq(np, &seq);
         }
     }
@@ -577,19 +560,16 @@ structure_reference (parse_ctx_t pctx, strudef_t *stru, int ctce_accessors,
     lexseq_init(&seq);
     lexseq_copy(&seq, &stru->accbody);
     parser_scope_set(pctx, myscope);
-    if (!expr_parse_seq(pctx, &seq, &exp)) {
+    if (!expr_parse_seq(ctx, &seq, &exp)) {
         /* XXX error condition */
         lexseq_free(&seq);
         parser_scope_end(pctx);
-        return -1;
+        return 0;
     }
 
     parser_scope_end(pctx);
-    resexp = expr_node_alloc(EXPTYPE_PRIM_STRUREF, pos);
+    resexp = expr_node_alloc(ctx, EXPTYPE_PRIM_STRUREF, pos);
     expr_struref_accexpr_set(resexp, exp);
-    if (expr_setlex(pctx, &curlex, resexp)) {
-        return 0;
-    }
-    return -1;
+    return exp;
 
 } /* structure_reference */

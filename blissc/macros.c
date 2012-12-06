@@ -374,7 +374,7 @@ macro_paramlist (parse_ctx_t pctx, scopectx_t curscope,
                 status = parse_lexeme_seq(pctx, 0, QL_MACRO,
                                           terms, ndelims+1, defval, &lt);
             } else {
-                status = parse_ctce(pctx, &lex);
+                status = expr_parse_ctce(parser_get_expctx(pctx), &lex);
                 if (status) lexseq_instail(defval, lex);
                 lt = parser_next(pctx, QL_NORMAL, 0);
             }

@@ -21,7 +21,6 @@ struct stgctx_s {
     frame_t         *freeframes;
     seg_t           *freesegs;
     initval_t       *freeivs;
-    scopectx_t      globalsyms;
 };
 #define FRAME_ALLOCOUNT 128
 #define SEG_ALLOCOUNT   128
@@ -119,7 +118,6 @@ storage_init (machinedef_t *mach)
     if (ctx != 0) {
         memset(ctx, 0, sizeof(struct stgctx_s));
         ctx->mach = mach;
-        ctx->globalsyms = scope_begin(0);
     }
     return ctx;
 
@@ -379,22 +377,6 @@ seg_static_psect (stgctx_t ctx, seg_t *seg)
             0);
 }
 
-int
-seg_static_is_external (stgctx_t ctx, seg_t *seg)
-{
-    return (seg->type == SEGTYPE_STATIC ?
-            seg->info.staticinfo.is_external :
-            0);
-}
-strdesc_t *
-seg_static_globalsym (stgctx_t ctx, seg_t *seg)
-{
-    return ((seg->type == SEGTYPE_STATIC &&
-             seg->info.staticinfo.globsym != 0) ?
-            name_string(seg->info.staticinfo.globsym) :
-            0);
-}
-
 frame_t *
 seg_stack_frame (stgctx_t ctx, seg_t *seg)
 {
@@ -505,7 +487,7 @@ initval_freelist (stgctx_t ctx, initval_t *iv)
                 string_free(iv->data.string);
                 break;
             case IVTYPE_EXPR_EXP:
-                expr_node_free(iv->data.scalar.expr, ctx);
+                break; // XXX possible memory leak here?
             case IVTYPE_LIST:
                 initval_freelist(ctx, iv->data.listptr);
             case IVTYPE_SCALAR:
@@ -887,38 +869,10 @@ seg_commit (stgctx_t ctx, seg_t *seg)
 }
 
 seg_t *
-seg_alloc_static (stgctx_t ctx, textpos_t defpos, psect_t *psect,
-                  int is_external, strdesc_t *namestr)
+seg_alloc_static (stgctx_t ctx, textpos_t defpos, psect_t *psect)
 {
     seg_t *seg;
-    name_t *np;
 
-    // GLOBAL/EXTERNAL
-    if (namestr != 0) {
-        np = name_search(ctx->globalsyms, namestr->ptr, namestr->len, 1);
-        if (np == 0) {
-            return 0;
-        }
-        seg = name_data_ptr(np);
-        if (seg == 0) {
-            seg = seg_alloc(ctx, SEGTYPE_STATIC, defpos);
-            name_data_set_ptr(np, seg);
-            if (seg != 0) {
-                seg->info.staticinfo.is_external = is_external;
-                seg->info.staticinfo.globsym = np;
-            }
-            return seg;
-        } else if (seg_type(seg) != SEGTYPE_STATIC) {
-            return 0;
-        }
-        if (!is_external) {
-            seg->info.staticinfo.psect = psect;
-            seg->info.staticinfo.is_external = 0;
-        }
-        return seg;
-    }
-
-    // OWN
     seg = seg_alloc(ctx, SEGTYPE_STATIC, defpos);
     if (seg == 0) {
         return 0;
@@ -957,67 +911,9 @@ seg_alloc_register (stgctx_t ctx, textpos_t defpos)
     return seg;
 }
 
-seg_t *
-seg_alloc_literal (stgctx_t ctx, textpos_t defpos, strdesc_t *namestr,
-                   int is_external, unsigned long value)
-{
-    seg_t *seg;
-    name_t *np;
-
-    np = name_search(ctx->globalsyms, namestr->ptr, namestr->len, 1);
-    if (np == 0) {
-        return 0;
-    }
-    seg = name_data_ptr(np);
-    if (seg == 0) {
-        seg = seg_alloc(ctx, SEGTYPE_LITERAL, defpos);
-        if (seg == 0) {
-            return 0;
-        }
-        seg->type = SEGTYPE_LITERAL;
-        seg->info.litinfo.value = value;
-        seg->info.litinfo.has_value = !is_external;
-        name_data_set_ptr(np, seg);
-        name_dclpos_set(np, defpos);
-    } else if (seg_type(seg) == SEGTYPE_LITERAL &&
-               !seg->info.litinfo.has_value && !is_external) {
-        seg->info.litinfo.value = value;
-        seg->info.litinfo.has_value = 1;
-    }
-
-    return seg;
-}
-
-
 int
-seg_litval_valid (seg_t *seg)
+seg_addr_is_ltce (seg_t *seg)
 {
-    if (seg == 0 || seg_type(seg) != SEGTYPE_LITERAL) {
-        return 0;
-    }
-    return seg->info.litinfo.has_value;
+    return (seg_type(seg) == SEGTYPE_STATIC);
 }
 
-long
-seg_litval (seg_t *seg)
-{
-    if (seg == 0 || seg_type(seg) != SEGTYPE_LITERAL ||
-        !seg->info.litinfo.has_value) {
-        return 0;
-    }
-    return (long) seg->info.litinfo.value;
-}
-
-seg_t *
-seg_globalsym_search (stgctx_t ctx, strdesc_t *namestr)
-{
-    name_t *np = name_search(ctx->globalsyms, namestr->ptr, namestr->len, 0);
-
-    return (np == 0 ? 0 : name_data_ptr(np));
-}
-
-strdesc_t *
-seg_dumpinfo (seg_t *seg)
-{
-    return 0;
-}

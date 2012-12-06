@@ -20,7 +20,7 @@
     DOEXPTYPE(NOOP) \
     DOEXPTYPE(PRIM_LIT) DOEXPTYPE(PRIM_SEG) \
     DOEXPTYPE(PRIM_FLDREF) DOEXPTYPE(PRIM_RTNCALL) \
-    DOEXPTYPE(PRIM_SEGNAME) DOEXPTYPE(PRIM_STRUREF) \
+    DOEXPTYPE(PRIM_STRUREF) \
     DOEXPTYPE(PRIM_BLK) DOEXPTYPE(OPERATOR) \
     DOEXPTYPE(EXECFUN) DOEXPTYPE(CTRL_COND) \
     DOEXPTYPE(CTRL_CASE) DOEXPTYPE(CTRL_EXIT) \
@@ -58,10 +58,24 @@ typedef enum {
 #define OPER_COUNT (OPER_ASSIGN+1)
 #define OPER_NONE OPER_COUNT
 
+struct expr_ctx_s;
+typedef struct expr_ctx_s *expr_ctx_t;
 struct expr_node_s;
 
+struct exprseq_s {
+    struct expr_node_s  *head;
+    struct expr_node_s  *tail;
+    int                  count;
+};
+typedef struct exprseq_s exprseq_t;
+
+struct expr_lit_s {
+    long                litval;
+    strdesc_t           *litstring;
+};
+
 struct expr_blk_s {
-    struct expr_node_s *blkseq;
+    exprseq_t           blkseq;
     struct expr_node_s *blkval;
     scopectx_t          blkscope;
     strdesc_t          *codecomment;
@@ -108,9 +122,8 @@ struct expr_loopid_s {
 struct expr_rtncall_s {
     struct expr_node_s  *rtn;
     // need linkage XXX
-    struct expr_node_s  *inargs;
-    struct expr_node_s  *outargs;
-    int                 incount, outcount;
+    exprseq_t           inargs;
+    exprseq_t           outargs;
 };
 struct expr_case_s {
     struct expr_node_s  *caseindex;
@@ -131,12 +144,15 @@ struct expr_sel_s {
     struct expr_node_s  *selindex;
     optype_t            cmptype;
     int                 selectone;
-    struct expr_node_s  *sequence; // of selectors
+    exprseq_t           sequence;
 };
 
 struct expr_seg_s {
+    name_t          *name;
     seg_t           *base_seg;
     long            offset;
+    unsigned int    units;
+    int             signext;
 };
 
 struct expr_exit_s {
@@ -144,15 +160,17 @@ struct expr_exit_s {
     name_t              *exitlabel;
 };
 
+#define EXPR_M_HASVAL (1<<0)
+#define EXPR_M_CTCE   (1<<1)
+#define EXPR_M_LTCE   (1<<2)
 struct expr_node_s {
     // for freelist tracking and sequences in blocks
     struct expr_node_s *next;
     exprtype_t          type;
     textpos_t           textpos;
-    int                 has_value;
+    unsigned int        flags;
     union {
-        long            litval;
-        name_t          *segname;
+        struct expr_lit_s litdata;
         struct expr_seg_s  segdata;
         struct expr_struref_s  srdata;
         struct expr_blk_s  blkdata;
@@ -171,10 +189,12 @@ struct expr_node_s {
 };
 typedef struct expr_node_s expr_node_t;
 
+typedef expr_node_t *(*expr_dispatch_fn)(expr_ctx_t ctx, lextype_t lt, lexeme_t *lex);
+
 const char *exprtype_name(exprtype_t type);
-expr_node_t *expr_node_alloc(exprtype_t type, textpos_t pos);
-void expr_node_free(expr_node_t *node, stgctx_t stg);
-expr_node_t *expr_node_copy(expr_node_t *src);
+expr_node_t *expr_node_alloc(expr_ctx_t ctx, exprtype_t type, textpos_t pos);
+void expr_node_free(expr_ctx_t ctx, expr_node_t *node);
+expr_node_t *expr_node_copy(expr_ctx_t ctx, expr_node_t *src);
 const char *oper_name(optype_t op);
 
 static inline __unused int expr_is_noop(expr_node_t *node) {
@@ -218,18 +238,36 @@ static inline __unused void expr_textpos_set(expr_node_t *node, textpos_t pos) {
     node->textpos = pos;
 }
 static inline __unused int expr_has_value(expr_node_t *node) {
-    return node->has_value;
+    return (node->flags & EXPR_M_HASVAL) != 0;
 }
 static inline __unused void expr_has_value_set(expr_node_t *node, int v) {
-    node->has_value = v;
+    node->flags = (v ? (node->flags|EXPR_M_HASVAL) : (node->flags & ~EXPR_M_HASVAL));
+}
+static inline __unused int expr_is_ctce(expr_node_t *node) {
+    return (node->flags & EXPR_M_CTCE) != 0;
+}
+static inline __unused void expr_is_ctce_set(expr_node_t *node, int v) {
+    node->flags = (v ? (node->flags|EXPR_M_CTCE) : (node->flags & ~EXPR_M_CTCE));
+}
+static inline __unused int expr_is_ltce(expr_node_t *node) {
+    return (node->flags & EXPR_M_LTCE) != 0;
+}
+static inline __unused void expr_is_ltce_set(expr_node_t *node, int v) {
+    node->flags = (v ? (node->flags|EXPR_M_LTCE) : (node->flags & ~EXPR_M_LTCE));
 }
 
 // PRIM_LIT
 static inline __unused long expr_litval(expr_node_t *node) {
-    return node->data.litval;
+    return node->data.litdata.litval;
 }
 static inline __unused void expr_litval_set(expr_node_t *node, long value) {
-    node->data.litval = value;
+    node->data.litdata.litval = value;
+}
+static inline __unused strdesc_t *expr_litstring(expr_node_t *node) {
+    return node->data.litdata.litstring;
+}
+static inline __unused void expr_litstring_set(expr_node_t *node, strdesc_t *str) {
+    node->data.litdata.litstring = str;
 }
 
 // PRIM_STRUREF
@@ -246,6 +284,18 @@ static inline __unused seg_t *expr_seg_base(expr_node_t *node) {
 static inline __unused void expr_seg_base_set(expr_node_t *node, seg_t *segval) {
     node->data.segdata.base_seg = segval;
 }
+static inline __unused unsigned int expr_seg_units(expr_node_t *node) {
+    return node->data.segdata.units;
+}
+static inline __unused void expr_seg_units_set(expr_node_t *node, unsigned int u) {
+    node->data.segdata.units = u;
+}
+static inline __unused int expr_seg_signext(expr_node_t *node) {
+    return node->data.segdata.signext;
+}
+static inline __unused void expr_seg_signext_set(expr_node_t *node, int s) {
+    node->data.segdata.signext = s;
+}
 static inline __unused long expr_seg_offset(expr_node_t *node) {
     return node->data.segdata.offset;
 }
@@ -253,11 +303,11 @@ static inline __unused void expr_seg_offset_set(expr_node_t *node, long offset) 
     node->data.segdata.offset = offset;
 }
 // PRIM_SEGNAME
-static inline __unused name_t *expr_segname(expr_node_t *node) {
-    return node->data.segname;
+static inline __unused name_t *expr_seg_name(expr_node_t *node) {
+    return node->data.segdata.name;
 }
-static inline __unused void expr_segname_set(expr_node_t *node, name_t *np) {
-    node->data.segname = np;
+static inline __unused void expr_seg_name_set(expr_node_t *node, name_t *np) {
+    node->data.segdata.name = np;
 }
 // PRIM_FLDREF
 static inline __unused expr_node_t *expr_fldref_addr(expr_node_t *node) {
@@ -286,11 +336,8 @@ static inline __unused void expr_fldref_signext_set(expr_node_t *node, int val) 
 }
 
 // PRIM_BLK
-static inline __unused expr_node_t *expr_blk_seq(expr_node_t *node) {
-    return node->data.blkdata.blkseq;
-}
-static inline __unused void expr_blk_seq_set(expr_node_t *node, expr_node_t *seq) {
-    node->data.blkdata.blkseq = seq;
+static inline __unused exprseq_t *expr_blk_seq(expr_node_t *node) {
+    return &node->data.blkdata.blkseq;
 }
 static inline __unused expr_node_t *expr_blk_valexp(expr_node_t *node) {
     return node->data.blkdata.blkval;
@@ -318,21 +365,11 @@ static inline __unused expr_node_t *expr_rtnaddr(expr_node_t *node) {
 static inline __unused void expr_rtnaddr_set(expr_node_t *node, expr_node_t *adr) {
     node->data.rcdata.rtn = adr;
 }
-static inline __unused int expr_inargs(expr_node_t *node, expr_node_t **arglst) {
-    if (arglst != 0) *arglst = node->data.rcdata.inargs;
-    return node->data.rcdata.incount;
+static inline __unused exprseq_t *expr_rtn_inargs(expr_node_t *node) {
+    return &node->data.rcdata.inargs;
 }
-static inline __unused void expr_inargs_set(expr_node_t *node, int count, expr_node_t *args) {
-    node->data.rcdata.incount = count;
-    node->data.rcdata.inargs = args;
-}
-static inline __unused int expr_outargs(expr_node_t *node, expr_node_t **arglst) {
-    if (arglst != 0) *arglst = node->data.rcdata.outargs;
-    return node->data.rcdata.outcount;
-}
-static inline __unused void expr_outargs_set(expr_node_t *node, int count, expr_node_t *args) {
-    node->data.rcdata.outcount = count;
-    node->data.rcdata.outargs = args;
+static inline __unused exprseq_t *expr_rtn_outargs(expr_node_t *node) {
+    return &node->data.rcdata.outargs;
 }
 // OPERATOR
 static inline __unused expr_node_t *expr_op_lhs(expr_node_t *node) {
@@ -489,11 +526,8 @@ static inline __unused int expr_sel_oneonly(expr_node_t *node) {
 static inline __unused void expr_sel_oneonly_set(expr_node_t *node, int val) {
     node->data.seldata.selectone = val;
 }
-static inline __unused expr_node_t *expr_sel_selectors(expr_node_t *node) {
-    return node->data.seldata.sequence;
-}
-static inline __unused void expr_sel_selectors_set(expr_node_t *node, expr_node_t *seq) {
-    node->data.seldata.sequence = seq;
+static inline __unused exprseq_t *expr_sel_selectors(expr_node_t *node) {
+    return &node->data.seldata.sequence;
 }
 // selectors
 static inline __unused expr_node_t *expr_selector_low(expr_node_t *node) {
@@ -545,15 +579,95 @@ static inline __unused void expr_exit_label_set(expr_node_t *node, name_t *np) {
     node->data.exitdata.exitlabel = np;
 }
 
-void expr_init (scopectx_t kwdscope);
-int expr_expr_next(parse_ctx_t pctx, expr_node_t **expp);
-int expr_parse_next(parse_ctx_t pctx, lexeme_t **lexp, int longstrings_ok);
-int expr_parse_block(parse_ctx_t pctx, expr_node_t **blkexp);
-int parse_ctce(parse_ctx_t pctx, lexeme_t **lexp);
-int parse_ltce(parse_ctx_t pctx, lexeme_t **lexp);
-int expr_is_ltc(stgctx_t stg, expr_node_t *exp);
-int expr_parse_seq(parse_ctx_t pctx, lexseq_t *seq, expr_node_t **expp);
-int expr_setlex(parse_ctx_t pctx, lexeme_t **lexp, expr_node_t *exp);
-strdesc_t *expr_dumpinfo(expr_node_t *exp);
+static inline __unused void exprseq_init (exprseq_t *seq) {
+    seq->head = seq->tail = 0; seq->count = 0;
+}
+static inline __unused int exprseq_empty (exprseq_t *seq) {
+    return (seq->count == 0);
+}
+static inline __unused void exprseq_inshead (exprseq_t *seq, expr_node_t *l) {
+    if (seq->count == 0) seq->tail = l;
+    l->next = seq->head; seq->head = l; seq->count += 1;
+}
+static inline __unused void exprseq_instail (exprseq_t *seq, expr_node_t *l) {
+    if (seq->count == 0) exprseq_inshead(seq, l);
+    else { seq->tail->next = l; l->next = 0; seq->tail = l; seq->count += 1;}
+}
+static inline __unused void exprseq_append (exprseq_t *dst, exprseq_t *addon) {
+    if (addon->count == 0) return;
+    if (dst->count == 0) {
+        dst->head = addon->head; dst->tail = addon->tail; dst->count = addon->count;
+    } else {
+        dst->tail->next = addon->head; dst->tail = addon->tail;
+        dst->count += addon->count;
+    }
+    addon->head = addon->tail = 0; addon->count = 0;
+}
+static inline __unused void exprseq_prepend (exprseq_t *dst, exprseq_t *addon) {
+    if (addon->count == 0) return;
+    if (dst->count == 0) {
+        dst->head = addon->head; dst->tail = addon->tail; dst->count = addon->count;
+    } else {
+        addon->tail->next = dst->head; dst->head = addon->head;
+        dst->count += addon->count;
+    }
+    addon->head = addon->tail = 0; addon->count = 0;
+}
+static inline __unused expr_node_t *exprseq_remhead (exprseq_t *seq) {
+    expr_node_t *l = seq->head;
+    if (l == 0) return l;
+    seq->head = l->next;
+    l->next = 0;
+    seq->count -= 1;
+    return l;
+}
+static inline __unused expr_node_t *exprseq_remtail (exprseq_t *seq) {
+    expr_node_t *l = seq->tail, *p = seq->head;
+    if (p == 0) return 0;
+    if (seq->count == 1) {
+        l = seq->head;
+        seq->head = seq->tail = 0;
+        seq->count = 0;
+        return l;
+    }
+    while (p->next != l) { p = p->next; }
+    p->next = 0;
+    seq->tail = p;
+    seq->count -= 1;
+    return l;
+}
+static inline __unused expr_node_t *exprseq_head (exprseq_t *seq) {
+    return seq->head;
+}
+static inline __unused expr_node_t *exprseq_tail (exprseq_t *seq) {
+    return seq->tail;
+}
+static inline __unused int exprseq_length (exprseq_t *seq) {
+    return seq->count;
+}
+static inline __unused void exprseq_set (exprseq_t *dst, exprseq_t *src) {
+    dst->head = src->head; dst->tail = src->tail; dst->count = src->count;
+}
 
+void exprseq_free(expr_ctx_t ctx, exprseq_t *seq);
+void exprseq_copy(expr_ctx_t ctx, exprseq_t *dst, exprseq_t *src);
+
+expr_ctx_t expr_init (parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope);
+int expr_expr_next(expr_ctx_t ctx, expr_node_t **expp);
+int expr_parse_ctce(expr_ctx_t ctx, lexeme_t **lex);
+int expr_parse_block(expr_ctx_t ctx, expr_node_t **blkexp);
+int expr_parse_seq(expr_ctx_t ctx, lexseq_t *seq, expr_node_t **expp);
+void expr_dispatch_register(expr_ctx_t ctx, lextype_t lt, expr_dispatch_fn fn);
+parse_ctx_t expr_parse_ctx(expr_ctx_t ctx);
+void *expr_decl_ctx(expr_ctx_t ctx);
+void expr_decl_ctx_set(expr_ctx_t ctx, void *d);
+stgctx_t expr_stg_ctx(expr_ctx_t);
+machinedef_t *expr_machinedef(expr_ctx_t);
+expr_node_t *expr_parse_arglist(expr_ctx_t ctx, expr_node_t *rtn);
+initval_t *expr_initval_add(expr_ctx_t ctx, initval_t *ivlist, expr_node_t *exp,
+                            unsigned int width);
+int expr_parse_ISSTRING(expr_ctx_t ctx, int *allstr);
+int expr_parse_xCTE(expr_ctx_t ctx, int checkltce, int *allok);
+int expr_get_allocation(expr_ctx_t ctx, strdesc_t *name, unsigned int *units);
+int expr_parse_SIZE(expr_ctx_t ctx, unsigned int *units);
 #endif

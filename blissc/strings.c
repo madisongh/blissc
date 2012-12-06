@@ -203,7 +203,7 @@ string_append (strdesc_t *trg, strdesc_t *add)
 void
 string_free (strdesc_t *dsc)
 {
-    if (is_static(dsc)) {
+    if (dsc == 0 || is_static(dsc)) {
         return;
     }
     string___free(desc_to_str(dsc));

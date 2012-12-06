@@ -144,14 +144,7 @@ void PRINTLEX(lexeme_t *lex)
         linewidth += printf("%sU[%s]<%-*.*s>", delim, btname,
                             text->len, text->len, text->ptr);
     } else if (lt == LEXTYPE_SEGMENT) {
-        text = seg_dumpinfo(lexeme_ctx_get(lex));
-        linewidth += printf("%sSEG(%-*.*s)", delim,
-                            text->len, text->len, text->ptr);
-        string_free(text);
-    } else if (lt == LEXTYPE_EXPRESSION) {
-        linewidth += printf("%sEXPR-BEGIN<<<\n", delim);
-        PRINTEXPR(lexeme_ctx_get(lex));
-        linewidth = printf(">>>END-EXPR");
+        linewidth += printf("%sSEG", delim);
     } else {
         linewidth += printf("%s%s<%-*.*s>", delim, typename,
                             text->len, text->len, text->ptr);
@@ -182,23 +175,17 @@ test_parser (int argc, const char *argv[])
 
     mainscope = scope_begin(0);
     stg = storage_init(&machdef);
-    pctx = parser_init(mainscope, stg, &machdef);
+    pctx = parser_init(mainscope, &machdef);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
     }
-    declarations_init(pctx, mainscope, stg, &machdef);
 //    linewidth = 0;
 //    delim = "";
     for (lt = parser_next(pctx, QL_NORMAL, &lex); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
          lt = parser_next(pctx, QL_NORMAL, &lex)) {
         PRINTLEX(lex);
-        if (lt >= LEXTYPE_DCL_MIN && lt <= LEXTYPE_DCL_MAX) {
-            parser_insert(pctx, lex);
-            parse_declaration(pctx);
-        } else {
-            lexeme_free(lex);
-        }
+        lexeme_free(lex);
     }
     if (lt == LEXTYPE_NONE) {
         fprintf(stderr, "parser_next returned error lexeme\n");
@@ -222,6 +209,7 @@ test_expr (int argc, const char *argv[])
     parse_ctx_t pctx;
     scopectx_t mainscope;
     stgctx_t stg;
+    expr_ctx_t  ectx;
 //    lexeme_t *lex;
 //   lextype_t lt;
 //    int linewidth;
@@ -231,16 +219,15 @@ test_expr (int argc, const char *argv[])
 
     mainscope = scope_begin(0);
     stg = storage_init(&machdef);
-    expr_init(mainscope);
-    pctx = parser_init(mainscope, stg, &machdef);
+    pctx = parser_init(mainscope, &machdef);
+    ectx = expr_init(pctx, stg, mainscope);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
     }
-    declarations_init(pctx, mainscope, stg, &machdef);
 //    linewidth = 0;
 //    delim = "";
-    if (!declare_module(pctx)) {
+    if (!declare_module(ectx)) {
 //    for (lt = expr_parse_next(pctx, &lex, 0); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
 //         lt = expr_parse_next(pctx, &lex, 0)) {
 //        PRINTLEX(lex);
@@ -279,7 +266,7 @@ void PRINTEXPR_internal(int level, expr_node_t *exp)
         case EXPTYPE_PRIM_BLK: {
             expr_node_t *e;
             printf("%-*.*s{BLK:BEGIN}\n", level, level, pfx);
-            for (e = expr_blk_seq(exp); e != 0; e = expr_next(e)) {
+            for (e = exprseq_head(expr_blk_seq(exp)); e != 0; e = expr_next(e)) {
                 PRINTEXPR_internal(level+1, e);
             }
             printf("%-*.*s{BLK:END}\n", level, level, pfx);
@@ -294,14 +281,15 @@ void PRINTEXPR_internal(int level, expr_node_t *exp)
             printf("%-*.*s{LIT=%ld}\n", level, level, pfx, expr_litval(exp));
             break;
         case EXPTYPE_PRIM_SEG: {
-            printf("%-*.*s{SEG:%p(%lx)}\n",
-                   level, level, pfx, expr_seg_base(exp), expr_seg_offset(exp));
-            break;
-        }
-        case EXPTYPE_PRIM_SEGNAME: {
-            strdesc_t *str = name_string(expr_segname(exp));
-            printf("%-*.*s{SEGNAME:%-*.*s}\n", level, level, pfx,
-                   str->len, str->len, str->ptr);
+            strdesc_t *str;
+            if (expr_seg_name(exp) != 0) {
+                str = name_string(expr_seg_name(exp));
+            } else {
+                str = string_printf(0, "%p", expr_seg_base(exp));
+            }
+            printf("%-*.*s{SEG:%-*.*s(%lx)}\n",
+                   level, level, pfx, str->len, str->len, str->ptr,
+                   expr_seg_offset(exp));
             break;
         }
         case EXPTYPE_PRIM_FLDREF:

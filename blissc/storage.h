@@ -46,15 +46,10 @@ struct seg_s;
 typedef struct seg_s seg_t;
 
 
-seg_t *seg_alloc_static(stgctx_t ctx, textpos_t defpos, psect_t *psect,
-                        int is_external, strdesc_t *namestr);
+seg_t *seg_alloc_static(stgctx_t ctx, textpos_t defpos, psect_t *psect);
 seg_t *seg_alloc_stack(stgctx_t ctx, textpos_t defpos, int stackonly);
 seg_t *seg_alloc_register(stgctx_t ctx, textpos_t defpos);
-seg_t *seg_alloc_literal(stgctx_t ctx, textpos_t defpos,
-                         strdesc_t *namestr, int is_external,
-                         unsigned long value);
 void seg_free(stgctx_t ctx, seg_t *seg);
-seg_t *seg_globalsym_search(stgctx_t ctx, strdesc_t *namestr);
 int seg_initval_set(stgctx_t ctx, seg_t *seg, initval_t *ivlist);
 int seg_preset_set(stgctx_t ctx, seg_t *seg, initval_t *ivlist);
 void seg_static_psect_set(stgctx_t ctx, seg_t *seg, psect_t *psect);
@@ -73,6 +68,7 @@ int seg_has_storage(stgctx_t ctx, seg_t *seg);
 segtype_t seg_type(seg_t *seg);
 long seg_litval(seg_t *seg);
 int seg_litval_valid(seg_t *seg);
+int seg_addr_is_ltce(seg_t *seg);
 
 psect_t *psect_create(stgctx_t ctx, strdesc_t *name, textpos_t defpos, unsigned int attr);
 
@@ -98,7 +94,6 @@ void storage_finish(stgctx_t ctx);
 frame_t *frame_begin(stgctx_t ctx, textpos_t defpos, void *routine);
 frame_t *frame_end(stgctx_t ctx);
 frame_t *storage_curframe(stgctx_t ctx);
-strdesc_t *seg_dumpinfo(seg_t *seg);
 
 #undef SIU
 #endif
