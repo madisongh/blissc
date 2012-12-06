@@ -1,5 +1,8 @@
 MODULE test =
 BEGIN
+    LITERAL
+        Z = 3 + 4,
+        Y = Z + 2 * 5;
     FIELD
         DSC_FIELDS = 
             SET
@@ -36,9 +39,6 @@ BEGIN
         BITE : SIGNED WORD;
     EXTERNAL
         ME : LONG UNSIGNED;        
-    LITERAL
-        Z = 3 + 4,
-        Y = Z + 2 * 5;
 %PRINT(%ASCII'Z is: ',%NUMBER(Z), %ASCII', Y is: ', %NUMBER(Y))
     LITERAL
         A = (Z + 5) * (Y - 5);
@@ -66,7 +66,7 @@ BEGIN
 %PRINT('LTCE test: ',%NUMBER(%LTCE(ALPHA EQLA BETA)))
 %PRINT('LTCE test: ',%NUMBER(%LTCE(BETA EQLA MU)))
 
-GLOBAL ROUTINE testrtn (ABC, DEF : REF BLOCK[,BYTE]) : NOVALUE =
+GLOBAL ROUTINE testrtn (ABC, DEF : REF BLOCK[,BYTE] FIELD (DSC_FIELDS)) : NOVALUE =
 BEGIN
     LABEL
         blklabel1, blklabel2;
