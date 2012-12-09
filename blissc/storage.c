@@ -195,6 +195,8 @@ psect_create (stgctx_t ctx, strdesc_t *name, textpos_t pos, unsigned int attr)
     return psect;
 }
 
+unsigned int psect_flags(psect_t *ps) { return ps->attr; }
+
 frame_t *
 frame_begin (stgctx_t ctx, textpos_t pos, void *routine)
 {
@@ -388,7 +390,7 @@ seg_stack_frame (stgctx_t ctx, seg_t *seg)
 
 
 unsigned long
-seg_size (stgctx_t ctx, seg_t *seg)
+seg_size (seg_t *seg)
 {
     if (seg->type == SEGTYPE_STATIC) {
         return seg->info.staticinfo.size;
@@ -839,7 +841,7 @@ seg_initval_set (stgctx_t ctx, seg_t *seg, initval_t *ivlist)
     if (seg->type != SEGTYPE_STATIC && seg->type != SEGTYPE_STACK) {
         return 0;
     }
-    segsize = seg_size(ctx, seg);
+    segsize = seg_size(seg);
 
     if (segsize == 0) {
         seg_size_set(ctx, seg, ivsize);

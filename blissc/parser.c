@@ -18,10 +18,12 @@
 #include "expression.h"
 #include "declarations.h"
 #include "macros.h"
+#include "symbols.h"
 #include "machinedef.h"
 #include "utils.h"
 
 struct parse_ctx_s {
+    namectx_t       namectx;
     scopectx_t      kwdscope, curscope;
     void            *expctx;
     machinedef_t    *mach;
@@ -77,7 +79,7 @@ static lexfunc_t lexfuncs[LEXTYPE_LXF_MAX-LEXTYPE_LXF_MIN+1] = {
 
 #define DODEF(name_, rtn_) NAMEDEF("%" #name_, LEXTYPE_LXF_##name_, NAME_M_RESERVED),
 
-static name_t parser_names[] = {
+static namedef_t parser_names[] = {
     DODEFS
     NAMEDEF("%THEN", LEXTYPE_LXF_THEN, NAME_M_RESERVED),
 };
@@ -140,12 +142,10 @@ name_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
 {
     parse_ctx_t pctx = ctx;
     strdesc_t *ltext = lexeme_text(lex);
-    name_t *np = name_search(pctx->curscope, ltext->ptr, ltext->len, 0);
+    name_t *np;
     lextype_t nt;
 
-    if (np != 0) {
-        nt = name_type(np);
-    }
+    np = name_search(pctx->curscope, ltext->ptr, ltext->len, &nt);
 
     // Check for lexical conditional skips
     if (cs == COND_CWA) {
@@ -165,21 +165,24 @@ name_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
         return 0;
     }
 
-    if (np == 0) {
-        np = name_search(pctx->curscope, ltext->ptr, ltext->len,
-                         (qm == QM_NONE && ql < QL_MACRO));
-        if (np == 0) {
+    if (ql == QL_MACRO) {
+        if (np == 0 || (is_name(nt) && nt != LEXTYPE_NAME_MAC_PARAM)) {
+            lex->type = LEXTYPE_UNBOUND;
             lex->boundtype = LEXTYPE_NAME;
             return 0;
         }
-        nt = name_type(np);
+    } else if (ql == QL_NAME) {
+        if (np == 0 || (is_name(nt) && nt != LEXTYPE_NAME_MACRO)) {
+            lex->type = LEXTYPE_UNBOUND;
+            lex->boundtype = LEXTYPE_NAME;
+            return 0;
+        }
     }
 
-    lex->boundtype = nt;
     lexeme_ctx_set(lex, np);
-    if (nt == LEXTYPE_NAME) {
-        // undeclared name, no type known
-        lex->type = nt;
+    lex->boundtype = (np == 0 ? LEXTYPE_NAME : nt);
+    if (np == 0) {
+        lex->type = LEXTYPE_NAME;
         return 0;
     }
 
@@ -203,16 +206,18 @@ name_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
  * pointer to be stored in the block.
  */
 parse_ctx_t
-parser_init (scopectx_t kwdscope, machinedef_t *mach)
+parser_init (namectx_t namectx, machinedef_t *mach)
 {
     parse_ctx_t pctx;
+    scopectx_t kwdscope;
     int i;
 
-    if (kwdscope == 0) {
-        kwdscope = scope_begin(0);
+    if (namectx == 0) {
+        namectx = nametables_init();
     }
+    kwdscope = scope_begin(namectx, 0);
     for (i = 0; i < sizeof(parser_names)/sizeof(parser_names[0]); i++) {
-        name_insert(kwdscope, &parser_names[i]);
+        name_declare(kwdscope, &parser_names[i], 0, 0, 0, 0);
     }
 
     lextype_register(LEXTYPE_NAME, name_bind);
@@ -220,8 +225,9 @@ parser_init (scopectx_t kwdscope, machinedef_t *mach)
     pctx = malloc(sizeof(struct parse_ctx_s));
     if (pctx != 0) {
         memset(pctx, 0, sizeof(struct parse_ctx_s));
+        pctx->namectx  = namectx;
         pctx->kwdscope = kwdscope;
-        pctx->curscope = scope_begin(kwdscope);
+        pctx->curscope = scope_begin(namectx, kwdscope);
         pctx->lexctx = lexer_init(pctx->kwdscope);
     }
 
@@ -458,7 +464,7 @@ parser_scope_set (parse_ctx_t pctx, scopectx_t newscope)
 scopectx_t
 parser_scope_begin (parse_ctx_t pctx)
 {
-    pctx->curscope = scope_begin(pctx->curscope);
+    pctx->curscope = scope_begin(pctx->namectx, pctx->curscope);
     return pctx->curscope;
 
 } /* parser_scope_begin */
@@ -671,9 +677,8 @@ parse_QUOTE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 
     if (lt == LEXTYPE_NAME) {
         name_t *np = name_search(pctx->curscope, lex->text.ptr,
-                                 lex->text.len, 0);
+                                 lex->text.len, &lt);
         if (np != 0) {
-            lt = name_type(np);
             // The lexical conditional functions are not %QUOTE-able
             if (lt >= LEXTYPE_LXF_IF && lt <= LEXTYPE_LXF_FI) {
                 /* XXX error condition */
@@ -714,12 +719,11 @@ parse_unquote_expand (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         return 1;
     }
     if (lt == LEXTYPE_NAME) {
-        np = name_search(pctx->curscope, lex->text.ptr, lex->text.len, 0);
+        np = name_search(pctx->curscope, lex->text.ptr, lex->text.len, &lt);
         if (np == 0) {
             /* XXX error condition */
             return 1;
         }
-        lt = name_type(np);
     }
     if ((curlt == LEXTYPE_LXF_EXPAND) &&
         !(is_lexfunc(lt, 0) || lt == LEXTYPE_NAME_MACRO)) {
@@ -1530,7 +1534,7 @@ parse_ASSIGN (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     if (!expr_parse_ctce(pctx->expctx, &lex)) {
         /* XXX error condition */
     } else {
-        name_data_set_int(np, lexeme_signedval(lex));
+        compiletime_assign(np, lexeme_signedval(lex));
         lexeme_free(lex);
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 0)) {
@@ -1616,10 +1620,11 @@ parse_DECLARED (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         lexer_insert(pctx->lexctx, lex);
     } else {
         strdesc_t *text = lexeme_text(lex);
-        name_t *np = name_search(pctx->curscope, text->ptr, text->len, 0);
-        lexeme_free(lex);
         rlex = lexeme_create(LEXTYPE_NUMERIC,
-                             (np != 0 && (name_flags(np) & NAME_M_DECLARED) != 0) ? &one : &zero);
+                             (name_is_declared(parser_scope_get(pctx),
+                                               text->ptr, text->len) ?
+                              &one : &zero));
+        lexeme_free(lex);
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
         /* XXX error condition */
@@ -1781,20 +1786,17 @@ parse_FIELDEXPAND (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     if (lex == 0) {
         lexseq_t tmpseq;
         lexseq_init(&tmpseq);
-        lexseq_copy(&tmpseq, name_data_lexseq(fnp));
+        lexseq_copy(&tmpseq, field_lexseq(fnp));
         parser_insert_seq(pctx, &tmpseq);
     } else {
-        int i, n = (int) lexeme_unsignedval(lex);
+        unsigned int which = (unsigned int) lexeme_unsignedval(lex);
+        lexeme_t *rlex = field_extract(fnp, which);
         lexeme_free(lex);
-        for (lex = lexseq_head(name_data_lexseq(fnp)), i = 0;
-             lex != 0 && i < n; lex = lexeme_next(lex), i += 1) {
-            if (lexeme_next(lex) == 0) break;
-            lex = lexeme_next(lex); // skip over the comma
-        }
-        if (i != n) {
+        if (rlex == 0) {
             /* XXX error condition */
+            parser_insert(pctx, lexeme_create(LEXTYPE_NUMERIC, &zero));
         } else {
-            parser_insert(pctx, lexeme_copy(lex));
+            parser_insert(pctx, rlex);
         }
 
     }

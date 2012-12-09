@@ -165,7 +165,6 @@ int
 test_parser (int argc, const char *argv[])
 {
     parse_ctx_t pctx;
-    scopectx_t mainscope;
     stgctx_t stg;
     lexeme_t *lex;
     lextype_t lt;
@@ -173,9 +172,8 @@ test_parser (int argc, const char *argv[])
 //    char *delim;
     machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32, .signext_supported=1 };
 
-    mainscope = scope_begin(0);
     stg = storage_init(&machdef);
-    pctx = parser_init(mainscope, &machdef);
+    pctx = parser_init(0, &machdef);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
@@ -194,7 +192,6 @@ test_parser (int argc, const char *argv[])
         printf("<<end of input>>\n");
     }
     parser_finish(pctx);
-    scope_end(mainscope);
     return 0;
 }
 
@@ -207,7 +204,6 @@ int
 test_expr (int argc, const char *argv[])
 {
     parse_ctx_t pctx;
-    scopectx_t mainscope;
     stgctx_t stg;
     expr_ctx_t  ectx;
 //    lexeme_t *lex;
@@ -217,10 +213,9 @@ test_expr (int argc, const char *argv[])
     machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32,
         .signext_supported=1, .max_align=2, .reg_count = 16 };
 
-    mainscope = scope_begin(0);
     stg = storage_init(&machdef);
-    pctx = parser_init(mainscope, &machdef);
-    ectx = expr_init(pctx, stg, mainscope);
+    pctx = parser_init(0, &machdef);
+    ectx = expr_init(pctx, stg, parser_scope_get(pctx));
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
@@ -250,7 +245,6 @@ test_expr (int argc, const char *argv[])
         printf("<<end of module>>\n");
     }
     parser_finish(pctx);
-    scope_end(mainscope);
     return 0;
 }
 

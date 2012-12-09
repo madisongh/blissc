@@ -8,6 +8,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include "declarations.h"
 #include "parser.h"
 #include "expression.h"
 #include "lexer.h"
@@ -26,12 +27,11 @@ typedef enum {
 struct macrodecl_s {
     lexseq_t body;
     macrotype_t type;
-    int paramcount, iparamcount;
-    struct macparam_s *plist, *ilist;
+    namereflist_t plist, ilist;
     scopectx_t ptable;
 };
 
-static name_t macro_names[] = {
+static namedef_t macro_names[] = {
     NAMEDEF("KEYWORDMACRO", LEXTYPE_DCL_KEYWORDMACRO, NAME_M_RESERVED),
     NAMEDEF("MACRO", LEXTYPE_DCL_MACRO, NAME_M_RESERVED),
     NAMEDEF("%EXITMACRO", LEXTYPE_LXF_EXITMACRO, NAME_M_RESERVED),
@@ -42,8 +42,6 @@ static name_t macro_names[] = {
     NAMEDEF("%LENGTH", LEXTYPE_LXF_LENGTH, NAME_M_RESERVED)
 };
 
-struct macparam_s *freelist;
-
 static lextype_t openers[] = { LEXTYPE_DELIM_LPAR, LEXTYPE_DELIM_LBRACK,
                                LEXTYPE_DELIM_LANGLE };
 static lextype_t closers[] = { LEXTYPE_DELIM_RPAR, LEXTYPE_DELIM_RBRACK,
@@ -51,11 +49,6 @@ static lextype_t closers[] = { LEXTYPE_DELIM_RPAR, LEXTYPE_DELIM_RBRACK,
 
 static int macro_expand(parse_ctx_t pctx, name_t *macroname,
                         lexseq_t *result);
-static void macro_freedata(name_t *np);
-static int macro_copydata(name_t *dst, name_t *src);
-static void macparam_freedata(name_t *np);
-static int macparam_copydata(name_t *dst, name_t *src);
-
 
 /*
  * macro_bind
@@ -66,14 +59,11 @@ macro_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
 {
     parse_ctx_t pctx = ctx;
     name_t *np = lexeme_ctx_get(lex);
-    strdesc_t namedsc;
 
     if (cs == COND_CWA || cs == COND_AWC) {
         lexeme_free(lex);
         return 1;
     }
-
-    strdesc_init(&namedsc, np->name, np->namelen);
 
     switch (qm) {
         case QM_QUOTE:
@@ -83,7 +73,7 @@ macro_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
             lexeme_free(lex);
             return macro_expand(pctx, np, result);
         case QM_UNQUOTE:
-            lex->type = name_type(np);
+            lex->type = LEXTYPE_NAME_MACRO;
             return 0;
         default:
             break;
@@ -121,7 +111,7 @@ macparam_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
     }
 
     lexseq_init(&tmpseq);
-    lexseq_copy(&tmpseq, name_data_lexseq(np));
+    lexseq_copy(&tmpseq, name_extraspace(np));
     lexseq_append(result, &tmpseq);
     lexeme_free(lex);
 
@@ -129,87 +119,28 @@ macparam_bind (void *ctx, quotelevel_t ql, quotemodifier_t qm,
 
 } /* macparam_bind */
 
-/*
- * macros_init
- *
- * Initialization routine.
- */
-void
-macros_init (scopectx_t kwdscope)
+lexseq_t *
+macparam_lexseq (name_t *np)
 {
-    int i;
-    struct macparam_s *p, *l;
-    for (i = 0; i < sizeof(macro_names)/sizeof(macro_names[0]); i++) {
-        name_insert(kwdscope, &macro_names[i]);
-    }
-    freelist = malloc(sizeof(struct macparam_s) * PARAM_ALLOCOUNT);
-    for (l = freelist, p = freelist + 1, i = 1; i < PARAM_ALLOCOUNT;
-         i+= 1, l = p, p = p + 1) {
-        l->next = p;
-    }
-    l->next = 0;
+    return name_extraspace(np);
+}
 
-    lextype_register(LEXTYPE_NAME_MACRO, macro_bind);
-    lextype_register(LEXTYPE_NAME_MAC_PARAM, macparam_bind);
-    nametype_dataop_register(LEXTYPE_NAME_MACRO, macro_freedata,
-                               macro_copydata);
-    nametype_dataop_register(LEXTYPE_NAME_MAC_PARAM, macparam_freedata,
-                               macparam_copydata);
-
-} /* macros_init */
-
-/*
- * macparam_alloc
- *
- * Allocate macro parameter structure.
- */
-static struct macparam_s *
-macparam_alloc (void)
+static int
+macparam_initdata (void *vctx, name_t *np, void *p)
 {
-    struct macparam_s *p, *l;
-    int i;
-
-    if (freelist == 0) {
-        freelist = malloc(sizeof(struct macparam_s) * PARAM_ALLOCOUNT);
-        for (l = freelist, p = freelist + 1, i = 1; i < PARAM_ALLOCOUNT;
-             i += 1, l = p, p = p + 1) {
-            l->next = p;
-        }
-        l->next = 0;
-    }
-    p = freelist;
-    freelist = freelist->next;
-    p->next = 0;
-    p->np = 0;
-    return p;
-
-} /* macparam_alloc */
-
-/*
- * macparams_free
- *
- * Free up a list of macparam structures.
- */
-void
-macparams_free (macparam_t *plist)
-{
-    macparam_t *p, *n;
-    for (p = plist; p != 0; p = n) {
-        n = p->next;
-        p->next = freelist;
-        freelist = p;
-    }
-} /* macparams_free */
-
+    lexseq_t *seq = p;
+    lexseq_init(seq);
+    return 1;
+}
 /*
  * macparam_freedata
  *
  * Frees up a macro parameter (in the name structure).
  */
 static void
-macparam_freedata (name_t *np)
+macparam_freedata (void *vctx, name_t *np, void *p)
 {
-    lexseq_t *seq = name_data_lexseq(np);
+    lexseq_t *seq = p;
     lexseq_free(seq);
 
 } /* macparam_freedata */
@@ -220,9 +151,21 @@ macparam_freedata (name_t *np)
  * Copies a macro parameter.
  */
 static int
-macparam_copydata (name_t *dst, name_t *src)
+macparam_copydata (void *vctx, name_t *dst, void *dp, name_t *src, void *sp)
 {
-    name_data_set_lexseq(dst, name_data_lexseq(src));
+    lexseq_copy(dp, sp);
+    return 1;
+}
+
+static int
+macro_initdata (void *vctx, name_t *np, void *p)
+{
+    struct macrodecl_s *macro = p;
+
+    namereflist_init(&macro->plist);
+    namereflist_init(&macro->ilist);
+    macro->ptable = 0;
+    lexseq_init(&macro->body);
     return 1;
 }
 
@@ -232,14 +175,16 @@ macparam_copydata (name_t *dst, name_t *src)
  * Releases a macro's storage.  Called by name_free().
  */
 static void
-macro_freedata (name_t *np)
+macro_freedata (void *vctx, name_t *np, void *p)
 {
-    struct macrodecl_s *macro = name_data_ptr(np);
-    macparams_free(macro->plist);
-    macparams_free(macro->ilist);
+    struct macrodecl_s *macro = p;
+    namectx_t namectx = vctx;
+
+    namereflist_free(namectx, &macro->plist);
+    namereflist_free(namectx, &macro->ilist);
     lexseq_free(&macro->body);
-    free(macro);
-    
+    scope_end(macro->ptable);
+
 } /* macro_freedata */
 
 /*
@@ -248,44 +193,106 @@ macro_freedata (name_t *np)
  * Copies a macro's storage.  Called by name_copy().
  */
 static int
-macro_copydata (name_t *dst, name_t *src)
+macro_copydata (void *vctx, name_t *dst, void *dp, name_t *src, void *sp)
 {
-    struct macrodecl_s *srcm, *dstm;
-    struct macparam_s *smp, *dmp, *dmpl;
-    srcm = name_data_ptr(src);
-    dstm = malloc(sizeof(struct macrodecl_s));
-    if (dstm == 0) return 0;
-    memcpy(dstm, srcm, sizeof(struct macrodecl_s));
+    struct macrodecl_s *srcm = sp;
+    struct macrodecl_s *dstm = dp;
+    nameref_t *ref;
+    namectx_t namectx = vctx;
+
     lexseq_init(&dstm->body);
     lexseq_copy(&dstm->body, &srcm->body);
-    dstm->plist = dstm->ilist = 0;
-    for (smp = srcm->plist, dmp = dmpl = 0; smp != 0;
-         dmpl = dmp, smp = smp->next) {
-        dmp = macparam_alloc();
-        memcpy(dmp, smp, sizeof(struct macparam_s));
-        dmp->next = 0;
-        if (dmpl == 0) {
-            dstm->plist = dmp;
+    dstm->ptable = scope_copy(srcm->ptable, 0);
+    namereflist_init(&dstm->plist);
+    namereflist_init(&dstm->ilist);
+    dstm->type = srcm->type;
+    for (ref = namereflist_head(&srcm->plist); ref != 0; ref = ref->tq_next) {
+        name_t *np;
+        if (ref->np == 0) {
+            np = 0;
         } else {
-            dmpl->next = dmp;
+            strdesc_t *namestr = name_string(ref->np);
+            np = name_search(dstm->ptable, namestr->ptr,
+                             namestr->len, 0);
         }
+        namereflist_instail(&dstm->plist, nameref_alloc(namectx, np));
+    }
+    for (ref = namereflist_head(&srcm->ilist); ref != 0; ref = ref->tq_next) {
+        name_t *np;
+        if (ref->np == 0) {
+            np = 0;
+        } else {
+            strdesc_t *namestr = name_string(ref->np);
+            np = name_search(dstm->ptable, namestr->ptr,
+                             namestr->len, 0);
+        }
+        namereflist_instail(&dstm->ilist, nameref_alloc(namectx, np));
     }
 
-    for (smp = srcm->ilist, dmp = dmpl = 0; smp != 0;
-         dmpl = dmp, smp = smp->next) {
-        dmp = macparam_alloc();
-        memcpy(dmp, smp, sizeof(struct macparam_s));
-        dmp->next = 0;
-        if (dmpl == 0) {
-            dstm->ilist = dmp;
-        } else {
-            dmpl->next = dmp;
-        }
-    }
-    name_data_set_ptr(dst, dstm);
     return 1;
 
 } /* macro_copydata */
+
+
+/*
+ * macros_init
+ *
+ * Initialization routine.
+ */
+void
+macros_init (scopectx_t kwdscope)
+{
+    namectx_t namectx = scope_namectx(kwdscope);
+    nametype_vectors_t vec;
+    int i;
+
+    for (i = 0; i < sizeof(macro_names)/sizeof(macro_names[0]); i++) {
+        name_declare(kwdscope, &macro_names[i], 0, 0, 0, 0);
+    }
+
+    lextype_register(LEXTYPE_NAME_MACRO, macro_bind);
+    lextype_register(LEXTYPE_NAME_MAC_PARAM, macparam_bind);
+    memset(&vec, 0, sizeof(vec));
+    vec.typesize = sizeof(struct macrodecl_s);
+    vec.typeinit = macro_initdata;
+    vec.typefree = macro_freedata;
+    vec.typecopy = macro_copydata;
+    nametype_dataop_register(namectx, LEXTYPE_NAME_MACRO, &vec, namectx);
+    memset(&vec, 0, sizeof(vec));
+    vec.typesize = sizeof(lexseq_t);
+    vec.typeinit = macparam_initdata;
+    vec.typefree = macparam_freedata;
+    vec.typecopy = macparam_copydata;
+    nametype_dataop_register(namectx, LEXTYPE_NAME_MAC_PARAM, &vec, 0);
+
+} /* macros_init */
+
+name_t *
+macparam_special (scopectx_t scope, strdesc_t *pname, lexseq_t *seqval)
+{
+    namedef_t ndef;
+
+    ndef.lt = LEXTYPE_NAME_MAC_PARAM;
+    ndef.name = pname->ptr;
+    ndef.namelen = pname->len;
+
+    return name_declare_nocheck(scope, &ndef, 0, seqval, sizeof(lexseq_t), 0);
+}
+
+name_t *
+macparam_lookup (scopectx_t scope, strdesc_t *pname, lexseq_t *value)
+{
+    name_t *np;
+    lexseq_t *seq;
+
+    np = name_search_typed(scope, pname->ptr, pname->len,
+                           LEXTYPE_NAME_MAC_PARAM, &seq);
+    if (np != 0 && value != 0) {
+        lexseq_copy(value, seq);
+    }
+
+    return np;
+}
 
 /*
  * macro_paramlist
@@ -305,77 +312,64 @@ int
 macro_paramlist (parse_ctx_t pctx, scopectx_t curscope,
                  int assign_allowed, int for_macro,
                  lextype_t delims[], int ndelims,
-                 scopectx_t *ptable, macparam_t **plist, int *pcount)
+                 scopectx_t *ptable, namereflist_t *plist)
 {
-    lexeme_t *lex, *head, *last;
+    namectx_t namectx = scope_namectx(parser_scope_get(pctx));
+    lexeme_t *lex;
     lextype_t lt;
     strdesc_t *ltext;
     name_t *mnp;
     scopectx_t pscope;
-    macparam_t *param, *lastp;
     lexseq_t nullseq;
-    int count = 0, i;
-    static lextype_t *terms;
+    namedef_t ndef;
+    int i;
+    lextype_t terms[16];
 
     // Need a delimiter array that adds ',' to the
     // caller's list
-    terms = malloc(sizeof(lextype_t)*(ndelims+1));
+    if (ndelims >= 16) return -1;
     memcpy(terms, delims, sizeof(lextype_t)*ndelims);
     terms[ndelims] = LEXTYPE_DELIM_COMMA;
 
     if (*ptable == 0) {
-        pscope = scope_begin(curscope);
+        pscope = scope_begin(scope_namectx(curscope), curscope);
     } else {
         pscope = *ptable;
     }
 
-    head = last = 0;
-    if (plist != 0) {
-        *plist = 0;
-    }
-
     lexseq_init(&nullseq);
     parser_scope_begin(pctx);
+    memset(&ndef, 0, sizeof(ndef));
+    ndef.lt = LEXTYPE_NAME_MAC_PARAM;
 
     while (1) {
+        lexseq_t *pseq;
         lt = parser_next(pctx, QL_NAME, &lex);
         if (lexeme_boundtype(lex) != LEXTYPE_NAME) {
             /* XXX error condition */
             break;
         }
         ltext = lexeme_text(lex);
-        mnp = name_declare(pscope, ltext->ptr, ltext->len,
-                           LEXTYPE_NAME_MAC_PARAM,
-                           lexeme_textpos_get(lex));
-        name_data_set_lexseq(mnp, 0);
+        ndef.name = ltext->ptr;
+        ndef.namelen = ltext->len;
+        mnp = name_declare(pscope, &ndef,
+                           lexeme_textpos_get(lex), 0, 0, &pseq);
         if (mnp == 0) {
             /* XXX error condition */
             break;
         }
-        if (plist != 0) {
-            param = macparam_alloc();
-            param->np = mnp;
-            if (*plist == 0) {
-                *plist = lastp = param;
-            } else {
-                lastp->next = param;
-                lastp = param;
-            }
-        }
+        namereflist_instail(plist, nameref_alloc(namectx, mnp));
         lexeme_free(lex);
-        count += 1;
         lt = parser_next(pctx, QL_NAME, &lex);
         if (assign_allowed && lt == LEXTYPE_OP_ASSIGN) {
             int status;
-            lexseq_t *defval = name_data_lexseq(mnp);
             lexeme_free(lex);
-            lexseq_init(defval);
             if (for_macro) {
                 status = parse_lexeme_seq(pctx, 0, QL_MACRO,
-                                          terms, ndelims+1, defval, &lt);
+                                          terms, ndelims+1, pseq, &lt);
             } else {
                 status = expr_parse_ctce(parser_get_expctx(pctx), &lex);
-                if (status) lexseq_instail(defval, lex);
+                if (status) lexseq_instail(pseq, lex);
                 lt = parser_next(pctx, QL_NORMAL, 0);
             }
             if (!status) {
@@ -392,19 +386,12 @@ macro_paramlist (parse_ctx_t pctx, scopectx_t curscope,
     parser_scope_end(pctx);
 
     for (i = 0; i < ndelims && lt != delims[i]; i++);
-    if (i < ndelims) {
-        *pcount = count;
-        *ptable = pscope;
-    } else {
+    if (i >= ndelims) {
         scope_end(pscope);
         parser_skip_to_delim(pctx, delims[0]);
-        if (plist != 0) {
-            macparams_free(*plist);
-            *plist = 0;
-        }
+        namereflist_free(namectx, plist);
         i = -1;
     }
-    free(terms);
 
     return i;
 
@@ -423,36 +410,21 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
 {
     int skip_to_end = 0;
     lexeme_t *lex;
-    lexseq_t body;
     lextype_t lt;
     strdesc_t *ltext;
     name_t *np;
-    scopectx_t ntbl;
-    struct macparam_s *nlst, *clst;
-    int normcount, condcount;
     int is_kwdmacro = (curlt == LEXTYPE_DCL_KEYWORDMACRO);
-    macrotype_t mtype;
+    struct macrodecl_s *macro;
+    textpos_t pos;
+    namedef_t ndef;
 
+    memset(&ndef, 0, sizeof(ndef));
+    ndef.lt = LEXTYPE_NAME_MACRO;
     while (1) {
-        parser_next(pctx, QL_NAME, &lex);
-        if (lexeme_boundtype(lex) != LEXTYPE_NAME) {
+        if (!parse_decl_name(pctx, scope, &ltext, &pos)) {
             /* XXX error condition */
             skip_to_end = 1;
         }
-        ltext = string_copy(0, lexeme_text(lex));
-        np = name_search(scope, ltext->ptr, ltext->len, 1);
-        lexeme_free(lex);
-        if (np != 0) {
-            if (name_flags(np) & NAME_M_RESERVED) {
-                /* XXX error condition */
-                skip_to_end = 1;
-            }
-            if (name_type(np) != LEXTYPE_NAME && np->namescope == scope) {
-                /* XXX redeclaration error */
-                skip_to_end = 1;
-            }
-        }
-        mtype = (is_kwdmacro ? MACRO_KWD : MACRO_UNK);
         lt = parser_next(pctx, QL_NAME, 0);
         if (lt != LEXTYPE_DELIM_LPAR &&
             lt != LEXTYPE_OP_ASSIGN &&
@@ -460,24 +432,23 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
             /* XXX error condition */
             skip_to_end = 1;
         }
-        ntbl = 0;
-        nlst = clst = 0;
-        lexseq_init(&body);
-        normcount = condcount = 0;
+        ndef.name = ltext->ptr;
+        ndef.namelen = ltext->len;
+        np = name_declare(scope, &ndef, pos, 0, 0, &macro);
+        macro->type = (is_kwdmacro ? MACRO_KWD : MACRO_UNK);
         if (lt == LEXTYPE_DELIM_LPAR) {
             if (macro_paramlist(pctx, scope, is_kwdmacro, 1,
-                                 closers, 1, &ntbl,
-                                 (!is_kwdmacro ? &nlst : 0),
-                                 &normcount) < 0) {
+                                closers, 1, &macro->ptable,
+                                &macro->plist) < 0) {
                 skip_to_end = 1;
             }
-            if (normcount == 0) {
+            if (namereflist_length(&macro->plist) == 0) {
                 /* XXX error condition */
                 skip_to_end = 1;
             }
             lt = parser_next(pctx, QL_NAME, 0);
             if (!is_kwdmacro) {
-                mtype = MACRO_SIMPLE;
+                macro->type = MACRO_SIMPLE;
             }
         }
         if (lt == LEXTYPE_DELIM_LBRACK) {
@@ -485,19 +456,19 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
                 /* XXX error condition */
                 skip_to_end = 1;
             }
-            if (macro_paramlist(pctx, scope, 0, 1,
-                                 &closers[1], 1,
-                                 &ntbl, &clst, &condcount) < 0) {
+            if (macro_paramlist(pctx, scope, 0, 1, &closers[1], 1,
+                                &macro->ptable, &macro->ilist) < 0) {
                 skip_to_end = 1;
             }
             lt = parser_next(pctx, QL_NAME, 0);
-            mtype = (condcount == 0 ? MACRO_COND : MACRO_ITER);
+            macro->type = (namereflist_length(&macro->ilist) == 0 ?
+                           MACRO_COND : MACRO_ITER);
         }
 
         if (lt == LEXTYPE_OP_ASSIGN) {
 
-            if (mtype == MACRO_UNK) {
-                mtype = MACRO_SIMPLE;
+            if (macro->type == MACRO_UNK) {
+                macro->type = MACRO_SIMPLE;
             }
 
             parser_incr_erroneof(pctx);
@@ -510,41 +481,21 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
                     skip_to_end = 1;
                     break;
                 }
-                lex->next = 0;
-                lexseq_instail(&body, lex);
+                lexseq_instail(&macro->body, lex);
             }
             parser_scope_end(pctx);
             parser_decr_erroneof(pctx);
         }
 
-        if (!skip_to_end) {
-            struct macrodecl_s *macro = malloc(sizeof(struct macrodecl_s));
-            if (macro == 0) {
-                /* XXX error condition */
-            } else {
-                name_t *mnp;
-                macro->type = mtype;
-                lexseq_init(&macro->body);
-                lexseq_append(&macro->body, &body);
-                macro->paramcount = normcount;
-                scope_setparent(ntbl, 0);
-                macro->ptable = ntbl;
-                macro->plist = nlst;
-                macro->ilist = clst;
-                macro->iparamcount = condcount;
-                mnp = name_declare(scope,
-                                   ltext->ptr, ltext->len,
-                                   LEXTYPE_NAME_MACRO,
-                                   parser_curpos(pctx));
-                name_data_set_ptr(mnp, macro);
-            }
-            string_free(ltext);
-        } else {
-            lexseq_free(&body);
-            scope_end(ntbl);
+        if (skip_to_end) {
+            name_free(np);
             string_free(ltext);
             break;
         }
+        if (macro->ptable != 0) {
+            scope_setparent(macro->ptable, 0);
+        }
+        string_free(ltext);
 
         lt = parser_next(pctx, QL_NAME, 0);
         if (lt == LEXTYPE_DELIM_SEMI) {
@@ -584,22 +535,15 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
 
         // Associate the iterative-formals with any actuals
         if (macro->type == MACRO_ITER) {
-            struct macparam_s *iformal;
-            lexseq_t *pseq;
+            nameref_t *iformal;
             lextype_t lt, terms[1] = { LEXTYPE_DELIM_COMMA };
 
-            for (iformal = macro->ilist; iformal != 0; iformal = iformal->next) {
-                np = name_search(expscope, iformal->np->name, iformal->np->namelen, 1);
-                if (np->namescope != expscope) {
-                    np = name_declare(expscope, iformal->np->name, iformal->np->namelen,
-                                      LEXTYPE_NAME_MAC_PARAM,
-                                      parser_curpos(pctx));
-                    name_data_set_lexseq(np, 0);
-                }
-                pseq = name_data_lexseq(np);
-                lexseq_free(pseq);
-                np->nametype = LEXTYPE_NAME_MAC_PARAM;
-                parse_lexeme_seq(pctx, remaining, QL_MACRO, terms, 1, pseq, &lt);
+            for (iformal = namereflist_head(&macro->ilist); iformal != 0;
+                 iformal = iformal->tq_next) {
+                strdesc_t *namestr = name_string(iformal->np);
+                np = macparam_special(expscope, namestr, 0);
+                parse_lexeme_seq(pctx, remaining, QL_MACRO, terms, 1,
+                                 macparam_lexseq(np), &lt);
             }
         }
 
@@ -611,10 +555,10 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
             lex = lexeme_copy(lex);
             lt = lexeme_boundtype(lex);
             if (lt == LEXTYPE_NAME) {
-                np = name_search(expscope, lex->text.ptr, lex->text.len, 0);
+                lextype_t nlt;
+                np = name_search(expscope, lex->text.ptr, lex->text.len, &nlt);
                 if (np != 0) {
-                    lextype_t nlt = name_type(np);
-                    struct macrodecl_s *mp = name_data_ptr(np);
+                    struct macrodecl_s *mp = name_extraspace(np);
                     if (nlt == LEXTYPE_NAME_MACRO && mp == macro) {
                         if (macro->type != MACRO_COND) {
                             /* XXX error condition */
@@ -624,11 +568,11 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
                         do_recursion = 1;
                         lexeme_free(lex);
                         lex = 0;
-                    } else if (np->namescope == expscope) {
+                    } else if (name_scope(np) == expscope) {
                         lexseq_t valcopy;
                         lexeme_free(lex);
                         lexseq_init(&valcopy);
-                        lexseq_copy(&valcopy, name_data_lexseq(np));
+                        lexseq_copy(&valcopy, name_extraspace(np));
                         lexseq_append(result, &valcopy);
                         lex = 0;
                     } else {
@@ -694,7 +638,7 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
             // other arguments may be specified. - XXX
             if (do_recursion) {
                 scopectx_t subscope;
-                struct macparam_s *cformal;
+                nameref_t *cformal;
                 lextype_t lt;
                 lexseq_t newremain;
                 int which;
@@ -746,29 +690,29 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
                     int ok;
 
                     lexseq_init(&rresult);
-                    cformal = macro->plist;
+                    cformal = namereflist_head(&macro->plist);
                     lexseq_copy(&newremain, remaining);
                     subscope = scope_copy(expscope, 0);
 
                     while (cformal != 0) {
-                        np = name_search(subscope, cformal->np->name,
-                                         cformal->np->namelen, 0);
+                        strdesc_t *cfname = name_string(cformal->np);
+                        np = name_search(subscope, cfname->ptr, cfname->len, 0);
                         if (np == 0) {
                             /* XXX error condition - should never happen */
                         }
-                        lexseq_free(name_data_lexseq(np));
+                        lexseq_free(name_extraspace(np));
                         if (lexseq_length(&newremain) != 0) {
-                            lexseq_t *val = name_data_lexseq(np);
+                            lexseq_t *val = name_extraspace(np);
                             parse_lexeme_seq(pctx, &newremain, QL_MACRO,
                                              terms, 1, val, &lt);
                         }
-                        cformal = cformal->next;
+                        cformal = cformal->tq_next;
                     } /* walk the formals */
                     // Hook the name table into the hierarchy and recurse.
                     scope_setparent(subscope, scope_getparent(expscope));
-                    ok = prepare_body(pctx, subscope, macro,
-                                   curdepth+1, actcount-macro->paramcount,
-                                   &newremain, &rresult, &do_errormacro);
+                    ok = prepare_body(pctx, subscope, macro, curdepth+1,
+                                      actcount-namereflist_length(&macro->plist),
+                                      &newremain, &rresult, &do_errormacro);
                     scope_end(subscope);
                     lexseq_free(&newremain);
                     if (ok) {
@@ -817,7 +761,7 @@ static int
 macro_expand (parse_ctx_t pctx, name_t *macroname,
               lexseq_t *result)
 {
-    struct macrodecl_s *macro = name_data_ptr(macroname);
+    struct macrodecl_s *macro = name_extraspace(macroname);
     lextype_t lt;
     lexeme_t *lex;
     lexseq_t extras;
@@ -838,7 +782,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
     if (macro->type == MACRO_KWD) {
         expscope = scope_copy(macro->ptable, 0);
     } else {
-        expscope = scope_begin(0);
+        expscope = scope_begin(scope_namectx(parser_scope_get(pctx)), 0);
     }
 
     nactuals = 0;
@@ -846,7 +790,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
 
     // Simple macros with no formal arguments get no processing
     // of parameter lists whatsoever.
-    if (macro->type == MACRO_SIMPLE && macro->paramcount == 0) {
+    if (macro->type == MACRO_SIMPLE && namereflist_length(&macro->plist) == 0) {
         expscope = 0;
         which = 3;
     } else {
@@ -862,7 +806,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
             lexeme_free(lex);
         } else {
             for (which = 0; lt != openers[which] && which < 3; which++);
-            if (which >= 3 && macro->paramcount > 0) {
+            if (which >= 3 && namereflist_length(&macro->plist) > 0) {
                 /* XXX error condition */
                 parser_insert(pctx, lex);
                 return 1;
@@ -880,14 +824,14 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
     if (which < 3) {
 
         lexeme_t *extralast;
-        struct macparam_s *formal;
+        nameref_t *formal;
         lexseq_t val;
 
         terms[0] = LEXTYPE_DELIM_COMMA;
         terms[1] = closers[which];
 
         extralast = 0;
-        formal = macro->plist;
+        formal = namereflist_head(&macro->plist);
 
         while (1) {
             // Keyword macro actuals are of the form name=value
@@ -900,7 +844,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
                     lexeme_free(lex);
                     break;
                 }
-                np = name_search(macro->ptable, lex->text.ptr, lex->text.len, 1);
+                np = name_search(macro->ptable, lex->text.ptr, lex->text.len, 0);
                 if (np == 0) {
                     /* XXX error condition */
                 }
@@ -909,9 +853,9 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
                     /* XXX error condition */
                     break;
                 }
-            } else if (nactuals < macro->paramcount) {
+            } else if (nactuals < namereflist_length(&macro->plist)) {
                 np = formal->np;
-                formal = formal->next;
+                formal = formal->tq_next;
             } else {
                 np = 0;
             }
@@ -934,14 +878,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
                 // flag that allows each name to be redeclared once.
                 // name_declare() clears this flag, so we can catch genuine
                 // redeclarations.
-                actual = name_declare(expscope, np->name, np->namelen,
-                                      LEXTYPE_NAME_MAC_PARAM,
-                                      parser_curpos(pctx));
-                if (actual == 0) {
-                    /* XXX error condition */
-                } else {
-                    name_data_set_lexseq(actual, &val);
-                }
+                actual = macparam_special(expscope, name_string(np), &val);
                 lexseq_free(&val);
             }
 
@@ -965,15 +902,11 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
             return 1;
         }
 
-        if (nactuals < macro->paramcount) {
+        if (nactuals < namereflist_length(&macro->plist)) {
             name_t *anp;
             while (formal != 0) {
-                anp = name_declare(expscope,
-                                   formal->np->name, formal->np->namelen,
-                                   LEXTYPE_NAME_MAC_PARAM,
-                                   parser_curpos(pctx));
-                name_data_set_lexseq(anp, 0);
-                formal = formal->next;
+                anp = macparam_special(expscope, name_string(formal->np), 0);
+                formal = formal->tq_next;
             }
         }
 

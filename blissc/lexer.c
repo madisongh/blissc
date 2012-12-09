@@ -110,7 +110,7 @@ DODEF(LEQ) DODEF(LEQU) DODEF(LEQA) \
 DODEF(NEQ) DODEF(NEQU) DODEF(NEQA)
 #define DODEF(name_) NAMEDEF(#name_, LEXTYPE_OP_##name_, NAME_M_RESERVED),
 
-static name_t operator_names[] = {
+static namedef_t operator_names[] = {
     DODEFS
 };
 #undef DODEF
@@ -208,7 +208,7 @@ lexer_init (scopectx_t kwdscope)
     int i;
 
     for (i = 0; i < sizeof(operator_names)/sizeof(operator_names[0]); i++) {
-        name_insert(kwdscope, &operator_names[i]);
+        name_declare(kwdscope, &operator_names[i], 0, 0, 0, 0);
     }
 
     ctx = malloc(sizeof(struct lexer_ctx_s));

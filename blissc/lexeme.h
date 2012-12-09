@@ -156,7 +156,7 @@ typedef enum {
 #define LEX_M_ALLOCATED (1<<0)
 
 struct lexeme_s {
-    struct lexeme_s *next;
+    TQ_ENT_FIELDS(struct lexeme_s)
     lextype_t        type;
     lextype_t        boundtype;
     strdesc_t        text;
@@ -168,9 +168,7 @@ struct lexeme_s {
 typedef struct lexeme_s lexeme_t;
 
 struct lexseq_s {
-    lexeme_t    *head;
-    lexeme_t    *tail;
-    int          count;
+    TQ_HDR_FIELDS(lexeme_t)
 };
 typedef struct lexseq_s lexseq_t;
 
@@ -193,7 +191,7 @@ int lexseq_copy(lexseq_t *dst, lexseq_t *src);
 int lexemes_match(lexseq_t *a, lexseq_t *b);
 
 static inline __unused lexeme_t *lexeme_next (lexeme_t *lex) {
-    return lex->next;
+    return lex->tq_next;
 }
 static inline __unused lextype_t lexeme_boundtype (lexeme_t *lex) {
     return lex->boundtype;
@@ -256,70 +254,6 @@ static inline __unused void lexeme_copypos (lexeme_t *dst, lexeme_t *src) {
     dst->textpos = src->textpos;
 }
 
-static inline __unused void lexseq_init (lexseq_t *seq) {
-    seq->head = seq->tail = 0; seq->count = 0;
-}
-static inline __unused int lexseq_empty (lexseq_t *seq) {
-    return (seq->count == 0);
-}
-static inline __unused void lexseq_inshead (lexseq_t *seq, lexeme_t *l) {
-    if (seq->count == 0) seq->tail = l;
-    l->next = seq->head; seq->head = l; seq->count += 1;
-}
-static inline __unused void lexseq_instail (lexseq_t *seq, lexeme_t *l) {
-    if (seq->count == 0) lexseq_inshead(seq, l);
-    else { seq->tail->next = l; l->next = 0; seq->tail = l; seq->count += 1;}
-}
-static inline __unused void lexseq_append (lexseq_t *dst, lexseq_t *addon) {
-    if (addon->count == 0) return;
-    if (dst->count == 0) {
-        dst->head = addon->head; dst->tail = addon->tail; dst->count = addon->count;
-    } else {
-        dst->tail->next = addon->head; dst->tail = addon->tail;
-        dst->count += addon->count;
-    }
-    addon->head = addon->tail = 0; addon->count = 0;
-}
-static inline __unused void lexseq_prepend (lexseq_t *dst, lexseq_t *addon) {
-    if (addon->count == 0) return;
-    if (dst->count == 0) {
-        dst->head = addon->head; dst->tail = addon->tail; dst->count = addon->count;
-    } else {
-        addon->tail->next = dst->head; dst->head = addon->head;
-        dst->count += addon->count;
-    }
-    addon->head = addon->tail = 0; addon->count = 0;
-}
-static inline __unused lexeme_t *lexseq_remhead (lexseq_t *seq) {
-    lexeme_t *l = seq->head;
-    if (l == 0) return l;
-    seq->head = l->next;
-    l->next = 0;
-    seq->count -= 1;
-    return l;
-}
-static inline __unused lexeme_t *lexseq_remtail (lexseq_t *seq) {
-    lexeme_t *l = seq->tail, *p = seq->head;
-    if (p == 0) return 0;
-    if (seq->count == 1) {
-        l = seq->head;
-        seq->head = seq->tail = 0;
-        seq->count = 0;
-        return l;
-    }
-    while (p->next != l) { p = p->next; }
-    p->next = 0;
-    seq->tail = p;
-    seq->count -= 1;
-    return l;
-}
-static inline __unused lexeme_t *lexseq_head (lexseq_t *seq) {
-    return seq->head;
-}
-static inline __unused lexeme_t *lexseq_tail (lexseq_t *seq) {
-    return seq->tail;
-}
-static inline __unused int lexseq_length (lexseq_t *seq) {
-    return seq->count;
-}
+DEFINE_TQ_FUNCS(lexseq, lexseq_t, lexeme_t)
+
 #endif

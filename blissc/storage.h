@@ -57,7 +57,7 @@ psect_t *seg_static_psect(stgctx_t ctx, seg_t *seg);
 int seg_static_is_external(stgctx_t ctx, seg_t *seg);
 strdesc_t *seg_static_globalsym(stgctx_t ctx, seg_t *seg);
 frame_t *seg_stack_frame(stgctx_t ctx, seg_t *seg);
-unsigned long seg_size(stgctx_t ctx, seg_t *seg);
+unsigned long seg_size(seg_t *seg);
 void seg_size_set(stgctx_t ctx, seg_t *seg, unsigned long size);
 unsigned int seg_alignment(stgctx_t ctx, seg_t *seg);
 void seg_alignment_set(stgctx_t ctx, seg_t *seg, unsigned int alignment);
@@ -71,6 +71,7 @@ int seg_litval_valid(seg_t *seg);
 int seg_addr_is_ltce(seg_t *seg);
 
 psect_t *psect_create(stgctx_t ctx, strdesc_t *name, textpos_t defpos, unsigned int attr);
+unsigned int psect_flags(psect_t *ps);
 
 initval_t *initval_scalar_add(stgctx_t ctx, initval_t *head, unsigned int reps,
                               long val, unsigned int width, int signext);

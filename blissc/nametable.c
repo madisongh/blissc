@@ -6,6 +6,7 @@
 //  Copyright (c) 2012 Matthew Madison. All rights reserved.
 //
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "nametable.h"
@@ -22,6 +23,25 @@
  */
 #define NAME_M_ALLOCATED (1<<16)
 #define NAME_M_NODCLCHK  (1<<17)
+#define NAME_K_EXTRAS     4
+
+struct name_s {
+    TQ_ENT_FIELDS(struct name_s)
+    lextype_t            nametype;
+    scopectx_t           namescope;
+    textpos_t            namedclpos;
+    unsigned int         nameflags;
+    size_t               namelen;
+    char                 name[NAME_SIZE];
+    void                *nameextra[NAME_K_EXTRAS];
+};
+// NB: max name length is (NAME_SIZE-1)
+
+struct namelist_s {
+    TQ_HDR_FIELDS(name_t)
+};
+typedef struct namelist_s namelist_t;
+DEFINE_TQ_FUNCS(namelist, namelist_t, name_t)
 
 /*
  * Hash table size.
@@ -45,21 +65,65 @@ hash (const char *str, size_t len)
     return result & (HT_BUCKETS-1);
 }
 
+#define NAME_ALLOCOUNT  64
+#define SCOPE_ALLOCOUNT 64
+#define REF_ALLOCOUNT   64
+
 /*
  * Name scope tracking structures
  */
+struct namectx_s;
 struct scopectx_s {
     struct scopectx_s *parent;
+    struct namectx_s  *home;
     int                namecount;
     struct name_s     *sclassnames[SCLASS_COUNT];
-    struct name_s     *hashtable[HT_BUCKETS];
+    namelist_t         hashtable[HT_BUCKETS];
 };
 
-struct scopectx_s *freescopes = 0;
-struct name_s     *freenames = 0;
+/*
+ * Master name table context
+ */
+struct namectx_s {
+    struct scopectx_s   *freescopes;
+    nameref_t           *freerefs;
+    struct name_s       *freenames[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1];
+    nametype_vectors_t   typevec[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1];
+    int                  freelistindex[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1];
+    int                  nfreelists;
+    struct scopectx_s   *nullscope;
+    struct scopectx_s   *globalscope;
+    void                *symctx;
+    unsigned int         tmpcount;
+};
+#define roundup(s_) ((((s_)+7)>>3)<<3)
+static const size_t cellsize = roundup(sizeof(name_t));
+static inline int typeidx(lextype_t type) {
+    if (type >= LEXTYPE_NAME_MIN && type <= LEXTYPE_NAME_MAX)
+        return type-LEXTYPE_NAME_MIN;
+    return 0;
+}
 
-static name_datafree_fn freedata[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1] = {0};
-static name_datacopy_fn copydata[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1] = {0};
+scopectx_t name_scope (name_t *np) { return np->namescope; }
+strdesc_t *name_string (name_t *np) {
+    return string_from_chrs(0, np->name, np->namelen); }
+lexeme_t *name_to_lexeme (name_t *np, textpos_t pos) {
+    lexeme_t *lex;
+    strdesc_t dsc;
+    strdesc_init(&dsc, np->name, np->namelen);
+    lex = lexeme_create(LEXTYPE_NAME, &dsc);
+    if (lex != 0) lexeme_textpos_set(lex, pos);
+    return lex;
+}
+void *name_extraspace (name_t *np) { return np->nameextra; }
+void *name_value_pointer (name_t *np) { return np->nameextra[0]; }
+long name_value_signed (name_t *np) { return (long) np->nameextra[0]; }
+unsigned long name_value_unsigned (name_t *np) { return (unsigned long) np->nameextra[0]; }
+void name_value_pointer_set (name_t *np, void *p) { np->nameextra[0] = p; }
+void name_value_signed_set (name_t *np, long v) { np->nameextra[0] = (void *) v; }
+void name_value_unsigned_set (name_t *np, unsigned long v) { np->nameextra[0] = (void *) v; }
+void *nametables_symctx_get (namectx_t ctx) { return ctx->symctx; }
+void nametables_symctx_set (namectx_t ctx, void *ptr) { ctx->symctx = ptr; }
 
 /*
  * name_alloc
@@ -67,23 +131,32 @@ static name_datacopy_fn copydata[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1] = {0};
  * Allocates and initializes a name_t structure.
  */
 static name_t *
-name_alloc (const char *name, size_t namelen)
+name_alloc (namectx_t ctx, lextype_t type,
+            const char *name, size_t namelen)
+
 {
     name_t *np;
-    if (freenames == 0) {
-        int i = 16;
-        freenames = malloc(sizeof(struct name_s)*i);
-        if (freenames == 0) {
+    int i = ctx->freelistindex[typeidx(type)];
+    size_t nsize = ctx->typevec[typeidx(type)].typesize;
+    name_datainit_fn initfn = ctx->typevec[typeidx(type)].typeinit;
+    void *vctx = ctx->typevec[typeidx(type)].typectx;
+
+    if (ctx->freenames[i] == 0) {
+        int j;
+        ctx->freenames[i] = malloc(nsize*NAME_ALLOCOUNT);
+        if (ctx->freenames[i] == 0) {
             /* XXX error condition */
             return 0;
         }
-        memset(freenames, 0, sizeof(struct name_s)*i);
-        for (np = freenames; i > 1; np++, i--)
-            np->next = np + 1;
+        memset(ctx->freenames[i], 0, nsize*NAME_ALLOCOUNT);
+        for (np = ctx->freenames[i], j = NAME_ALLOCOUNT; j > 1;
+             np = np->tq_next, j--) {
+            np->tq_next = (name_t *)((char *) np + nsize);
+        }
     }
-    np = freenames;
-    freenames = np->next;
-    memset(np, 0, sizeof(name_t));
+    np = ctx->freenames[i];
+    ctx->freenames[i] = np->tq_next;
+    memset(np, 0, nsize);
     if (namelen > NAME_SIZE-1) {
         namelen = NAME_SIZE-1;
     }
@@ -91,7 +164,13 @@ name_alloc (const char *name, size_t namelen)
     np->name[namelen] = '\0';
     np->nameflags = NAME_M_ALLOCATED;
     np->namelen = namelen;
-    np->nametype = LEXTYPE_NAME;
+    np->nametype = type;
+    if (initfn != 0 && !initfn(vctx, np, np->nameextra)) {
+        np->tq_next = ctx->freenames[i];
+        ctx->freenames[i] = np;
+        np = 0;
+    }
+
     return np;
 
 } /* name_alloc */
@@ -105,20 +184,23 @@ name_alloc (const char *name, size_t namelen)
 static name_t *
 name_copy (name_t *src, scopectx_t dstscope)
 {
-    name_t *dst = name_alloc(src->name, src->namelen);
-    name_datacopy_fn cfn;
+    namectx_t ctx = src->namescope->home;
+    name_t *dst = name_alloc(ctx, src->nametype, src->name, src->namelen);
+    name_datacopy_fn cfn = ctx->typevec[typeidx(src->nametype)].typecopy;
+    void *vctx = ctx->typevec[typeidx(src->nametype)].typectx;
 
     if (dst == 0) {
         return dst;
     }
-    dst->nametype = src->nametype;
+
     dst->namescope = dstscope;
     dst->nameflags = NAME_M_ALLOCATED | src->nameflags;
-    cfn = copydata[src->nametype-LEXTYPE_NAME_MIN];
+    dst->nametype = src->nametype;
+    dst->namelen = src->namelen;
+    dst->namedclpos = src->namedclpos;
+    memcpy(dst->name, src->name, dst->namelen);
     if (cfn != 0) {
-        cfn(dst, src);
-    } else {
-        memcpy(&dst->nameunion, &src->nameunion, sizeof(dst->nameunion));
+        cfn(vctx, dst, dst->nameextra, src, src->nameextra);
     }
     return dst;
     
@@ -133,19 +215,126 @@ name_copy (name_t *src, scopectx_t dstscope)
 void
 name_free (name_t *np)
 {
+    namectx_t ctx;
     name_datafree_fn freefn;
 
-    if (np->namescope == 0 &&
+    if (np == 0) {
+        return;
+    }
+    ctx = np->namescope->home;
+    if (np->namescope == ctx->nullscope &&
         (np->nameflags & NAME_M_ALLOCATED)) {
-        freefn = freedata[np->nametype-LEXTYPE_NAME_MIN];
+        int i = typeidx(np->nametype);
+        freefn = ctx->typevec[i].typefree;
         if (freefn != 0) {
-            freefn(np);
+            freefn(ctx->typevec[i].typectx, np, np->nameextra);
         }
-        memset(np, 0xcc, sizeof(name_t));
-        np->next = freenames;
-        freenames = np;
+        memset(np, 0xcc, ctx->typevec[i].typesize);
+        np->tq_next = ctx->freenames[ctx->freelistindex[i]];
+        ctx->freenames[ctx->freelistindex[i]] = np;
     }
 } /* name_free */
+
+void
+namelist_free (namelist_t *nl)
+{
+    name_t *np;
+
+    if (nl == 0) {
+        return;
+    }
+    while ((np = namelist_remhead(nl)) != 0) {
+        name_free(np);
+    }
+} /* namelist_free */
+
+int
+namelist_copy (scopectx_t dstscope, namelist_t *dst, namelist_t *src)
+{
+    name_t *np;
+
+    if (dst == 0) {
+        return 0;
+    }
+    memset(dst, 0, sizeof(namelist_t));
+    if (src == 0) {
+        return 0;
+    }
+    for (np = namelist_head(src); np != 0; np = np->tq_next) {
+        namelist_instail(dst, name_copy(np, dstscope));
+    }
+    return 1;
+
+} /* namelist_copy */
+
+nameref_t *
+nameref_alloc (namectx_t ctx, name_t *np)
+{
+    nameref_t *ref;
+    if (ctx->freerefs == 0) {
+        int i;
+        ctx->freerefs = malloc(REF_ALLOCOUNT*sizeof(nameref_t));
+        for (i = REF_ALLOCOUNT-1, ref = ctx->freerefs; i > 0; ref++, i--)
+            ref->tq_next = ref + 1;
+        ref->tq_next = 0;
+    }
+    if (ctx->freerefs == 0) return 0;
+    ref = ctx->freerefs;
+    ctx->freerefs = ref->tq_next;
+    memset(ref, 0, sizeof(nameref_t));
+    ref->np = np;
+    return ref;
+} /* nameref_alloc */
+
+void
+nameref_free (namectx_t ctx, nameref_t *ref)
+{
+    if (ref == 0) return;
+    ref->tq_next = ctx->freerefs;
+    ctx->freerefs = ref;
+
+} /* nameref_free */
+
+void
+namereflist_free (namectx_t ctx, namereflist_t *rlist)
+{
+    nameref_t *ref, *rnext;
+    for (ref = namereflist_head(rlist); ref != 0; ref = rnext) {
+        rnext = ref->tq_next;
+        nameref_free(ctx, ref);
+    }
+
+} /* namereflist_free */
+
+int
+namereflist_copy (namectx_t ctx, namereflist_t *dst, namereflist_t *src)
+{
+    nameref_t *s;
+    for (s = namereflist_head(src); s != 0; s = s->tq_next) {
+        namereflist_instail(dst, nameref_alloc(ctx, s->np));
+    }
+    return 1;
+}
+
+namectx_t
+nametables_init (void)
+{
+    namectx_t master = malloc(sizeof(struct namectx_s));
+
+    if (master != 0) {
+        memset(master, 0, sizeof(struct namectx_s));
+        master->nullscope = scope_begin(master, 0);
+        master->globalscope = scope_begin(master, 0);
+        // Set up the default size and freelist index
+        master->typevec[0].typesize = cellsize;
+        master->nfreelists = 1;
+        master->freelistindex[0] = 0;
+    }
+    return master;
+
+} /* nametables_init */
+
+scopectx_t nametables_globalscope (namectx_t ctx) { return ctx->globalscope; }
 
 /*
  * scope_begin
@@ -153,25 +342,26 @@ name_free (name_t *np)
  * Establishes a new name scope, underneath 'parent'.
  */
 scopectx_t
-scope_begin (scopectx_t parent)
+scope_begin (namectx_t ctx, scopectx_t parent)
 {
     scopectx_t scope;
 
-    if (freescopes == 0) {
-        int i = 16;
-        freescopes = malloc(sizeof(struct scopectx_s)*i);
-        if (freescopes == 0) {
+    if (ctx->freescopes == 0) {
+        int i;
+        ctx->freescopes = malloc(sizeof(struct scopectx_s)*SCOPE_ALLOCOUNT);
+        if (ctx->freescopes == 0) {
             /* XXX error condition */
             return 0;
         }
-        memset(freescopes, 0, sizeof(struct scopectx_s)*i);
-        for (scope = freescopes; i > 1; scope++, i--)
+        memset(ctx->freescopes, 0, sizeof(struct scopectx_s)*SCOPE_ALLOCOUNT);
+        for (scope = ctx->freescopes, i = SCOPE_ALLOCOUNT; i > 1; scope++, i--)
             scope->parent = scope + 1;
     }
-    scope = freescopes;
-    freescopes = scope->parent;
+    scope = ctx->freescopes;
+    ctx->freescopes = scope->parent;
     memset(scope, 0, sizeof(struct scopectx_s));
-    scope->parent = parent;
+    scope->parent = (parent == 0 ? ctx->nullscope : parent);
+    scope->home = ctx;
     if (parent != 0) {
         memcpy(scope->sclassnames, parent->sclassnames, sizeof(scope->sclassnames));
     }
@@ -188,26 +378,22 @@ scopectx_t
 scope_end (scopectx_t scope)
 {
     int i;
+    namectx_t ctx;
     scopectx_t parent;
 
     if (scope == 0) {
         return 0;
     }
+    ctx = scope->home;
     parent = scope->parent;
     if (scope->namecount > 0) {
         for (i = 0; i < HT_BUCKETS; i++) {
-            struct name_s *name, *next;
-            name = scope->hashtable[i];
-            while (name != 0) {
-                next = name->next;
-                name->namescope = 0;
-                name_free(name);
-                name = next;
-            }
+            namelist_free(&scope->hashtable[i]);
         }
     }
-    scope->parent = freescopes;
-    freescopes = scope;
+    memset(scope, 0x33, sizeof(struct scopectx_s));
+    scope->parent = ctx->freescopes;
+    ctx->freescopes = scope;
     return parent;
 
 } /* scope_end */
@@ -224,31 +410,26 @@ scope_end (scopectx_t scope)
 scopectx_t
 scope_copy (scopectx_t src, scopectx_t newparent)
 {
-    int i;
-    scopectx_t dst = scope_begin(newparent);
 
+    namectx_t ctx;
+    scopectx_t dst;
+    int i;
+
+    if (src == 0) {
+        return 0;
+    }
+    ctx = src->home;
+    dst = scope_begin(ctx, newparent);
     if (dst == 0) {
         return 0;
     }
     if (src->namecount > 0) {
         for (i = 0; i < HT_BUCKETS; i++) {
-            name_t *sname, *dname, *dlast;
-            sname = src->hashtable[i];
-            dlast = 0;
-            while (sname != 0) {
-                dname = name_copy(sname, dst);
-                if (dname == 0) {
-                    scope_end(dst);
-                    return 0;
-                }
+            name_t *dname;
+            namelist_copy(dst, &dst->hashtable[i], &src->hashtable[i]);
+            for (dname = namelist_head(&dst->hashtable[i]); dname != 0;
+                 dname = dname->tq_next) {
                 dname->nameflags |= NAME_M_NODCLCHK;
-                if (dlast == 0) {
-                    dst->hashtable[i] = dlast = dname;
-                } else {
-                    dlast->next = dname;
-                    dlast = dname;
-                }
-                sname = sname->next;
             }
         }
     }
@@ -264,14 +445,7 @@ scope_copy (scopectx_t src, scopectx_t newparent)
  * Return the parent scope of a name table.
  */
 scopectx_t
-scope_getparent (scopectx_t scope) {
-
-    if (scope == 0) {
-        return 0;
-    }
-    return scope->parent;
-
-} /* scope_getparent */
+scope_getparent (scopectx_t scope) { return (scope == 0 ? 0 : scope->parent); }
 
 /*
  * scope_setparent
@@ -321,33 +495,69 @@ scope_sclass_psectname_set (scopectx_t scope, storageclass_t cl, name_t *np)
     
 } /* scope_sclass_psectname_set */
 
+namectx_t
+scope_namectx (scopectx_t scope)
+{
+    return scope->home;
+}
+
 /*
- * nametype_datafree_register
+ * nametype_dataop_register
  *
- * Used by name table users to install a
- * function in the data-freeing function table.
+ * Used by name table users to install extension
+ * function vectors for extra data attached to names.
  */
 void
-nametype_dataop_register (lextype_t lt, name_datafree_fn ffn,
-                          name_datacopy_fn cfn)
+nametype_dataop_register (namectx_t ctx, lextype_t lt,
+                          nametype_vectors_t *vec, void *vctx)
 {
-    if (lt >= LEXTYPE_NAME_MIN && lt <= LEXTYPE_NAME_MAX) {
-        freedata[lt-LEXTYPE_NAME_MIN] = ffn;
-        copydata[lt-LEXTYPE_NAME_MIN] = cfn;
+    // NB: LEXTYPE_NAME_MIN == LEXTYPE_NAME, the default
+    //     unbound name type, which is managed internally
+    //     by this module and used for all non-declarable
+    //     name types as well.
+    if (lt > LEXTYPE_NAME_MIN && lt <= LEXTYPE_NAME_MAX) {
+        int j, i = typeidx(lt);
+        memcpy(&ctx->typevec[i], vec, sizeof(nametype_vectors_t));
+        ctx->typevec[i].typectx = vctx;
+        // If the type-specific data fits in the default "extra"
+        // space, just use that.  Otherwise, look for a lookaside
+        // list that has the same size, or create a new one if needed.
+        // When calculating the desired size, we subtract off the
+        // extra space already allocated by default, since we'll
+        // just be reusing that.
+        if (vec->typesize <= NAME_K_EXTRAS*sizeof(void *)) {
+            ctx->typevec[i].typesize = cellsize;
+            ctx->freelistindex[i] = 0;
+        } else {
+            size_t desired_size = cellsize - NAME_K_EXTRAS*sizeof(void *)
+                                    + roundup(vec->typesize);
+            ctx->typevec[i].typesize = desired_size;
+            for (j = 0; j <= (LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN); j++) {
+                if (i == j || ctx->typevec[j].typesize == 0) continue;
+                if (ctx->typevec[j].typesize == desired_size) break;
+            }
+            if (j > LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN) {
+                ctx->freelistindex[i] = ctx->nfreelists;
+                ctx->nfreelists += 1;
+            } else {
+                ctx->freelistindex[i] = ctx->freelistindex[j];
+            }
+        }
     }
-} /* nametype_datafree_register */
+
+} /* nametype_dataop_register */
 
 /*
  * name_search
  *
  * Looks up a name, starting from the specified scope and working
  * backwards through the ancestor scopes.  Returns the found name_t
- * structure, if the name was found and not marked UNDECLAREd.
- * If the name is not found, and 'do_create' is set, the name
- * is inserted in the current scope, marked UNDECLAREd.
+ * structure, if the name was found and is declared as something
+ * (i.e, has a nametype other than LEXTYPE_NAME).
  */
-name_t *
-name_search (scopectx_t curscope, const char *id, size_t len, int do_create)
+static name_t *
+name_search_internal (scopectx_t curscope, const char *id, size_t len,
+                      lextype_t *ntypep, void *datapp, int undeclared_ok)
 {
     int i;
     name_t *np = 0;
@@ -356,24 +566,54 @@ name_search (scopectx_t curscope, const char *id, size_t len, int do_create)
     for (scope = curscope; scope != 0; scope = scope->parent) {
         if (scope->namecount > 0) {
             i = hash(id, len);
-            for (np = scope->hashtable[i]; np != 0;
-                 np = np->next) {
-                if (len == np->namelen &&
+            for (np = namelist_head(&scope->hashtable[i]); np != 0;
+                 np = np->tq_next) {
+                if ((np->nametype != LEXTYPE_NAME || undeclared_ok)
+                    && len == np->namelen &&
                     memcmp(id, np->name, len) == 0) {
-                    return (do_create || np->nametype != LEXTYPE_NAME) ? np : 0;
+                    if (ntypep != 0) *ntypep = np->nametype;
+                    if (datapp != 0) *(void **)datapp = np->nameextra;
+                    return np;
                 }
             }
         }
     }
 
-    if (do_create) {
-        np = name_alloc(id, len); // automatically sets as undeclared
-        name_insert(curscope, np);
-    }
-    return np;
+    return 0;
     
+} /* name_search_internal */
+
+/*
+ * External API for name search
+ */
+name_t *
+name_search (scopectx_t curscope, const char *id, size_t len,
+                     lextype_t *ntypep)
+{
+    return name_search_internal(curscope, id, len, ntypep, 0, 0);
+
 } /* name_search */
 
+name_t *
+name_search_typed (scopectx_t curscope, const char *id,
+                           size_t len, lextype_t ntype, void *datapp)
+{
+    lextype_t acttype;
+    name_t *np;
+    np = name_search_internal(curscope, id, len, &acttype, 0, 0);
+    if (acttype != ntype) return 0;
+    if (datapp != 0) *(void **)datapp = np->nameextra;
+    return np;
+
+} /* name_search_typed */
+
+int
+name_is_declared (scopectx_t curscope, const char *id, size_t len)
+{
+    lextype_t acttype;
+    name_t *np = name_search_internal(curscope, id, len, &acttype, 0, 0);
+    return (np != 0) && ((np->nameflags & NAME_M_DECLARED) != 0);
+}
 /*
  * name_insert
  *
@@ -387,8 +627,7 @@ name_insert (scopectx_t scope, name_t *np)
         return;
     }
     i = hash(np->name, np->namelen);
-    np->next = scope->hashtable[i];
-    scope->hashtable[i] = np;
+    namelist_instail(&scope->hashtable[i], np);
 
     scope->namecount += 1;
     np->namescope = scope;
@@ -402,28 +641,31 @@ name_insert (scopectx_t scope, name_t *np)
  */
 static name_t *
 name_declare_internal (scopectx_t scope, const char *id, size_t len,
-                       lextype_t type, textpos_t pos, int rescheck)
+                       lextype_t type, unsigned int flags,
+                       textpos_t pos, void *datap,
+                       size_t datasize, void *datapp, int rescheck)
 {
+    namectx_t namectx = scope_namectx(scope);
     name_t *np;
+    lextype_t nt;
 
     if (len >= NAME_SIZE) {
         len = NAME_SIZE-1;
     }
 
-    np = name_search(scope, id, len, 1);
+    np = name_search_internal(scope, id, len, &nt, 0, 1);
     if (!rescheck && np != 0) {
         // with the override, we go ahead and define
         // the name in the local scope, regardless
-        // of outer definitions, but we still
-        // check for redefs within the current scope
+        // of outer definitions
         if (np->namescope != scope) {
             np = 0;
-        } else if (np->nametype != LEXTYPE_NAME &&
-                   (!(np->nameflags & NAME_M_NODCLCHK))) {
-            return 0;
-        }
+        } //else if (nt != LEXTYPE_NAME &&
+          //         (!(np->nameflags & NAME_M_NODCLCHK))) {
+          //  return 0;
+          //}
     } else if (np != 0) {
-        if (np->namescope == scope && np->nametype != LEXTYPE_NAME &&
+        if (np->namescope == scope && nt != LEXTYPE_NAME &&
             !(np->nameflags & NAME_M_NODCLCHK)) {
             /* XXX error condition - redeclaration */
             return 0;
@@ -433,8 +675,16 @@ name_declare_internal (scopectx_t scope, const char *id, size_t len,
             return 0;
         }
     }
+    // If np is non-NULL at this point, we can overwrite
+    // an existing entry.  If so, but the types don't match,
+    // we need to replace the existing entry (and hope that
+    // nobody has a dangling pointer to it!).
+    if (np != 0 && nt != type) {
+        name_free(np);
+        np = 0;
+    }
     if (np == 0) {
-        np = name_alloc(id, len);
+        np = name_alloc(scope->home, type, id, len);
         if (np == 0) {
             return 0;
         }
@@ -444,39 +694,78 @@ name_declare_internal (scopectx_t scope, const char *id, size_t len,
     np->nametype = type;
     np->nameflags &= ~NAME_M_NODCLCHK;
     np->nameflags |= NAME_M_DECLARED;
+    np->nameflags &= ~NAME_M_FLAGMASK;
+    np->nameflags |= (NAME_M_FLAGMASK & flags);
     np->namedclpos = pos;
+    if (datap != 0) {
+        name_datacopy_fn cfn = namectx->typevec[typeidx(type)].typecopy;
+        if (cfn != 0) {
+            cfn(namectx->typevec[typeidx(type)].typectx,
+                np, np->nameextra, 0, datap);
+        } else {
+            if (datasize > namectx->typevec[typeidx(type)].typesize) {
+                datasize = namectx->typevec[typeidx(type)].typesize;
+            }
+            memcpy(np->nameextra, datap, datasize);
+        }
+    }
+    if (datapp != 0) *(void **)datapp = np->nameextra;
 
     return np;
 
 } /* name_declare_internal */
 
 name_t *
-name_declare (scopectx_t scope, const char *id, size_t len,
-              lextype_t type, textpos_t pos) {
-    return name_declare_internal(scope, id, len, type, pos, 1);
-}
+name_declare (scopectx_t scope, namedef_t *def,
+              textpos_t pos, void *datap, size_t datasize, void *datapp) {
+    return name_declare_internal(scope,
+                                 def->name, def->namelen,
+                                 def->lt, def->flags, pos,
+                                 datap, datasize, datapp, 1);
+} /* name_declare */
+
 name_t *
-name_declare_nocheck (scopectx_t scope, const char *id, size_t len,
-                      lextype_t type, textpos_t pos) {
-    return name_declare_internal(scope, id, len, type, pos, 0);
-}
+name_declare_nocheck (scopectx_t scope, namedef_t *def,
+                      textpos_t pos, void *datap, size_t datasize, void *datapp) {
+    return name_declare_internal(scope,
+                                 def->name, def->namelen,
+                                 def->lt, def->flags, pos,
+                                 datap, datasize, datapp, 0);
+} /* name_declare_nocheck */
+/*
+ * name_undeclare
+ *
+ * Create a LEXTYPE_NAME entry in the scope table to represent
+ * an undeclared name.  If the name being undeclared is present
+ * in that scope, free it first.
+ *
+ * The new entry is created to prevent the search algorithm
+ * from finding the name in an ancestral scope.
+ */
 int
 name_undeclare (scopectx_t scope, name_t *np)
 {
-    if (name_scope(np) == scope) {
-        np->nameflags &= ~NAME_M_DECLARED;
-        name_datafree_fn freefn = freedata[np->nametype-LEXTYPE_NAME_MIN];
-        if (freefn != 0) {
-            freefn(np);
-        } else {
-            memset(&np->nameunion, 0, sizeof(np->nameunion));
-        }
-        np->nametype = LEXTYPE_NAME;
-    } else {
-        name_t *unp = name_alloc(np->name, np->namelen);
-        if (unp != 0) {
-            name_insert(scope, unp);
-        }
+    namectx_t ctx = scope->home;
+    name_t *undeclarednp;
+
+    if (np->nameflags & NAME_M_RESERVED) {
+        return 0;
+    }
+    undeclarednp = name_alloc(ctx, LEXTYPE_NAME, np->name, np->namelen);
+
+    if (np->namescope == scope) {
+        name_free(np);
+    }
+    if (undeclarednp != 0) {
+        name_insert(scope, undeclarednp);
     }
     return 1;
+
+} /* name_undeclare */
+
+strdesc_t *
+tempname_get (namectx_t ctx)
+{
+    ctx->tmpcount += 1;
+    return string_printf(0, "%%TMP$%04u", ctx->tmpcount);
 }

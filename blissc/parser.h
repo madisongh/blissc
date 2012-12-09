@@ -17,7 +17,7 @@
 struct parse_ctx_s;
 typedef struct parse_ctx_s *parse_ctx_t;
 
-parse_ctx_t parser_init(scopectx_t mainscope, machinedef_t *mach);
+parse_ctx_t parser_init(namectx_t namectx, machinedef_t *mach);
 int parser_fopen(parse_ctx_t pctx, const char *fname, size_t fnlen);
 int parser_popen(parse_ctx_t pctx, scan_input_fn infn, void *fnctx);
 void parser_finish(parse_ctx_t pctx);

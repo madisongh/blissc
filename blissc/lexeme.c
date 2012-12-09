@@ -120,13 +120,13 @@ lexeme_alloc (lextype_t type, const char *text, size_t len)
             return &errlex;
         }
         for (i = 0, lex = freepool; i < ALLOC_QTY-1; i++, lex++) {
-            lex->next = lex + 1;
+            lex->tq_next = lex + 1;
         }
-        lex->next = 0;
+        lex->tq_next = 0;
     }
 
     lex = freepool;
-    freepool = lex->next;
+    freepool = lex->tq_next;
     memset(lex, 0, sizeof(lexeme_t));
     string_alloc(&lex->text, len);
     if (text != 0) {
@@ -174,7 +174,7 @@ lexeme_free (lexeme_t *lex)
     if (lex->flags & LEX_M_ALLOCATED) {
         string_free(&lex->text);
         memset(lex, 0xdd, sizeof(lexeme_t));
-        lex->next = freepool;
+        lex->tq_next = freepool;
         freepool = lex;
     }
 }
@@ -196,7 +196,7 @@ lexeme_copy (lexeme_t *orig)
     lex->extra = orig->extra;
     lex->numval = orig->numval;
     lexeme_copypos(lex, orig);
-    lex->next = 0;
+    lex->tq_next = 0;
     return lex;
 }
 
@@ -249,7 +249,7 @@ lexemes_match (lexseq_t *a, lexseq_t *b)
         return 0;
     }
     for (la = lexseq_head(a), lb = lexseq_head(b); la != 0;
-         la = la->next, lb = lb->next) {
+         la = la->tq_next, lb = lb->tq_next) {
         if (!strings_eql(&la->text, &lb->text)) {
             return 0;
         }

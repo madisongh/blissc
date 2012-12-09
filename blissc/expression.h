@@ -250,7 +250,7 @@ static inline __unused void expr_is_ctce_set(expr_node_t *node, int v) {
     node->flags = (v ? (node->flags|EXPR_M_CTCE) : (node->flags & ~EXPR_M_CTCE));
 }
 static inline __unused int expr_is_ltce(expr_node_t *node) {
-    return (node->flags & EXPR_M_LTCE) != 0;
+    return (node->flags & (EXPR_M_CTCE|EXPR_M_LTCE)) != 0;
 }
 static inline __unused void expr_is_ltce_set(expr_node_t *node, int v) {
     node->flags = (v ? (node->flags|EXPR_M_LTCE) : (node->flags & ~EXPR_M_LTCE));
@@ -663,6 +663,7 @@ void *expr_decl_ctx(expr_ctx_t ctx);
 void expr_decl_ctx_set(expr_ctx_t ctx, void *d);
 stgctx_t expr_stg_ctx(expr_ctx_t);
 machinedef_t *expr_machinedef(expr_ctx_t);
+namectx_t expr_namectx(expr_ctx_t);
 expr_node_t *expr_parse_arglist(expr_ctx_t ctx, expr_node_t *rtn);
 initval_t *expr_initval_add(expr_ctx_t ctx, initval_t *ivlist, expr_node_t *exp,
                             unsigned int width);
