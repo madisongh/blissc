@@ -346,6 +346,9 @@ declare_structure (expr_ctx_t ctx, scopectx_t scope)
         ndef.name = struname->ptr;
         ndef.namelen = struname->len;
         np = name_declare(scope, &ndef, pos, 0, 0, &stru);
+        if (np == 0) {
+            /* XXX error condition */
+        }
         which = macro_paramlist(pctx, 0, 1, 0, delims, 2,
                                 &stru->acctbl, &stru->accformals);
         if (which < 0) {
@@ -526,21 +529,32 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
                 break;
             }
             np = litsym_special(myscope, &aus[i], units);
+            if (np == 0) {
+                /* XXX error condition */
+            }
         }
     }
     // and the sign-extension keywords, where supported
     if (machine_signext_supported(mach)) {
         np = litsym_special(myscope, &kw_signed, 1);
+        if (np == 0) {
+            /* XXX error condition */
+        }
         np = litsym_special(myscope, &kw_unsigned, 0);
+        if (np == 0) {
+            /* XXX error condition */
+        }
     }
     // Now fill in the default values for the allocation formals, if they
     // have any
     for (ref = namereflist_head(&stru->alloformals); ref != 0; ref = ref->tq_next) {
         if (ref->np != 0) {
             strdesc_t *alloname = name_string(ref->np);
-            lexseq_t *seq = macparam_lexseq(ref->np);
+            lexseq_t seq;
             expr_node_t *exp;
-            if (expr_parse_seq(ctx, seq, &exp)) {
+            lexseq_init(&seq);
+            lexseq_copy(&seq, macparam_lexseq(ref->np));
+            if (lexseq_length(&seq) > 0 && expr_parse_seq(ctx, &seq, &exp)) {
                 // XXX any CTCE should be good here
                 if (expr_type(exp) == EXPTYPE_PRIM_LIT)
                     litsym_special(myscope, alloname,
@@ -554,18 +568,28 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
         if (ref->np != 0) {
             name_t *rnp;
             strdesc_t *alloname = name_string(ref->np);
-            unsigned int val;
+            unsigned long val;
             if (expr_parse_ctce(ctx, &lex)) {
-                val = (unsigned int) lexeme_unsignedval(lex);
+                val = lexeme_unsignedval(lex);
                 lexeme_free(lex);
+                np = litsym_special(myscope, alloname, val);
             } else {
+                np = litsym_search(myscope, alloname, &val);
+            } if (np == 0) {
+                /* XXX error condition - missing and no default */
                 val = 0;
+                np = litsym_special(myscope, alloname, val);
+                if (np == 0) {
+                    /* XXX error condition */
+                }
             }
-            np = litsym_special(myscope, alloname, val);
             // Now copy the declaration into the scope we'll pass back
             // to the caller for later use
             if (scopep != 0) {
                 rnp = litsym_special(retscope, alloname, val);
+                if (rnp == 0) {
+                    /* XXX error condition */
+                }
             }
         }
         if (ref->tq_next != 0 &&

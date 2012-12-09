@@ -879,6 +879,9 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
                 // name_declare() clears this flag, so we can catch genuine
                 // redeclarations.
                 actual = macparam_special(expscope, name_string(np), &val);
+                if (actual == 0) {
+                    /* XXX error condition */
+                }
                 lexseq_free(&val);
             }
 
@@ -906,6 +909,9 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
             name_t *anp;
             while (formal != 0) {
                 anp = macparam_special(expscope, name_string(formal->np), 0);
+                if (anp == 0) {
+                    /* XXX error condition */
+                }
                 formal = formal->tq_next;
             }
         }

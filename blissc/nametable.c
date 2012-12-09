@@ -201,6 +201,8 @@ name_copy (name_t *src, scopectx_t dstscope)
     memcpy(dst->name, src->name, dst->namelen);
     if (cfn != 0) {
         cfn(vctx, dst, dst->nameextra, src, src->nameextra);
+    } else {
+        memcpy(dst->nameextra, src->nameextra, sizeof(dst->nameextra));
     }
     return dst;
     
@@ -261,7 +263,9 @@ namelist_copy (scopectx_t dstscope, namelist_t *dst, namelist_t *src)
         return 0;
     }
     for (np = namelist_head(src); np != 0; np = np->tq_next) {
-        namelist_instail(dst, name_copy(np, dstscope));
+        name_t *npc = name_copy(np, dstscope);
+        if (npc == 0) return 0;
+        namelist_instail(dst, npc);
     }
     return 1;
 

@@ -372,7 +372,7 @@ seg_static_psect_set (stgctx_t ctx, seg_t *seg, psect_t *psect)
 }
 
 psect_t *
-seg_static_psect (stgctx_t ctx, seg_t *seg)
+seg_static_psect (seg_t *seg)
 {
     return (seg->type == SEGTYPE_STATIC ?
             seg->info.staticinfo.psect :
@@ -380,7 +380,7 @@ seg_static_psect (stgctx_t ctx, seg_t *seg)
 }
 
 frame_t *
-seg_stack_frame (stgctx_t ctx, seg_t *seg)
+seg_stack_frame (seg_t *seg)
 {
     return (seg->type == SEGTYPE_STACK ?
             seg->info.stackinfo.frame :

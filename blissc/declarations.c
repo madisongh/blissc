@@ -825,7 +825,7 @@ handle_data_attrs (expr_ctx_t ctx, scopectx_t scope, decltype_t dt,
         if (!saw_ext) {
             int signext;
             saw_ext = attr_extension(ctx, &signext);
-            if (saw_ext) {
+            if (saw_ext > 0) {
                 did1 = 1; saw_stru = -1;
                 if (signext) attr->flags |= SYM_M_SIGNEXT;
             }
@@ -1235,7 +1235,7 @@ parse_formals (expr_ctx_t ctx, scopectx_t curscope,
             break;
         }
     }
-    curscope = parser_scope_end(pctx);
+    parser_scope_end(pctx);
 
     return (which == 0);
     
@@ -1313,6 +1313,9 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
     name_t *np;
     symscope_t sc;
     int which;
+    static lextype_t delims[4] = { LEXTYPE_DELIM_SEMI,
+        LEXTYPE_DELIM_COMMA, LEXTYPE_OP_ASSIGN, LEXTYPE_DELIM_COLON };
+
 
     if (!is_bind) {
         np = scope_sclass_psectname(scope, SCLASS_CODE);
@@ -1328,6 +1331,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
 
     while (1) {
         routine_attr_t attr;
+        argscope = 0;
         if (!parse_decl_name(pctx, scope, &namestr, &pos)) {
             /* XXX error condition */
             return 0;
@@ -1353,7 +1357,8 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
                 }
             }
         }
-        if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
+        which = parser_expect_oneof(pctx, QL_NORMAL, delims, 4, 0, 1);
+        if (which == 3) {  // the colon
             which = handle_routine_attrs(ctx, scope, dt, seg, &attr, is_bind);
             if (which < 0) {
                 /* XXX error condition */
@@ -1507,7 +1512,6 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
                    stgctx_t stg, machinedef_t *mach)
 {
     int i;
-    name_t *np;
     literal_attr_t attr;
     static strdesc_t bpdsc[4] = {
         STRDEF("%BPUNIT"), STRDEF("%BPADDR"), STRDEF("%BPVAL"),
@@ -1522,15 +1526,15 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
     psects_init(kwdscope, stg, mach);
 
     attr.width = machine_unit_bits(mach);
-    attr.flags = NAME_M_RESERVED;
+    attr.flags = SYM_M_RESERVED;
     attr.value = machine_unit_bits(mach);
-    np = litsym_declare(kwdscope, &bpdsc[0], SYMSCOPE_LOCAL, &attr, 0);
+    litsym_declare(kwdscope, &bpdsc[0], SYMSCOPE_LOCAL, &attr, 0);
     attr.value = machine_addr_bits(mach);
-    np = litsym_declare(kwdscope, &bpdsc[1], SYMSCOPE_LOCAL, &attr, 0);
+    litsym_declare(kwdscope, &bpdsc[1], SYMSCOPE_LOCAL, &attr, 0);
     attr.value = machine_scalar_bits(mach);
-    np = litsym_declare(kwdscope, &bpdsc[2], SYMSCOPE_LOCAL, &attr, 0);
+    litsym_declare(kwdscope, &bpdsc[2], SYMSCOPE_LOCAL, &attr, 0);
     attr.value = machine_scalar_units(mach);
-    np = litsym_declare(kwdscope, &bpdsc[3], SYMSCOPE_LOCAL, &attr, 0);
+    litsym_declare(kwdscope, &bpdsc[3], SYMSCOPE_LOCAL, &attr, 0);
     structures_init(ctx);
  
 } /* declarations_init */

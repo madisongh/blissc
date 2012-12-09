@@ -110,6 +110,7 @@ static const struct {
     { 30, 0 }, { 30, 0 }, // + -
     { 25, 0 }, { 25, 0 }, { 25, 0 }, { 25, 0 }, { 25, 0 }, { 25, 0 }, // cmp
     { 25, 0 }, { 25, 0 }, { 25, 0 }, { 25, 0 }, { 25, 0 }, { 25, 0 }, // cmp-u
+    { 25, 0 }, { 25, 0 }, { 25, 0 }, { 25, 0 }, { 25, 0 }, { 25, 0 }, // cmp-a
     { 20, 3 }, // unary NOT
     { 15, 0 }, { 10, 0 }, { 5, 0 }, { 5, 0 }, // AND, OR, EQV, XOR
     { 0, 1 } // assignment
@@ -256,6 +257,7 @@ expr_node_free (expr_ctx_t ctx, expr_node_t *node)
         }
         case EXPTYPE_SELECTOR: {
             expr_node_t *sel, *subnext;
+            sel = node;
             do {
                 subnext = expr_selector_next(sel);
                 expr_node_free(ctx, expr_selector_action(sel));
@@ -925,6 +927,15 @@ parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
     if (expr_type(pos) == EXPTYPE_PRIM_LIT && expr_type(size) == EXPTYPE_PRIM_LIT) {
         machinedef_t *mach = parser_get_machinedef(pctx);
 
+        // Can operate on CTCEs directly
+        if (expr_type(*expp) == EXPTYPE_PRIM_LIT) {
+            expr_litval_set(*expp, getvalue(expr_litval(*expp) >> expr_litval(pos),
+                                            (unsigned int) expr_litval(size),
+                                            (signext != 0)));
+            expr_node_free(ctx, pos);
+            expr_node_free(ctx, size);
+            return 1;
+        }
         if (expr_litval(pos) % machine_unit_bits(mach) == 0 &&
             expr_litval(size) == machine_scalar_bits(mach)) {
             expr_seg_offset_set(*expp, expr_seg_offset(*expp) +
@@ -938,6 +949,8 @@ parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
     }
     exp = expr_node_alloc(ctx, EXPTYPE_PRIM_FLDREF, parser_curpos(pctx));
     expr_fldref_addr_set(exp, *expp);
+    expr_is_ctce_set(exp, expr_is_ctce(*expp));
+    expr_is_ltce_set(exp, expr_is_ltce(*expp));
     expr_fldref_pos_set(exp, pos);
     expr_fldref_size_set(exp, size);
     expr_fldref_signext_set(exp, (signext != 0));
@@ -1072,6 +1085,73 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 
 } /* parse_primary */
 
+static seg_t *
+find_base_seg (expr_node_t *expr)
+{
+    seg_t *seg;
+    if (expr == 0) {
+        return 0;
+    }
+    if (expr_type(expr) == EXPTYPE_PRIM_SEG) {
+        return expr_seg_base(expr);
+    }
+    if (expr_type(expr) != EXPTYPE_OPERATOR) {
+        return 0;
+    }
+    seg = find_base_seg(expr_op_lhs(expr));
+    if (seg == 0) {
+        seg = find_base_seg(expr_op_rhs(expr));
+    }
+    return seg;
+}
+
+static void
+update_xtce_bits (expr_node_t *opexpr)
+{
+    optype_t op = expr_op_type(opexpr);
+
+    if (op == OPER_FETCH || op == OPER_ASSIGN) {
+        expr_is_ctce_set(opexpr, 0);
+        expr_is_ltce_set(opexpr, 0);
+        return;
+    }
+    if (op_is_unary(op)) {
+        expr_is_ctce_set(opexpr, expr_is_ctce(expr_op_rhs(opexpr)));
+        expr_is_ltce_set(opexpr, 0);
+        return;
+    }
+    if (expr_is_ctce(expr_op_lhs(opexpr)) && expr_is_ctce(expr_op_rhs(opexpr))) {
+        expr_is_ctce_set(opexpr, 1);
+        return;
+    }
+    if (expr_is_ltce_only(expr_op_lhs(opexpr))) {
+        if ((op == OPER_ADD || op == OPER_SUBTRACT) &&
+            expr_is_ctce(expr_op_rhs(opexpr))) {
+            expr_is_ltce_set(opexpr, 1);
+            return;
+        }
+        if ((op == OPER_SUBTRACT ||
+             (op >= OPER_CMP_EQLA && op <= OPER_CMP_GEQA)) &&
+             expr_is_ltce_only(expr_op_rhs(opexpr))) {
+            seg_t *seg_lhs, *seg_rhs;
+            seg_lhs = find_base_seg(expr_op_lhs(opexpr));
+            seg_rhs = find_base_seg(expr_op_rhs(opexpr));
+            if (seg_lhs != 0 && seg_rhs != 0) {
+                expr_is_ltce_set(opexpr,
+                                 seg_static_psect(seg_lhs) == seg_static_psect(seg_rhs));
+            }
+            return;
+        }
+    }
+    if (expr_is_ltce_only(expr_op_rhs(opexpr))) {
+        if (op == OPER_ADD &&
+            expr_is_ctce(expr_op_lhs(opexpr))) {
+            expr_is_ltce_set(opexpr, 1);
+            return;
+        }
+    }
+}
+
 static expr_node_t *
 parse_op_expr (expr_ctx_t ctx, optype_t curop, expr_node_t *lhs)
 {
@@ -1098,13 +1178,13 @@ parse_op_expr (expr_ctx_t ctx, optype_t curop, expr_node_t *lhs)
     }
 
     rhs = 0;
-    ctx->noreduce = 1;
+    ctx->noreduce += 1;
     if (!parse_expr(ctx, &rhs) || rhs == 0) {
         // XXX error condition ?
-        ctx->noreduce = 0;
+        ctx->noreduce -= 1;
         return 0;
     }
-    ctx->noreduce = 0;
+    ctx->noreduce -= 1;
 
     if (expr_is_noop(rhs) || expr_is_ctrl(rhs)) {
         /* XXX error condition */
@@ -1136,17 +1216,24 @@ parse_op_expr (expr_ctx_t ctx, optype_t curop, expr_node_t *lhs)
     }
 
     thisnode = expr_node_alloc(ctx, EXPTYPE_OPERATOR, expr_textpos(rhs));
+    if (thisnode == 0) {
+        /* XXX error condition */
+        return 0;
+    }
     if (normal) {
         expr_op_type_set(thisnode, curop);
         expr_op_lhs_set(thisnode, lhs);
         expr_op_rhs_set(thisnode, rhs);
         expr_has_value_set(thisnode, 1);
+        update_xtce_bits(thisnode);
         return thisnode;
     } else {
         expr_op_type_set(thisnode, curop);
         expr_op_rhs_set(thisnode, expr_op_lhs(rhs));
         expr_op_lhs_set(rhs, thisnode);
         expr_has_value_set(thisnode, 1);
+        update_xtce_bits(thisnode);
+        update_xtce_bits(rhs);
         return rhs;
     }
 
@@ -1433,14 +1520,16 @@ parse_expr (expr_ctx_t ctx, expr_node_t **expp)
             }
         }
 
-        if (exp != 0 && expr_is_primary(exp)) {
-            lt = parser_next(pctx, QL_NORMAL, &lex);
-            op = lextype_to_optype(lt);
-            if (op == OPER_NONE) {
-                parser_insert(pctx, lex);
-                break;
+        if (exp != 0) {
+            if (expr_is_primary(exp)) {
+                lt = parser_next(pctx, QL_NORMAL, &lex);
+                op = lextype_to_optype(lt);
+                if (op == OPER_NONE) {
+                    parser_insert(pctx, lex);
+                } else {
+                    exp = parse_op_expr(ctx, op, exp);
+                }
             }
-            exp = parse_op_expr(ctx, op, exp);
             break;
         }
     }

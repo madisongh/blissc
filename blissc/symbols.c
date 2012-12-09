@@ -444,9 +444,16 @@ label_declare (scopectx_t scope, strdesc_t *dsc, textpos_t pos)
 
 }
 name_t *
-litsym_search (scopectx_t scope, strdesc_t *dsc)
+litsym_search (scopectx_t scope, strdesc_t *dsc, unsigned long *valp)
 {
-    return name_search_typed(scope, dsc->ptr, dsc->len, LEXTYPE_NAME_LITERAL, 0);
+    name_t *np;
+    sym_literal_t *sym;
+    np = name_search_typed(scope, dsc->ptr, dsc->len, LEXTYPE_NAME_LITERAL, &sym);
+    if (np != 0 && valp != 0) {
+        *valp = getvalue(sym->attr.value, sym->attr.width,
+                         (sym->attr.flags & SYM_M_SIGNEXT) != 0);
+    }
+    return np;
 }
 name_t *
 litsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
@@ -468,6 +475,7 @@ litsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     ndef.lt = LEXTYPE_NAME_LITERAL;
     ndef.name = dsc->ptr;
     ndef.namelen = dsc->len;
+    ndef.flags = (attrp->flags & SYM_M_RESERVED) ? NAME_M_RESERVED : 0;
 
     if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
         name_t *gnp = 0;
@@ -484,6 +492,9 @@ litsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
         }
         if (gnp == 0) {
             gnp = name_declare(gscope, &ndef, pos, 0, 0, &gsym);
+            if (gnp == 0) {
+                /* XXX error condition */
+            }
             if (gsym != 0) memcpy(&gsym->attr, attrp, sizeof(literal_attr_t));
         }
     }
@@ -492,7 +503,7 @@ litsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     return np;
 }
 name_t *
-litsym_special (scopectx_t scope, strdesc_t *dsc, unsigned int value)
+litsym_special (scopectx_t scope, strdesc_t *dsc, unsigned long value)
 {
     namectx_t namectx = scope_namectx(scope);
     symctx_t symctx = nametables_symctx_get(namectx);

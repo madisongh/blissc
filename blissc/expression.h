@@ -244,7 +244,7 @@ static inline __unused void expr_has_value_set(expr_node_t *node, int v) {
     node->flags = (v ? (node->flags|EXPR_M_HASVAL) : (node->flags & ~EXPR_M_HASVAL));
 }
 static inline __unused int expr_is_ctce(expr_node_t *node) {
-    return (node->flags & EXPR_M_CTCE) != 0;
+    return node == 0 || (node->flags & EXPR_M_CTCE) != 0;
 }
 static inline __unused void expr_is_ctce_set(expr_node_t *node, int v) {
     node->flags = (v ? (node->flags|EXPR_M_CTCE) : (node->flags & ~EXPR_M_CTCE));
@@ -252,7 +252,11 @@ static inline __unused void expr_is_ctce_set(expr_node_t *node, int v) {
 static inline __unused int expr_is_ltce(expr_node_t *node) {
     return (node->flags & (EXPR_M_CTCE|EXPR_M_LTCE)) != 0;
 }
+static inline __unused int expr_is_ltce_only(expr_node_t *node) {
+    return (node->flags & EXPR_M_LTCE) != 0;
+}
 static inline __unused void expr_is_ltce_set(expr_node_t *node, int v) {
+    if (node == 0) return;
     node->flags = (v ? (node->flags|EXPR_M_LTCE) : (node->flags & ~EXPR_M_LTCE));
 }
 

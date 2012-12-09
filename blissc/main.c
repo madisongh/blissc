@@ -165,14 +165,14 @@ int
 test_parser (int argc, const char *argv[])
 {
     parse_ctx_t pctx;
-    stgctx_t stg;
+//    stgctx_t stg;
     lexeme_t *lex;
     lextype_t lt;
 //    int linewidth;
 //    char *delim;
     machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32, .signext_supported=1 };
 
-    stg = storage_init(&machdef);
+//    stg = storage_init(&machdef);
     pctx = parser_init(0, &machdef);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);

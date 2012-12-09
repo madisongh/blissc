@@ -71,12 +71,12 @@ name_t *compiletime_declare(scopectx_t scope, strdesc_t *dsc,
 void compiletime_assign(name_t *np, long val);
 long compiletime_value(name_t *np);
 name_t *label_declare(scopectx_t scope, strdesc_t *dsc, textpos_t pos);
-name_t *litsym_search(scopectx_t scope, strdesc_t *dsc);
+name_t *litsym_search(scopectx_t scope, strdesc_t *dsc, unsigned long *valp);
 name_t *litsym_declare(scopectx_t scope, strdesc_t *dsc,
                        symscope_t sc, literal_attr_t *attr,
                        textpos_t pos);
 name_t *litsym_special(scopectx_t scope, strdesc_t *dsc,
-                       unsigned int value);
+                       unsigned long value);
 name_t *rtnsym_search(scopectx_t scope, strdesc_t *dsc);
 name_t *rtnsym_declare(scopectx_t scope, strdesc_t *dsc,
                        symscope_t sc, routine_attr_t *attr,
