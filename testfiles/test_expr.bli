@@ -84,5 +84,17 @@ BEGIN
     CODECOMMENT 'hi there': blklabel2: BEGIN END;
     CODECOMMENT 'another': BEGIN END;
 END;
+
+ROUTINE testrtn2 (meh) =
+BEGIN
+    LOCAL
+        wahoo;
+        
+    wahoo = .meh * 37;
+    IF .wahoo EQL A THEN
+        RETURN 1419;
+        
+    testrtn(.wahoo, QQQ)
+END;
 END
 ELUDOM
