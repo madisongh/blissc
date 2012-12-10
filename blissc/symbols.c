@@ -203,7 +203,6 @@ bind_data (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         exp = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG,
                               lexeme_textpos_get(lex));
         expr_seg_name_set(exp, lexeme_ctx_get(lex));
-        expr_seg_base_set(exp, sym->seg);
         expr_seg_units_set(exp, sym->attr.units);
         expr_seg_signext_set(exp, (sym->attr.flags & SYM_M_SIGNEXT) != 0);
         expr_is_ltce_set(exp, seg_addr_is_ltce(sym->seg));
@@ -222,16 +221,13 @@ bind_routine (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
     machinedef_t *mach = expr_machinedef(ctx);
     name_t *np = lexeme_ctx_get(lex);
     expr_node_t *exp;
-    sym_routine_t *sym;
 
     if (np == 0) {
         return 0;
     }
-    sym = name_extraspace(np);
     exp = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG,
                           lexeme_textpos_get(lex));
-    expr_seg_name_set(exp, lexeme_ctx_get(lex));
-    expr_seg_base_set(exp, sym->seg);
+    expr_seg_name_set(exp, np);
     expr_seg_units_set(exp, machine_scalar_units(mach));
     expr_seg_signext_set(exp, machine_addr_signed(mach));
     if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
@@ -694,4 +690,67 @@ sym_undeclare (scopectx_t scope, strdesc_t *dsc)
     }
     return name_undeclare(scope, np);
 
+}
+
+static int
+get_sym_base (name_t *np, psect_t **psp, name_t **extsymp)
+{
+    sym_data_t *d = name_extraspace(np);
+    sym_routine_t *r = name_extraspace(np);
+
+    *psp = 0;
+    *extsymp = 0;
+    switch (name_type(np)) {
+        case LEXTYPE_NAME_DATA:
+            if (d->seg != 0) {
+                if (seg_type(d->seg) == SEGTYPE_STATIC) {
+                    *psp = seg_static_psect(d->seg);
+                    return 1;
+                }
+                return 0;
+            }
+            if (d->globalsym != 0) {
+                *extsymp = d->globalsym;
+                return 1;
+            }
+            break;
+
+        case LEXTYPE_NAME_ROUTINE:
+            if (r->seg != 0) {
+                if (seg_type(r->seg) == SEGTYPE_STATIC) {
+                    *psp = seg_static_psect(r->seg);
+                    return 1;
+                }
+                return 0;
+            }
+            if (r->globalsym != 0) {
+                *extsymp = r->globalsym;
+                return 1;
+            }
+            break;
+
+        default:
+            break;
+    }
+
+    return 0;
+}
+
+int
+sym_addrs_comparable (name_t *np_a, name_t *np_b)
+{
+    name_t *ext_a, *ext_b;
+    psect_t *ps_a, *ps_b;
+
+    if (!get_sym_base(np_a, &ps_a, &ext_a) ||
+        !get_sym_base(np_b, &ps_b, &ext_b)) {
+        return 0;
+    }
+    if (ps_a != 0) {
+        return ps_a == ps_b;
+    }
+    if (ext_a != 0) {
+        return ext_a == ext_b;
+    }
+    return 0;
 }

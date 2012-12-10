@@ -115,6 +115,7 @@ lexeme_t *name_to_lexeme (name_t *np, textpos_t pos) {
     if (lex != 0) lexeme_textpos_set(lex, pos);
     return lex;
 }
+lextype_t name_type (name_t *np) { return np->nametype; }
 void *name_extraspace (name_t *np) { return np->nameextra; }
 void *name_value_pointer (name_t *np) { return np->nameextra[0]; }
 long name_value_signed (name_t *np) { return (long) np->nameextra[0]; }

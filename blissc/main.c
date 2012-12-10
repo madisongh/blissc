@@ -143,8 +143,6 @@ void PRINTLEX(lexeme_t *lex)
         const char *btname = lextype_name(lexeme_boundtype(lex));
         linewidth += printf("%sU[%s]<%-*.*s>", delim, btname,
                             text->len, text->len, text->ptr);
-    } else if (lt == LEXTYPE_SEGMENT) {
-        linewidth += printf("%sSEG", delim);
     } else {
         linewidth += printf("%s%s<%-*.*s>", delim, typename,
                             text->len, text->len, text->ptr);
@@ -279,7 +277,7 @@ void PRINTEXPR_internal(int level, expr_node_t *exp)
             if (expr_seg_name(exp) != 0) {
                 str = name_string(expr_seg_name(exp));
             } else {
-                str = string_printf(0, "%p", expr_seg_base(exp));
+                str = string_printf(0, "<UNKNOWN>");
             }
             printf("%-*.*s{SEG:%-*.*s(%lx)}\n",
                    level, level, pfx, str->len, str->len, str->ptr,

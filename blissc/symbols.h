@@ -84,7 +84,9 @@ name_t *rtnsym_declare(scopectx_t scope, strdesc_t *dsc,
 int rtnsym_attr_update(name_t *np, routine_attr_t *attr);
 void rtnsym_expr_set(name_t *np, expr_node_t *exp);
 void rtnsym_seg_set(name_t *np, seg_t *seg);
+routine_attr_t *rtnsym_attr(name_t *np);
 int sym_undeclare(scopectx_t scope, strdesc_t *dsc);
+int sym_addrs_comparable(name_t *np_a, name_t *np_b);
 name_t *psect_declare(scopectx_t scope, strdesc_t *dsc,
                       unsigned int psflags, textpos_t pos);
 psect_t *psect_search(scopectx_t scope, strdesc_t *namedsc);

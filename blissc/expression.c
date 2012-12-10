@@ -31,6 +31,7 @@ struct expr_ctx_s {
     expr_dispatch_fn    dispatchers[LEXTYPE_EXPKWD_MAX-LEXTYPE_EXPKWD_MIN+1];
     expr_dispatch_fn    name_dispatchers[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1];
     exprseq_t           exprseq;
+    namereflist_t       routinestack;
     unsigned int        loopdepth;
     int                 longstringsok;
     int                 noreduce;
@@ -73,7 +74,9 @@ static namedef_t expr_names[] = {
     NAMEDEF("DO", LEXTYPE_CTRL_DO, NAME_M_RESERVED),
     NAMEDEF("EXITLOOP", LEXTYPE_CTRL_EXITLOOP, NAME_M_RESERVED),
     NAMEDEF("LEAVE", LEXTYPE_CTRL_LEAVE, NAME_M_RESERVED),
-    NAMEDEF("WITH", LEXTYPE_KWD_WITH, NAME_M_RESERVED)
+    NAMEDEF("WITH", LEXTYPE_KWD_WITH, NAME_M_RESERVED),
+    NAMEDEF("%REF", LEXTYPE_KWD_PCTREF, NAME_M_RESERVED),
+    NAMEDEF("RETURN", LEXTYPE_CTRL_RETURN, NAME_M_RESERVED)
 };
 
 #undef OPMAP
@@ -131,6 +134,7 @@ static expr_node_t *parse_wu_loop(expr_ctx_t ctx, lextype_t lt, lexeme_t *lex);
 static expr_node_t *parse_do_loop(expr_ctx_t ctx, lextype_t lt, lexeme_t *lex);
 static expr_node_t *parse_leave(expr_ctx_t ctx, lextype_t lt, lexeme_t *lex);
 static expr_node_t *parse_exitloop(expr_ctx_t ctx, lextype_t lt, lexeme_t *lex);
+static expr_node_t *parse_return(expr_ctx_t ctx, lextype_t lt, lexeme_t *lex);
 static expr_node_t *parse_codecomment(expr_ctx_t ctx, lextype_t lt, lexeme_t *lex);
 static int get_ctce(expr_ctx_t ctx, long *valp);
 
@@ -275,6 +279,7 @@ expr_node_free (expr_ctx_t ctx, expr_node_t *node)
             break;
 
         case EXPTYPE_CTRL_EXIT:
+        case EXPTYPE_CTRL_RET:
             expr_node_free(ctx, expr_exit_value(node));
             break;
 
@@ -394,7 +399,9 @@ expr_node_copy (expr_ctx_t ctx, expr_node_t *node)
             break;
 
         case EXPTYPE_CTRL_EXIT:
+        case EXPTYPE_CTRL_RET:
             expr_exit_value_set(dst, expr_node_copy(ctx, expr_exit_value(node)));
+            expr_exit_label_set(dst, expr_exit_label(node));
             break;
             
         case EXPTYPE_PRIM_LIT:
@@ -537,6 +544,7 @@ expr_init (parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope)
     expr_dispatch_register(ectx, LEXTYPE_CTRL_DO, parse_do_loop);
     expr_dispatch_register(ectx, LEXTYPE_CTRL_LEAVE, parse_leave);
     expr_dispatch_register(ectx, LEXTYPE_CTRL_EXITLOOP, parse_exitloop);
+    expr_dispatch_register(ectx, LEXTYPE_CTRL_RETURN, parse_return);
     expr_dispatch_register(ectx, LEXTYPE_KWD_CODECOMMENT, parse_codecomment);
 
     declarations_init(ectx, pctx, kwdscope, stg, ectx->mach);
@@ -549,6 +557,38 @@ parse_ctx_t expr_parse_ctx (expr_ctx_t ctx) { return ctx->pctx; }
 namectx_t expr_namectx (expr_ctx_t ctx) { return ctx->namectx; }
 stgctx_t expr_stg_ctx (expr_ctx_t ctx) { return ctx->stg; }
 machinedef_t *expr_machinedef (expr_ctx_t ctx) { return ctx->mach; }
+
+void
+expr_push_routine (expr_ctx_t ctx, name_t *np)
+{
+    nameref_t *ref = nameref_alloc(ctx->namectx, np);
+    if (ref == 0) {
+        /* XXX error condition */
+    } else {
+        namereflist_inshead(&ctx->routinestack, ref);
+    }
+}
+
+void
+expr_pop_routine (expr_ctx_t ctx)
+{
+    nameref_t *ref = namereflist_remhead(&ctx->routinestack);
+    if (ref == 0) {
+        /* XXX error condition */
+    } else {
+        nameref_free(ctx->namectx, ref);
+    }
+}
+
+name_t *
+expr_current_routine (expr_ctx_t ctx)
+{
+    nameref_t * ref = namereflist_head(&ctx->routinestack);
+    if (ref == 0) {
+        return 0;
+    }
+    return ref->np;
+}
 
 /*
  * parse_block
@@ -648,6 +688,7 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
     
     exprseq_set(expr_blk_seq(exp), &seq);
     expr_blk_valexp_set(exp, valexp);
+    expr_has_value_set(exp, (valexp != 0));
     expr_blk_codecomment_set(exp, codecomment);
     *expp = exp;
     // Now point the labels at us
@@ -709,6 +750,44 @@ parse_exitloop (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
     return exp;
 
 } /* parse_exitloop */
+
+static expr_node_t *
+parse_return (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
+{
+    expr_node_t *exp, *valexp;
+    name_t *lp;
+    routine_attr_t *attr;
+
+    lp = expr_current_routine(ctx);
+
+    if (!parse_expr(ctx, &valexp)) {
+        valexp = 0;
+    }
+    if (lp == 0) {
+        /* XXX error condition */
+        if (valexp != 0) expr_node_free(ctx, valexp);
+        return 0;
+    }
+    attr = rtnsym_attr(lp);
+    if (attr == 0) {
+        /* XXX error condition */
+        valexp = 0;
+    } else if (attr->flags & SYM_M_NOVALUE) {
+        if (valexp != 0) {
+            /* XXX error condition */
+        }
+    } else {
+        if (valexp == 0) {
+            /* XXX error condition */
+        }
+    }
+    exp = expr_node_alloc(ctx, EXPTYPE_CTRL_RET, lexeme_textpos_get(curlex));
+    expr_exit_label_set(exp, lp);
+    expr_exit_value_set(exp, valexp);
+    expr_has_value_set(exp, (valexp != 0));
+    return exp;
+
+} /* parse_leave */
 
 static expr_node_t *
 parse_wu_loop (expr_ctx_t ctx, lextype_t opener, lexeme_t *curlex)
@@ -805,7 +884,42 @@ expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
         while (1) {
-            if (!parse_expr(ctx, &arg)) {
+            if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_PCTREF, 0, 1)) {
+                scopectx_t scope = parser_scope_get(pctx);
+                textpos_t pos = parser_curpos(pctx);
+                strdesc_t *str;
+                name_t *tmpsym;
+                initval_t *ivlist;
+                seg_t *seg;
+                if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
+                    /* XXX error condition */
+                }
+                if (!parse_expr(ctx, &exp)) {
+                    /* XXX error condition */
+                }
+                if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
+                    /* XXX error condition */
+                }
+                if (!expr_has_value(exp)) {
+                    /* XXX error condition */
+                }
+                str = tempname_get(ctx->namectx);
+                tmpsym = datasym_declare(scope, str, SYMSCOPE_LOCAL, 0, pos);
+                string_free(str);
+                ivlist = expr_initval_add(ctx, 0, exp, machine_scalar_units(ctx->mach));
+                seg = seg_alloc_stack(ctx->stg, pos, 0);
+                if (tmpsym == 0 || seg == 0 || !seg_initval_set(ctx->stg, seg, ivlist)) {
+                    if (seg != 0) seg_free(ctx->stg, seg);
+                    if (ivlist != 0) initval_freelist(ctx->stg, ivlist);
+                    arg = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, pos);
+                    /* XXX error condition */
+                } else {
+                    seg_commit(ctx->stg, seg);
+                    datasym_seg_set(tmpsym, seg);
+                    arg = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG, pos);
+                    expr_seg_name_set(arg, tmpsym);
+                }
+            } else if (!parse_expr(ctx, &arg)) {
                 arg = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
                 // null argument = zero literal
             }
@@ -873,13 +987,6 @@ lex_to_expr (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
             expr_is_ctce_set(exp, 1);
             break;
         }
-        case LEXTYPE_SEGMENT:
-            exp = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG, lexeme_textpos_get(lex));
-            expr_seg_base_set(exp, lexeme_ctx_get(lex));
-            expr_seg_units_set(exp, machine_scalar_units(ctx->mach));
-            expr_seg_signext_set(exp, 0);
-            expr_is_ltce_set(exp, seg_addr_is_ltce(expr_seg_base(exp)));
-            break;
         default:
             /* XXX huh? */
             break;
@@ -1085,24 +1192,25 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 
 } /* parse_primary */
 
-static seg_t *
-find_base_seg (expr_node_t *expr)
+static name_t *
+find_base_segname (expr_node_t *expr)
 {
-    seg_t *seg;
+    name_t *np;
+
     if (expr == 0) {
         return 0;
     }
     if (expr_type(expr) == EXPTYPE_PRIM_SEG) {
-        return expr_seg_base(expr);
+        return expr_seg_name(expr);
     }
     if (expr_type(expr) != EXPTYPE_OPERATOR) {
         return 0;
     }
-    seg = find_base_seg(expr_op_lhs(expr));
-    if (seg == 0) {
-        seg = find_base_seg(expr_op_rhs(expr));
+    np = find_base_segname(expr_op_lhs(expr));
+    if (np == 0) {
+        np = find_base_segname(expr_op_rhs(expr));
     }
-    return seg;
+    return np;
 }
 
 static void
@@ -1133,12 +1241,12 @@ update_xtce_bits (expr_node_t *opexpr)
         if ((op == OPER_SUBTRACT ||
              (op >= OPER_CMP_EQLA && op <= OPER_CMP_GEQA)) &&
              expr_is_ltce_only(expr_op_rhs(opexpr))) {
-            seg_t *seg_lhs, *seg_rhs;
-            seg_lhs = find_base_seg(expr_op_lhs(opexpr));
-            seg_rhs = find_base_seg(expr_op_rhs(opexpr));
-            if (seg_lhs != 0 && seg_rhs != 0) {
+            name_t *np_lhs, *np_rhs;
+            np_lhs = find_base_segname(expr_op_lhs(opexpr));
+            np_rhs = find_base_segname(expr_op_rhs(opexpr));
+            if (np_lhs != 0 && np_rhs != 0) {
                 expr_is_ltce_set(opexpr,
-                                 seg_static_psect(seg_lhs) == seg_static_psect(seg_rhs));
+                                 sym_addrs_comparable(np_lhs, np_rhs));
             }
             return;
         }

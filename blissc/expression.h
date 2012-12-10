@@ -24,6 +24,7 @@
     DOEXPTYPE(PRIM_BLK) DOEXPTYPE(OPERATOR) \
     DOEXPTYPE(EXECFUN) DOEXPTYPE(CTRL_COND) \
     DOEXPTYPE(CTRL_CASE) DOEXPTYPE(CTRL_EXIT) \
+    DOEXPTYPE(CTRL_RET) \
     DOEXPTYPE(CTRL_SELECT) DOEXPTYPE(SELECTOR) \
     DOEXPTYPE(CTRL_LOOPWU) DOEXPTYPE(CTRL_LOOPID)
 #define DOEXPTYPE(t_) EXPTYPE_##t_,
@@ -149,13 +150,12 @@ struct expr_sel_s {
 
 struct expr_seg_s {
     name_t          *name;
-    seg_t           *base_seg;
     long            offset;
     unsigned int    units;
     int             signext;
 };
 
-struct expr_exit_s {
+struct expr_exit_s { // also used for RETURN
     struct expr_node_s  *exitval;
     name_t              *exitlabel;
 };
@@ -282,12 +282,6 @@ static inline __unused void expr_struref_accexpr_set(expr_node_t *node, expr_nod
     node->data.srdata.accexpr = e;
 }
 // PRIM_SEG
-static inline __unused seg_t *expr_seg_base(expr_node_t *node) {
-    return node->data.segdata.base_seg;
-}
-static inline __unused void expr_seg_base_set(expr_node_t *node, seg_t *segval) {
-    node->data.segdata.base_seg = segval;
-}
 static inline __unused unsigned int expr_seg_units(expr_node_t *node) {
     return node->data.segdata.units;
 }
@@ -306,7 +300,6 @@ static inline __unused long expr_seg_offset(expr_node_t *node) {
 static inline __unused void expr_seg_offset_set(expr_node_t *node, long offset) {
     node->data.segdata.offset = offset;
 }
-// PRIM_SEGNAME
 static inline __unused name_t *expr_seg_name(expr_node_t *node) {
     return node->data.segdata.name;
 }
@@ -569,7 +562,7 @@ static inline __unused expr_node_t *expr_selector_next(expr_node_t *node) {
 static inline __unused void expr_selector_next_set(expr_node_t *node, expr_node_t *sel) {
     node->data.slctrdata.nextsel = sel;
 }
-// Exit expressions (EXITLOOP, LEAVE)
+// Exit expressions (EXITLOOP, LEAVE, RETURN)
 static inline __unused expr_node_t *expr_exit_value(expr_node_t *node) {
     return node->data.exitdata.exitval;
 }
@@ -675,4 +668,7 @@ int expr_parse_ISSTRING(expr_ctx_t ctx, int *allstr);
 int expr_parse_xCTE(expr_ctx_t ctx, int checkltce, int *allok);
 int expr_get_allocation(expr_ctx_t ctx, strdesc_t *name, unsigned int *units);
 int expr_parse_SIZE(expr_ctx_t ctx, unsigned int *units);
+void expr_push_routine(expr_ctx_t ctx, name_t *np);
+void expr_pop_routine(expr_ctx_t ctx);
+name_t *expr_current_routine (expr_ctx_t ctx);
 #endif

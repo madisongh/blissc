@@ -85,6 +85,7 @@ name_t *name_declare(scopectx_t scope, namedef_t *def, textpos_t pos,
                      void *datap, size_t datasize, void *datapp);
 name_t *name_declare_nocheck(scopectx_t scope, namedef_t *def, textpos_t pos,
                              void *datap, size_t datasize, void *datapp);
+lextype_t name_type(name_t *np);
 void *name_extraspace(name_t *np);
 void *name_value_pointer(name_t *np);
 long name_value_signed(name_t *np);

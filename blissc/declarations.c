@@ -958,9 +958,15 @@ declare_data (expr_ctx_t ctx, scopectx_t scope, lextype_t lt, decltype_t dt)
             stackonly = 1;
             // FALLTHROUGH
         case LEXTYPE_DCL_LOCAL:
+            if (expr_current_routine(ctx) == 0) {
+                /* XXX error condition */
+            }
             st = SEGTYPE_STACK;
             break;
         case LEXTYPE_DCL_REGISTER:
+            if (expr_current_routine(ctx) == 0) {
+                /* XXX error condition */
+            }
             st = SEGTYPE_REGISTER;
             break;
         default:
@@ -1377,6 +1383,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
                 return 0;
             }
             if (!is_bind) {
+                expr_push_routine(ctx, np);
                 // XXX Temporary until we are properly
                 //     handling linkages XXX
                 nameref_t *arg;
@@ -1395,6 +1402,9 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
                 }
             }
             if (!expr_expr_next(ctx, &exp)) {
+                /* XXX error condition */
+            }
+            if (!expr_has_value(exp)) {
                 /* XXX error condition */
             }
             if (is_bind) {
