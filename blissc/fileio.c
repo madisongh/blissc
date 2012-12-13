@@ -15,6 +15,7 @@
 
 struct filectx_s {
     struct filectx_s *next;
+    fioctx_t          fio;
     int               fd;
     size_t            fnlen;
     size_t            bufpos;
@@ -23,7 +24,9 @@ struct filectx_s {
     char              filebuf[4096];
 };
 
-static filectx_t input_files;
+struct fioctx_s {
+    filectx_t        input_files;
+};
 
 /*
  * Note that file names are NOT freed with the
@@ -32,25 +35,30 @@ static filectx_t input_files;
  * an error message after it is closed.
  */
 
-void
+fioctx_t
 fileio_init (void)
 {
-    input_files = 0;
+    fioctx_t fio = malloc(sizeof(struct fioctx_s));
+    if (fio != 0) {
+        memset(fio, 0, sizeof(struct fioctx_s));
+    }
+    return fio;
 }
 
 void
-fileio_finish (void)
+fileio_finish (fioctx_t fio)
 {
-    filectx_t ctx;
-    for (ctx = input_files; ctx != 0; ctx = input_files) {
-        input_files = ctx->next;
+    filectx_t ctx, cnext;
+
+    for (ctx = fio->input_files; ctx != 0; ctx = cnext) {
+        cnext = ctx->next;
         close(ctx->fd);
         free(ctx);
     }
 }
 
 filectx_t
-file_open_input (const char *fname, size_t fnlen)
+file_open_input (fioctx_t fio, const char *fname, size_t fnlen)
 {
     filectx_t ctx = malloc(sizeof(struct filectx_s));
     if (ctx == 0)
@@ -69,19 +77,26 @@ file_open_input (const char *fname, size_t fnlen)
         free(ctx);
         return 0;
     }
-    ctx->next = input_files;
-    input_files = ctx;
+    ctx->next = fio->input_files;
+    fio->input_files = ctx;
     ctx->bufpos = 0;
     ctx->buflen = 0;
+    ctx->fio = fio;
     return ctx;
 }
 
 void
 file_close (filectx_t ctx)
 {
+    fioctx_t fio;
     filectx_t prev, cur;
+
+    if (ctx == 0 || ctx->fio == 0) {
+        return;
+    }
+    fio = ctx->fio;
     prev = 0;
-    for (cur = input_files; cur != 0; cur = cur->next) {
+    for (cur = fio->input_files; cur != 0; cur = cur->next) {
         if (cur == ctx)
             break;
         prev = cur;
@@ -91,7 +106,7 @@ file_close (filectx_t ctx)
         return;
     }
     if (prev == 0) {
-        input_files = cur->next;
+        fio->input_files = cur->next;
     } else {
         prev->next = cur->next;
     }

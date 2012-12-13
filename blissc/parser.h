@@ -14,6 +14,14 @@
 #include "scanner.h"
 #include "machinedef.h"
 
+typedef enum {
+    PUNCT_COMMASEP_NOGROUP,
+    PUNCT_SEMISEP_NOGROUP,
+    PUNCT_OPERSEP_NOGROUP,
+    PUNCT_SEMISEP_SETTES,
+    PUNCT_COMMASEP_PARENS
+} punctclass_t;
+
 struct parse_ctx_s;
 typedef struct parse_ctx_s *parse_ctx_t;
 
@@ -23,6 +31,7 @@ int parser_popen(parse_ctx_t pctx, scan_input_fn infn, void *fnctx);
 void parser_finish(parse_ctx_t pctx);
 void *parser_get_expctx(parse_ctx_t pctx);
 void parser_set_expctx(parse_ctx_t pctx, void *ectx);
+lexctx_t parser_lexmemctx(parse_ctx_t pctx);
 lextype_t parser_next(parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lex);
 void parser_insert(parse_ctx_t pctx, lexeme_t *lex);
 void parser_insert_seq(parse_ctx_t pctx, lexseq_t *seq);
@@ -49,4 +58,7 @@ void parser_set_indecl(parse_ctx_t pctx, int yes);
 unsigned int parser_loopdepth(parse_ctx_t pctx);
 void parser_loopdepth_incr(parse_ctx_t pctx);
 void parser_loopdepth_decr(parse_ctx_t pctx);
+void parser_punctclass_set(parse_ctx_t pctx, punctclass_t cl, lextype_t lt);
+lexeme_t *parser_punct_grouper(parse_ctx_t pctx, int docloser);
+lexeme_t *parser_punct_separator(parse_ctx_t pctx);
 #endif

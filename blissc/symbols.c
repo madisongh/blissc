@@ -119,14 +119,14 @@ routine_free (void *vctx, name_t *np, void *p)
  * lexeme_bind.
  */
 static int
-bind_compiletime (void *ctx, quotelevel_t ql, quotemodifier_t qm,
+bind_compiletime (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
                   lextype_t lt, condstate_t cs, lexeme_t *lex,
                   lexseq_t *result) {
     name_t *np = lexeme_ctx_get(lex);
     long val;
 
     if (cs == COND_CWA || cs == COND_AWC) {
-        lexeme_free(lex);
+        lexeme_free(lctx, lex);
         return 1;
     }
 
@@ -149,7 +149,7 @@ bind_compiletime (void *ctx, quotelevel_t ql, quotemodifier_t qm,
  * Binds a literal to its value.
  */
 static int
-bind_literal (void *ctx, quotelevel_t ql, quotemodifier_t qm,
+bind_literal (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
               lextype_t lt, condstate_t cs, lexeme_t *lex,
               lexseq_t *result) {
     name_t *np = lexeme_ctx_get(lex);
@@ -157,7 +157,7 @@ bind_literal (void *ctx, quotelevel_t ql, quotemodifier_t qm,
     long val;
 
     if (cs == COND_CWA || cs == COND_AWC) {
-        lexeme_free(lex);
+        lexeme_free(lctx, lex);
         return 1;
     }
 
@@ -248,6 +248,7 @@ symbols_init (expr_ctx_t ctx)
     int i;
     namectx_t namectx = scope_namectx(parser_scope_get(expr_parse_ctx(ctx)));
     symctx_t symctx = malloc(sizeof(struct symctx_s));
+    lexctx_t lctx = expr_lexmemctx(ctx);
     machinedef_t *mach = expr_machinedef(ctx);
 
     static nametype_vectors_t symvec[3] = {
@@ -264,8 +265,8 @@ symbols_init (expr_ctx_t ctx)
     for (i = 0; i < sizeof(symvec)/sizeof(symvec[0]); i++)
         nametype_dataop_register(namectx, symtype[i], &symvec[i], ctx);
     
-    lextype_register(LEXTYPE_NAME_COMPILETIME, bind_compiletime);
-    lextype_register(LEXTYPE_NAME_LITERAL, bind_literal);
+    lextype_register(lctx, LEXTYPE_NAME_COMPILETIME, bind_compiletime);
+    lextype_register(lctx, LEXTYPE_NAME_LITERAL, bind_literal);
     expr_dispatch_register(ctx, LEXTYPE_NAME_DATA, bind_data);
     expr_dispatch_register(ctx, LEXTYPE_NAME_ROUTINE, bind_routine);
     

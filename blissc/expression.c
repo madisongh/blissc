@@ -26,6 +26,7 @@ struct expr_ctx_s {
     parse_ctx_t         pctx;
     stgctx_t            stg;
     namectx_t           namectx;
+    lexctx_t            lctx;
     machinedef_t       *mach;
     expr_node_t        *freenodes;
     expr_dispatch_fn    dispatchers[LEXTYPE_EXPKWD_MAX-LEXTYPE_EXPKWD_MIN+1];
@@ -137,6 +138,7 @@ static expr_node_t *parse_exitloop(expr_ctx_t ctx, lextype_t lt, lexeme_t *lex);
 static expr_node_t *parse_return(expr_ctx_t ctx, lextype_t lt, lexeme_t *lex);
 static expr_node_t *parse_codecomment(expr_ctx_t ctx, lextype_t lt, lexeme_t *lex);
 static int get_ctce(expr_ctx_t ctx, long *valp);
+static void reduce_op_expr(expr_ctx_t ctx, expr_node_t **expp);
 
 const char *
 exprtype_name (exprtype_t type) {
@@ -514,6 +516,7 @@ expr_init (parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope)
     memset(ectx, 0, sizeof(struct expr_ctx_s));
     ectx->pctx = pctx;
     parser_set_expctx(pctx, ectx);
+    ectx->lctx = parser_lexmemctx(pctx);
     ectx->stg = stg;
     ectx->mach = parser_get_machinedef(pctx);
     ectx->namectx = scope_namectx(kwdscope);
@@ -557,6 +560,7 @@ parse_ctx_t expr_parse_ctx (expr_ctx_t ctx) { return ctx->pctx; }
 namectx_t expr_namectx (expr_ctx_t ctx) { return ctx->namectx; }
 stgctx_t expr_stg_ctx (expr_ctx_t ctx) { return ctx->stg; }
 machinedef_t *expr_machinedef (expr_ctx_t ctx) { return ctx->mach; }
+lexctx_t expr_lexmemctx (expr_ctx_t ctx) { return ctx->lctx; }
 
 void
 expr_push_routine (expr_ctx_t ctx, name_t *np)
@@ -626,6 +630,9 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
             name_value_pointer_set(ref->np, fake_label_ptr);
         }
     }
+
+    parser_punctclass_set(pctx, PUNCT_SEMISEP_NOGROUP, LEXTYPE_DELIM_SEMI);
+
     lt = parser_next(pctx, QL_NORMAL, &lex);
 
     exprseq_init(&seq);
@@ -633,12 +640,12 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
     while (1) {
         if (lt == closer) {
             endpos = lexeme_textpos_get(lex);
-            lexeme_free(lex);
+            lexeme_free(ctx->lctx, lex);
             break;
         } else if (lt >= LEXTYPE_DCL_MIN && lt <= LEXTYPE_DCL_MAX) {
             if (exprseq_length(&seq) != 0) {
                 /* XXX error condition */
-                lexeme_free(lex);
+                lexeme_free(ctx->lctx, lex);
                 parser_skip_to_delim(pctx, closer);
                 endpos = parser_curpos(pctx);
                 break;
@@ -665,7 +672,7 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
         lt = parser_next(pctx, QL_NORMAL, &lex);
         if (lt == LEXTYPE_DELIM_SEMI) {
             valexp = 0;
-            lexeme_free(lex);
+            lexeme_free(ctx->lctx, lex);
             lt = parser_next(pctx, QL_NORMAL, &lex);
         }
     }
@@ -676,8 +683,15 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
             return 1;
         }
         if (exprseq_length(&seq) == 1) {
-            *expp = exprseq_remhead(&seq);
-            return 1;
+            expr_node_t *exp = exprseq_remhead(&seq);
+            if (expr_type(exp) == EXPTYPE_OPERATOR) {
+                reduce_op_expr(ctx, &exp);
+            }
+            if (expr_is_primary(exp)) {
+                *expp = exp;
+                return 1;
+            }
+            exprseq_inshead(&seq, exp);
         }
     }
     if (scope != 0) {
@@ -843,7 +857,7 @@ parse_do_loop (expr_ctx_t ctx, lextype_t opener, lexeme_t *curlex)
         parser_insert(ctx->pctx, lex);
         return 0;
     }
-    lexeme_free(lex);
+    lexeme_free(ctx->lctx, lex);
 
     if (!parse_expr(ctx, &test)) {
         /* XXX error condition */
@@ -1080,7 +1094,7 @@ parse_codecomment (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
     namereflist_init(&labels);
     while (parser_expect(pctx, QL_NORMAL, LEXTYPE_STRING, &lex, 1)) {
         codecomment = string_append(codecomment, lexeme_text(lex));
-        lexeme_free(lex);
+        lexeme_free(ctx->lctx, lex);
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
             break;
         }
@@ -1091,7 +1105,7 @@ parse_codecomment (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
     while (parser_expect(pctx, QL_NORMAL, LEXTYPE_NAME_LABEL, &lex, 1)) {
         namereflist_instail(&labels,
                        nameref_alloc(namectx, lexeme_ctx_get(lex)));
-        lexeme_free(lex);
+        lexeme_free(ctx->lctx, lex);
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
             /* XXX error condition */
         }
@@ -1102,7 +1116,7 @@ parse_codecomment (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
         string_free(codecomment);
         return 0;
     }
-    lexeme_free(lex);
+    lexeme_free(ctx->lctx, lex);
     if (!parse_block(ctx, lt, &exp, codecomment, &labels)) {
         return 0;
     }
@@ -1120,14 +1134,14 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
     namereflist_init(&labels);
     if (lt == LEXTYPE_NAME_LABEL) {
         namereflist_instail(&labels, nameref_alloc(namectx, lexeme_ctx_get(lex)));
-        lexeme_free(lex);
+        lexeme_free(ctx->lctx, lex);
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
             /* XXX error condition */
         }
         while (parser_expect(pctx, QL_NORMAL, LEXTYPE_NAME_LABEL, &lex, 1)) {
             namereflist_instail(&labels,
                                 nameref_alloc(namectx, lexeme_ctx_get(lex)));
-            lexeme_free(lex);
+            lexeme_free(ctx->lctx, lex);
             if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
                 /* XXX error condition */
             }
@@ -1142,14 +1156,14 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
             return 0;
         }
     } else if (lt == LEXTYPE_DELIM_LPAR || lt == LEXTYPE_EXP_DELIM_BEGIN) {
-        lexeme_free(lex);
+        lexeme_free(ctx->lctx, lex);
         if (!parse_block(ctx, lt, &exp, 0, &labels)) {
             return 0;
         }
     } else {
         exp = lex_to_expr(ctx, lt, lex);
         if (exp != 0) {
-            lexeme_free(lex);
+            lexeme_free(ctx->lctx, lex);
         }
     }
 
@@ -1163,7 +1177,7 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 //        // XXX need to parse the entire function invocation here
 //        if (parse_fldref(ctx, &exp)) {
 //            // and exp is updated to be a PRIM_FLDREF
-//            lexeme_free(lex);
+//            lexeme_free(ctx->lctx, lex);
 //            return 1;
 //        } else {
 //            expr_node_free(ctx, exp);
@@ -1351,7 +1365,7 @@ void
 reduce_op_expr (expr_ctx_t ctx, expr_node_t **nodep) {
     expr_node_t *node, *lhs, *rhs;
 
-    if (ctx->noreduce || nodep == 0) {
+    if (nodep == 0) {
         return;
     }
 
@@ -1609,11 +1623,11 @@ parse_expr (expr_ctx_t ctx, expr_node_t **expp)
             if (dfunc != 0) {
                 exp = dfunc(ctx, lt, lex);
                 if (exp != 0) {
-                    lexeme_free(lex);
+                    lexeme_free(ctx->lctx, lex);
                 }
             }
             if (exp == 0 && check_unary_op(lt, &op)) {
-                lexeme_free(lex);
+                lexeme_free(ctx->lctx, lex);
                 exp = parse_op_expr(ctx, op, 0);
                 if (exp == 0) {
                     break;
@@ -1642,7 +1656,9 @@ parse_expr (expr_ctx_t ctx, expr_node_t **expp)
         }
     }
 
-    if (exp != 0 && expr_type(exp) == EXPTYPE_OPERATOR) {
+    if (exp != 0 &&
+        expr_type(exp) == EXPTYPE_OPERATOR &&
+        ctx->noreduce == 0) {
         reduce_op_expr(ctx, &exp);
     }
 
@@ -1679,7 +1695,7 @@ expr_parse_seq (expr_ctx_t ctx, lexseq_t *seq, expr_node_t **expp)
     strdesc_t nullstr = STRDEF("");
     int status;
 
-    parser_insert(pctx, lexeme_create(LEXTYPE_MARKER, &nullstr));
+    parser_insert(pctx, lexeme_create(ctx->lctx, LEXTYPE_MARKER, &nullstr));
     parser_insert_seq(pctx, seq);
     *expp = 0;
     status = parse_expr(ctx, expp);
@@ -1966,6 +1982,7 @@ parse_case (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
         /* XXX error condition */
         return 0;
     }
+    parser_punctclass_set(pctx, PUNCT_SEMISEP_SETTES, LEXTYPE_DELIM_SEMI);
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_SET, 0, 1)) {
         /* XXX error condition */
         return 0;
@@ -2006,7 +2023,7 @@ parse_case (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
             } else if (lt == LEXTYPE_NUMERIC) {
                 long beginval = lexeme_signedval(lex);
                 long endval = beginval;
-                lexeme_free(lex);
+                lexeme_free(ctx->lctx, lex);
                 if (saw_inrange) {
                     /* XXX error condition */
                 }
@@ -2023,7 +2040,7 @@ parse_case (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
                             endval = tmp;
                         }
                     }
-                    lexeme_free(lex);
+                    lexeme_free(ctx->lctx, lex);
                 }
                 for (i = beginval-lo; i <= endval-lo; todo[i++] = 1);
             }
@@ -2130,6 +2147,7 @@ parse_select (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_OF, 0, 1)) {
         /* XXX error condition */
     }
+    parser_punctclass_set(pctx, PUNCT_SEMISEP_SETTES, LEXTYPE_DELIM_SEMI);
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_SET, 0, 1)) {
         /* XXX error condition */
     }

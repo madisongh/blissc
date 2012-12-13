@@ -13,11 +13,13 @@
 
 struct filectx_s;
 typedef struct filectx_s *filectx_t;
+struct fioctx_s;
+typedef struct fioctx_s *fioctx_t;
 
-void fileio_init(void);
-void fileio_finish(void);
+fioctx_t fileio_init(void);
+void fileio_finish(fioctx_t fio);
 
-filectx_t file_open_input(const char *fname, size_t fnlen);
+filectx_t file_open_input(fioctx_t fio, const char *fname, size_t fnlen);
 void file_close(filectx_t ctx);
 char *file_getname(filectx_t ctx);
 int file_readline(filectx_t ctx, char *buf, size_t bufsiz, size_t *len);

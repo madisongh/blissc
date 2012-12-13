@@ -148,6 +148,8 @@ typedef enum {
 #define LEXTYPE_EXPKWD_MAX LEXTYPE_MAX
 #define LEXTYPE_DCL_MIN LEXTYPE_DCL_MACRO
 #define LEXTYPE_DCL_MAX LEXTYPE_DCL_COMPILETIME
+#define LEXTYPE_ATTR_MIN LEXTYPE_ATTR_SIGNED
+#define LEXTYPE_ATTR_MAX LEXTYPE_ATTR_NOVALUE
 #define LEXTYPE_AU_MIN LEXTYPE_AU_BYTE
 #define LEXTYPE_AU_MAX LEXTYPE_AU_QUAD
 
@@ -170,22 +172,26 @@ struct lexseq_s {
 };
 typedef struct lexseq_s lexseq_t;
 
-typedef int (*lextype_bind_fn)(void *pctx, quotelevel_t ql,
+struct lexctx_s;
+typedef struct lexctx_s *lexctx_t;
+
+typedef int (*lextype_bind_fn)(lexctx_t lctx, void *pctx, quotelevel_t ql,
              quotemodifier_t qm, lextype_t lt, condstate_t cs,
              lexeme_t *orig, lexseq_t *result);
 
-lexeme_t *lexeme_alloc(lextype_t type, const char *text, size_t len);
-lexeme_t *lexeme_copy(lexeme_t *orig);
-void lexeme_free(lexeme_t *lex);
-lexeme_t *lexeme_create(lextype_t type, strdesc_t *dsc);
+lexctx_t lexeme_init(void);
+void lexeme_finish(lexctx_t lctx);
+lexeme_t *lexeme_copy(lexctx_t lctx, lexeme_t *orig);
+void lexeme_free(lexctx_t lctx, lexeme_t *lex);
+lexeme_t *lexeme_create(lexctx_t lctx, lextype_t type, strdesc_t *dsc);
 const char *lextype_name(lextype_t lt);
 
-int lextype_register(lextype_t lt, lextype_bind_fn bindfn);
-int lexeme_bind(void *ctx, quotelevel_t ql, quotemodifier_t qm,
+int lextype_register(lexctx_t lctx, lextype_t lt, lextype_bind_fn bindfn);
+int lexeme_bind(lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
                 condstate_t cs, lexeme_t *lex, lexseq_t *result);
 
-void lexseq_free(lexseq_t *seq);
-int lexseq_copy(lexseq_t *dst, lexseq_t *src);
+void lexseq_free(lexctx_t lctx, lexseq_t *seq);
+int lexseq_copy(lexctx_t lctx, lexseq_t *dst, lexseq_t *src);
 int lexemes_match(lexseq_t *a, lexseq_t *b);
 
 static inline __unused lexeme_t *lexeme_next (lexeme_t *lex) {

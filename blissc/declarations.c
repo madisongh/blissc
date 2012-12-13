@@ -91,6 +91,7 @@ static int
 declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
+    lexctx_t lctx = expr_lexmemctx(ctx);
     lexeme_t *lex, *nlex;
     lextype_t lt;
     name_t *np;
@@ -102,13 +103,13 @@ declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 0)) {
             /* XXX error condition */
-            lexeme_free(nlex);
+            lexeme_free(lctx, nlex);
             return 0;
         } else {
 
             if (!expr_parse_ctce(ctx, &lex)) {
                 /* XXX error condition */
-                lexeme_free(nlex);
+                lexeme_free(lctx, nlex);
                 return 0;
             } else {
                 np = compiletime_declare(scope, lexeme_text(nlex),
@@ -117,8 +118,8 @@ declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
                 if (np == 0) {
                     /* XXX error condition */
                 }
-                lexeme_free(lex);
-                lexeme_free(nlex);
+                lexeme_free(lctx, lex);
+                lexeme_free(lctx, nlex);
             }
 
         }
@@ -156,7 +157,7 @@ parse_decl_name (parse_ctx_t pctx, scopectx_t scope,
     if (lt == LEXTYPE_NAME || lexeme_boundtype(lex) == LEXTYPE_NAME) {
         *result = string_copy(0, lexeme_text(lex));
         *pos = lexeme_textpos_get(lex);
-        lexeme_free(lex);
+        lexeme_free(parser_lexmemctx(pctx), lex);
         return 1;
     }
 
@@ -179,6 +180,7 @@ static int
 declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
+    lexctx_t lctx = expr_lexmemctx(ctx);
     machinedef_t *mach = expr_machinedef(ctx);
     lexeme_t *lex;
     lextype_t lt;
@@ -210,7 +212,7 @@ declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
                     return 0;
                 } else {
                     attr.value = lexeme_signedval(lex);
-                    lexeme_free(lex);
+                    lexeme_free(lctx, lex);
                 }
             }
 
@@ -230,7 +232,7 @@ declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
                     rval = machine_scalar_bits(mach);
                 } else {
                     rval = lexeme_signedval(lex);
-                    lexeme_free(lex);
+                    lexeme_free(lctx, lex);
                 }
                 if (!machine_signext_supported(mach)) {
                     /* XXX error condition */
@@ -417,18 +419,20 @@ static int
 attr_psect (expr_ctx_t ctx, name_t **psnp)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
+    lexctx_t lctx = expr_lexmemctx(ctx);
     lexeme_t *lex;
     int status = 0;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DCL_PSECT, 0, 1)) {
         return 0;
     }
+    parser_punctclass_set(pctx, PUNCT_COMMASEP_PARENS, LEXTYPE_DELIM_COMMA);
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
         /* XXX error condition */
     }
     if (parser_expect(pctx, QL_NORMAL, LEXTYPE_NAME_PSECT, &lex, 1)) {
         *psnp = lexeme_ctx_get(lex);
-        lexeme_free(lex);
+        lexeme_free(lctx, lex);
         status = 1;
     } else {
         /* XXX error condition */
@@ -478,6 +482,7 @@ plit_items (expr_ctx_t ctx, int defau) {
 
     stgctx_t stg = expr_stg_ctx(ctx);
     parse_ctx_t pctx = expr_parse_ctx(ctx);
+    lexctx_t lctx = expr_lexmemctx(ctx);
     initval_t *ivlist, *iv;
     int itemau = defau;
     lexeme_t *lex;
@@ -494,11 +499,12 @@ plit_items (expr_ctx_t ctx, int defau) {
                 repcount = 1;
             } else {
                 repcount = (unsigned int)lexeme_unsignedval(lex);
-                lexeme_free(lex);
+                lexeme_free(lctx, lex);
             }
             if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_OF, 0, 1)) {
                 /* XXX error condition */
             }
+            parser_punctclass_set(pctx, PUNCT_COMMASEP_PARENS, LEXTYPE_DELIM_COMMA);
             if (attr_allocunit(ctx, &itemau) == 0) {
                 itemau = defau;
             }
@@ -520,7 +526,7 @@ plit_items (expr_ctx_t ctx, int defau) {
             lex = 0;
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_STRING, &lex, 1)) {
                 ivlist = initval_string_add(stg, ivlist, 1, lexeme_text(lex));
-                lexeme_free(lex);
+                lexeme_free(lctx, lex);
             } else if (expr_expr_next(ctx, &exp)) {
                 ivlist = expr_initval_add(ctx, ivlist, exp, itemau);
             } else {
@@ -633,6 +639,7 @@ attr_align (expr_ctx_t ctx, int *valp)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     machinedef_t *mach = expr_machinedef(ctx);
+    lexctx_t lctx = expr_lexmemctx(ctx);
     lexeme_t *lex;
     long val;
 
@@ -649,7 +656,7 @@ attr_align (expr_ctx_t ctx, int *valp)
         /* XXX error condition */
     }
     val = lexeme_signedval(lex);
-    lexeme_free(lex);
+    lexeme_free(lctx, lex);
     if (val < 0 || val > machine_align_max(mach)) {
         /* XXX error condition */
         *valp = 0;
@@ -679,6 +686,7 @@ attr_field (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     namectx_t namectx = expr_namectx(ctx);
+    lexctx_t lctx = expr_lexmemctx(ctx);
     lexeme_t *lex;
     name_t *np;
     lextype_t ftypes[2] = { LEXTYPE_NAME_FIELD, LEXTYPE_NAME_FIELDSET };
@@ -700,7 +708,7 @@ attr_field (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
             } else {
                 namereflist_append(fldset, fieldset_reflist(np));
             }
-            lexeme_free(lex);
+            lexeme_free(lctx, lex);
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
             break;
@@ -742,7 +750,7 @@ attr_preset (expr_ctx_t ctx, name_t *np, seg_t *seg,
         }
         // We're essentially building an assignment expression that
         // will get interpreted at a later stage.
-        lex = name_to_lexeme(np, parser_curpos(pctx));
+        lex = name_to_lexeme(parser_lexmemctx(pctx), np, parser_curpos(pctx));
         pexp = structure_reference(ctx, attr->struc, 1, np, lex);
         if (pexp == 0) {
             /* XXX error condition */
@@ -1450,7 +1458,7 @@ declare_require (parse_ctx_t pctx)
     if (!parser_fopen(pctx, str->ptr, str->len)) {
         /* XXX error condition */
     }
-    lexeme_free(lex);
+    lexeme_free(parser_lexmemctx(pctx), lex);
     return 1;
 
 } /* declare_require */
@@ -1471,7 +1479,7 @@ undeclare (parse_ctx_t pctx, scopectx_t scope)
                 /* XXX error condition */
             }
         }
-        lexeme_free(lex);
+        lexeme_free(parser_lexmemctx(pctx), lex);
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
             break;
         }
@@ -1532,7 +1540,7 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
     }
 
     symbols_init(ctx);
-    macros_init(kwdscope);
+    macros_init(kwdscope, ctx);
     psects_init(kwdscope, stg, mach);
 
     attr.width = machine_unit_bits(mach);
@@ -1570,6 +1578,8 @@ parse_declaration (expr_ctx_t ctx)
     };
     static int count[3] = { 4, 3, 1 };
 
+    parser_punctclass_set(pctx, PUNCT_COMMASEP_NOGROUP, LEXTYPE_DELIM_COMMA);
+    
     which = parser_expect_oneof(pctx, QL_NORMAL, pfx, 3, 0, 1);
     if (which >= 0) {
         int i;

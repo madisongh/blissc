@@ -29,6 +29,7 @@ struct bufctx_s {
 };
 
 struct scanctx_s {
+    fioctx_t        fioctx;
     struct bufctx_s bufstack[SCAN_MAXFILES];
     int             curbuf;
     char            tokbuf[SCAN_LINESIZE];
@@ -70,6 +71,7 @@ scan_init (void)
     if (ctx != 0) {
         memset(ctx, 0, sizeof(struct scanctx_s));
         ctx->curbuf = -1;
+        ctx->fioctx = fileio_init();
     }
     return ctx;
 }
@@ -93,7 +95,7 @@ scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen)
         return 0;
     }
     i = i + 1;
-    ctx->bufstack[i].fctx = file_open_input(fname, fnlen);
+    ctx->bufstack[i].fctx = file_open_input(ctx->fioctx, fname, fnlen);
     if (ctx->bufstack[i].fctx == 0) {
         /* XXX error condition */
         return 0;

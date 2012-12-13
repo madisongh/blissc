@@ -107,11 +107,11 @@ static inline int typeidx(lextype_t type) {
 scopectx_t name_scope (name_t *np) { return np->namescope; }
 strdesc_t *name_string (name_t *np) {
     return string_from_chrs(0, np->name, np->namelen); }
-lexeme_t *name_to_lexeme (name_t *np, textpos_t pos) {
+lexeme_t *name_to_lexeme (lexctx_t lctx, name_t *np, textpos_t pos) {
     lexeme_t *lex;
     strdesc_t dsc;
     strdesc_init(&dsc, np->name, np->namelen);
-    lex = lexeme_create(LEXTYPE_NAME, &dsc);
+    lex = lexeme_create(lctx, LEXTYPE_NAME, &dsc);
     if (lex != 0) lexeme_textpos_set(lex, pos);
     return lex;
 }

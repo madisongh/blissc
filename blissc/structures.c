@@ -96,6 +96,7 @@ static void
 structure_free (void *vctx, name_t *np, void *p)
 {
     expr_ctx_t ctx = vctx;
+    lexctx_t lctx = expr_lexmemctx(ctx);
     strudef_t *stru = p;
     namectx_t namectx = expr_namectx(ctx);
 
@@ -103,8 +104,8 @@ structure_free (void *vctx, name_t *np, void *p)
     scope_end(stru->allotbl);
     namereflist_free(namectx, &stru->accformals);
     namereflist_free(namectx, &stru->alloformals);
-    lexseq_free(&stru->accbody);
-    lexseq_free(&stru->allobody);
+    lexseq_free(lctx, &stru->accbody);
+    lexseq_free(lctx, &stru->allobody);
 
 } /* structure_free */
 
@@ -113,6 +114,7 @@ structure_copy (void *vctx, name_t *dst, void *dp,
                 name_t *src, void *sp)
 {
     expr_ctx_t ctx = vctx;
+    lexctx_t lctx = expr_lexmemctx(ctx);
     strudef_t *dstru = dp;
     strudef_t *sstru = sp;
     namectx_t namectx = expr_namectx(ctx);
@@ -141,8 +143,8 @@ structure_copy (void *vctx, name_t *dst, void *dp,
         }
         namereflist_instail(&dstru->alloformals, nameref_alloc(namectx, np));
     }
-    lexseq_copy(&dstru->accbody, &sstru->accbody);
-    lexseq_copy(&dstru->allobody, &sstru->allobody);
+    lexseq_copy(lctx, &dstru->accbody, &sstru->accbody);
+    lexseq_copy(lctx, &dstru->allobody, &sstru->allobody);
 
     return 1;
     
@@ -164,7 +166,7 @@ field_free (void *vctx, name_t *np, void *p)
 {
     lexseq_t *fseq = p;
 
-    lexseq_free(fseq);
+    lexseq_free(expr_lexmemctx(vctx), fseq);
 
 } /* field_free */
 
@@ -175,7 +177,7 @@ field_copy (void *vctx, name_t *dst, void *dp,
     lexseq_t *dseq = dp;
     lexseq_t *sseq = sp;
 
-    return lexseq_copy(dseq, sseq);
+    return lexseq_copy(expr_lexmemctx(vctx), dseq, sseq);
 
 } /* field_copy */
 
@@ -194,7 +196,7 @@ field_extract (name_t *fnp, unsigned int which)
         if (lex == 0) break;
     }
     if (lex == 0) return 0;
-    return lexeme_copy(lex);
+    return lex;
 }
 
 static int
@@ -453,7 +455,9 @@ parse_fields (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
                 lexseq_instail(fseq, lex);
             } else {
                 /* XXX error condition */
-                lexseq_instail(fseq, lexeme_create(LEXTYPE_NUMERIC, &zero));
+                lexseq_instail(fseq,
+                               lexeme_create(parser_lexmemctx(pctx),
+                                             LEXTYPE_NUMERIC, &zero));
             }
             which = parser_expect_oneof(pctx, QL_NORMAL, delims, 2, &lex, 1);
             if (which != 0) {
@@ -497,6 +501,7 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     strudef_t *stru = name_extraspace(struname);
     machinedef_t *mach = expr_machinedef(ctx);
+    lexctx_t lctx = expr_lexmemctx(ctx);
     int i;
     lexeme_t *lex;
     lexseq_t tmpseq;
@@ -553,7 +558,7 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
             lexseq_t seq;
             expr_node_t *exp;
             lexseq_init(&seq);
-            lexseq_copy(&seq, macparam_lexseq(ref->np));
+            lexseq_copy(lctx, &seq, macparam_lexseq(ref->np));
             if (lexseq_length(&seq) > 0 && expr_parse_seq(ctx, &seq, &exp)) {
                 // XXX any CTCE should be good here
                 if (expr_type(exp) == EXPTYPE_PRIM_LIT)
@@ -571,7 +576,7 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
             unsigned long val;
             if (expr_parse_ctce(ctx, &lex)) {
                 val = lexeme_unsignedval(lex);
-                lexeme_free(lex);
+                lexeme_free(lctx, lex);
                 np = litsym_special(myscope, alloname, val);
             } else {
                 np = litsym_search(myscope, alloname, &val);
@@ -601,14 +606,14 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
         /* XXX error condition */
     }
     lexseq_init(&tmpseq);
-    lexseq_copy(&tmpseq, &stru->allobody);
+    lexseq_copy(lctx, &tmpseq, &stru->allobody);
     parser_insert_seq(pctx, &tmpseq);
     if (!expr_parse_ctce(ctx, &lex)) {
         /* XXX error condition */
         return 0;
     }
     *nunits = (unsigned int)lexeme_unsignedval(lex);
-    lexeme_free(lex);
+    lexeme_free(lctx, lex);
     if (scopep != 0) *scopep = retscope;
     parser_scope_end(pctx);
     if (strup != 0) *strup = stru;
@@ -632,6 +637,7 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
                      name_t *symname, lexeme_t *curlex)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
+    lexctx_t lctx = expr_lexmemctx(ctx);
     lextype_t delim;
     lexseq_t seq;
     scopectx_t myscope, fldscope;
@@ -664,12 +670,12 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
             return 0;
         }
         if (attr->flags & SYM_M_REF) {
-            lexseq_instail(&seq, lexeme_create(LEXTYPE_DELIM_LPAR, &leftparen));
-            lexseq_instail(&seq, lexeme_create(LEXTYPE_OP_FETCH, &dot));
+            lexseq_instail(&seq,lexeme_create(lctx, LEXTYPE_DELIM_LPAR, &leftparen));
+            lexseq_instail(&seq,lexeme_create(lctx, LEXTYPE_OP_FETCH, &dot));
         }
-        lexseq_instail(&seq, lexeme_copy(curlex));
+        lexseq_instail(&seq,lexeme_copy(lctx, curlex));
         if (attr->flags & SYM_M_REF) {
-            lexseq_instail(&seq, lexeme_create(LEXTYPE_DELIM_RPAR, &rightparen));
+            lexseq_instail(&seq,lexeme_create(lctx, LEXTYPE_DELIM_RPAR, &rightparen));
         }
         // Semicolons (and allocation-formals) not allowed in this case
         ndelims = 2;
@@ -689,7 +695,7 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
         }
     }
     macparam_special(myscope, name_string(struname), &seq);
-    lexseq_free(&seq);
+    lexseq_free(lctx, &seq);
     if (fldscope != 0) {
         parser_scope_set(pctx, fldscope);
     }
@@ -706,7 +712,7 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
                 if (ctce_accessors) {
                     lexseq_t testseq;
                     lexseq_init(&testseq);
-                    lexseq_copy(&testseq, &seq);
+                    lexseq_copy(lctx, &testseq, &seq);
                     // XXX another place where it would be convenient
                     // to have an expr_parse_seq_ctce() that returns a lexeme
                     if (!expr_parse_seq(ctx, &testseq, &exp) ||
@@ -715,14 +721,14 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
                     } else {
                         expr_node_free(ctx, exp);
                     }
-                    lexseq_free(&testseq);
+                    lexseq_free(lctx, &testseq);
                 }
             }
             if (lexseq_length(&seq) == 0) {
-                macparam_lookup(stru->acctbl, pname, &seq);
+                macparam_lookup(lctx, stru->acctbl, pname, &seq);
             }
             macparam_special(myscope, pname, &seq);
-            lexseq_free(&seq);
+            lexseq_free(lctx, &seq);
         }
     }
     if (fldscope != 0) {
@@ -742,7 +748,7 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
                     }
                 }
                 if (lexseq_length(&seq) == 0) {
-                    macparam_lookup(stru->allotbl, pname, &seq);
+                    macparam_lookup(lctx, stru->allotbl, pname, &seq);
                 }
                 macparam_special(myscope, pname, &seq);
             }
@@ -753,11 +759,11 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RBRACK);
     }
     lexseq_init(&seq);
-    lexseq_copy(&seq, &stru->accbody);
+    lexseq_copy(lctx, &seq, &stru->accbody);
     parser_scope_set(pctx, myscope);
     if (!expr_parse_seq(ctx, &seq, &exp)) {
         /* XXX error condition */
-        lexseq_free(&seq);
+        lexseq_free(lctx, &seq);
         parser_scope_end(pctx);
         return 0;
     }

@@ -163,6 +163,7 @@ int
 test_parser (int argc, const char *argv[])
 {
     parse_ctx_t pctx;
+    lexctx_t lctx;
 //    stgctx_t stg;
     lexeme_t *lex;
     lextype_t lt;
@@ -172,6 +173,7 @@ test_parser (int argc, const char *argv[])
 
 //    stg = storage_init(&machdef);
     pctx = parser_init(0, &machdef);
+    lctx = parser_lexmemctx(pctx);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
@@ -181,7 +183,7 @@ test_parser (int argc, const char *argv[])
     for (lt = parser_next(pctx, QL_NORMAL, &lex); lt != LEXTYPE_END && lt != LEXTYPE_NONE;
          lt = parser_next(pctx, QL_NORMAL, &lex)) {
         PRINTLEX(lex);
-        lexeme_free(lex);
+        lexeme_free(lctx, lex);
     }
     if (lt == LEXTYPE_NONE) {
         fprintf(stderr, "parser_next returned error lexeme\n");
