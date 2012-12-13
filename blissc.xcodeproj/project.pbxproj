@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7A13E03616775C9600C4F14D /* execfuncs.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A13E03516775C9600C4F14D /* execfuncs.c */; };
 		7A2DD25B165009F1002CD078 /* declarations.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A2DD25A165009F1002CD078 /* declarations.c */; };
 		7A7FD5151636C29C00B2D7FC /* lexer.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A7FD5141636C29C00B2D7FC /* lexer.c */; };
 		7A95BCEC1641CC2F002F851E /* strings.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A95BCEB1641CC2F002F851E /* strings.c */; };
@@ -39,6 +40,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		7A13E03516775C9600C4F14D /* execfuncs.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = execfuncs.c; sourceTree = "<group>"; };
+		7A13E03816775CA100C4F14D /* execfuncs.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = execfuncs.h; sourceTree = "<group>"; };
 		7A2DD25A165009F1002CD078 /* declarations.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; path = declarations.c; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.c; };
 		7A5351E91656FE7B00BE4B99 /* test_decl.bli */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_decl.bli; path = testfiles/test_decl.bli; sourceTree = SOURCE_ROOT; };
 		7A548D681646E9E500A2A20F /* test_req.req */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_req.req; path = testfiles/test_req.req; sourceTree = SOURCE_ROOT; };
@@ -111,6 +114,8 @@
 				7A9D4C9F1635A88F0013AE09 /* blissc.1 */,
 				7A2DD25A165009F1002CD078 /* declarations.c */,
 				7AC12EC516593429009C84F5 /* declarations.h */,
+				7A13E03516775C9600C4F14D /* execfuncs.c */,
+				7A13E03816775CA100C4F14D /* execfuncs.h */,
 				7AB5ED811642A3AB0063EC94 /* expression.c */,
 				7AB5ED841642A3B80063EC94 /* expression.h */,
 				7A9D4CA61635A93A0013AE09 /* fileio.c */,
@@ -214,6 +219,7 @@
 				7AC12EC7165944B4009C84F5 /* storage.c in Sources */,
 				7AD8D0FF1666B7EA002AB41D /* structures.c in Sources */,
 				7AB8A9AD16722B3500B91750 /* symbols.c in Sources */,
+				7A13E03616775C9600C4F14D /* execfuncs.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
