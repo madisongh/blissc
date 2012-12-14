@@ -89,8 +89,8 @@ struct expr_oper_s {
     optype_t            op_type;
 };
 struct expr_func_s {
-    struct expr_node_s *func_arglist;
-    // exfntype_t which;
+    name_t             *funcname;
+    exprseq_t           arglist;
 };
 struct expr_fldref_s {
     struct expr_node_s  *addr;
@@ -367,6 +367,17 @@ static inline __unused exprseq_t *expr_rtn_inargs(expr_node_t *node) {
 }
 static inline __unused exprseq_t *expr_rtn_outargs(expr_node_t *node) {
     return &node->data.rcdata.outargs;
+}
+
+// EXECFUN
+static inline __unused name_t *expr_func_name(expr_node_t *node) {
+    return node->data.fdata.funcname;
+}
+static inline __unused void expr_func_name_set(expr_node_t *node, name_t *name) {
+    node->data.fdata.funcname = name;
+}
+static inline __unused exprseq_t *expr_func_arglist(expr_node_t *node) {
+    return &node->data.fdata.arglist;
 }
 // OPERATOR
 static inline __unused expr_node_t *expr_op_lhs(expr_node_t *node) {

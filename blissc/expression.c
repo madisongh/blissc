@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "expression.h"
+#include "execfuncs.h"
 #include "declarations.h"
 #include "symbols.h"
 #include "storage.h"
@@ -551,6 +552,7 @@ expr_init (parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope)
     expr_dispatch_register(ectx, LEXTYPE_KWD_CODECOMMENT, parse_codecomment);
 
     declarations_init(ectx, pctx, kwdscope, stg, ectx->mach);
+    execfunc_init(ectx, kwdscope);
 
     return ectx;
     
