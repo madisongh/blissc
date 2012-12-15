@@ -215,7 +215,7 @@ test_expr (int argc, const char *argv[])
 
     stg = storage_init(&machdef);
     pctx = parser_init(0, &machdef);
-    ectx = expr_init(pctx, stg, parser_scope_get(pctx));
+    ectx = expr_init(pctx, stg, scope_getparent(parser_scope_get(pctx)));
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;

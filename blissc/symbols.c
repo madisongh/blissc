@@ -98,19 +98,6 @@ data_copy (void *vctx, name_t *dnp, void *dp, name_t *snp, void *sp)
     return 1;
 }
 
-#if 0
-static void
-routine_free (void *vctx, name_t *np, void *p)
-{
-    expr_ctx_t ctx = vctx;
-    sym_routine_t *r = p;
-
-    expr_node_free(ctx, r->rtnexp);
-    scope_end(r->argscope);
-
-} /* routine_free */
-#endif
-
 /*
  * bind_compiletime
  *
@@ -254,7 +241,7 @@ symbols_init (expr_ctx_t ctx)
     static nametype_vectors_t symvec[3] = {
         { sizeof(sym_literal_t), 0, 0, 0, 0 },
         { sizeof(sym_data_t), 0, 0, data_free, data_copy },
-//        { sizeof(sym_routine_t), 0, 0, routine_free, 0 }
+        { sizeof(sym_routine_t), 0, 0, 0, 0 }
     };
 
     memset(symctx, 0, sizeof(struct symctx_s));

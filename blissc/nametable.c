@@ -46,7 +46,13 @@ DEFINE_TQ_FUNCS(namelist, namelist_t, name_t)
 /*
  * Hash table size.
  */
-#define HT_BUCKETS  128
+#define HT_BUCKETS  32
+
+/*
+ * Count of names at which we switch from
+ * simple linear list to hash tables
+ */
+#define NAMECOUNT_THRESHOLD 20
 
 /*
  * hash
@@ -72,13 +78,18 @@ hash (const char *str, size_t len)
 /*
  * Name scope tracking structures
  */
+struct hashtable_s {
+    struct hashtable_s  *next;
+    namereflist_t       listhead[HT_BUCKETS];
+};
+typedef struct hashtable_s hashtable_t;
 struct namectx_s;
 struct scopectx_s {
     struct scopectx_s *parent;
     struct namectx_s  *home;
-    int                namecount;
     struct name_s     *sclassnames[SCLASS_COUNT];
-    namelist_t         hashtable[HT_BUCKETS];
+    namelist_t         names;
+    hashtable_t       *htptr;
 };
 
 /*
@@ -86,6 +97,7 @@ struct scopectx_s {
  */
 struct namectx_s {
     struct scopectx_s   *freescopes;
+    hashtable_t         *freehts;
     nameref_t           *freerefs;
     struct name_s       *freenames[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1];
     nametype_vectors_t   typevec[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1];
@@ -225,6 +237,23 @@ name_free (name_t *np)
         return;
     }
     ctx = np->namescope->home;
+    if (np->namescope != 0 && np->namescope != ctx->nullscope) {
+        scopectx_t scope = np->namescope;
+        namelist_remove(&scope->names, np);
+        if (scope->htptr != 0) {
+            int i = hash(np->name, np->namelen);
+            nameref_t *ref;
+            hashtable_t *table = scope->htptr;
+            for (ref = namereflist_head(&table->listhead[i]);
+                 ref != 0 && ref->np != np;
+                 ref = ref->tq_next);
+            if (ref != 0) {
+                namereflist_remove(&table->listhead[i], ref);
+            }
+        }
+        np->namescope = ctx->nullscope;
+    }
+
     if (np->namescope == ctx->nullscope &&
         (np->nameflags & NAME_M_ALLOCATED)) {
         int i = typeidx(np->nametype);
@@ -238,8 +267,8 @@ name_free (name_t *np)
     }
 } /* name_free */
 
-void
-namelist_free (namelist_t *nl)
+static void
+namelist_free (namectx_t ctx, namelist_t *nl)
 {
     name_t *np;
 
@@ -247,11 +276,12 @@ namelist_free (namelist_t *nl)
         return;
     }
     while ((np = namelist_remhead(nl)) != 0) {
+        np->namescope = ctx->nullscope;
         name_free(np);
     }
 } /* namelist_free */
 
-int
+static int
 namelist_copy (scopectx_t dstscope, namelist_t *dst, namelist_t *src)
 {
     name_t *np;
@@ -321,6 +351,54 @@ namereflist_copy (namectx_t ctx, namereflist_t *dst, namereflist_t *src)
     return 1;
 }
 
+static void
+destroy_hashtable (scopectx_t scope)
+{
+    int i;
+    namectx_t ctx = scope->home;
+
+    if (scope->htptr != 0) {
+        for (i = 0; i < HT_BUCKETS; i++) {
+            namereflist_free(ctx, &scope->htptr->listhead[i]);
+        }
+        memset(scope->htptr, 0x22, sizeof(hashtable_t));
+        scope->htptr->next = scope->home->freehts;
+        scope->home->freehts = scope->htptr;
+        scope->htptr = 0;
+    }
+
+} /* destroy_hashtable */
+
+static void
+create_hashtable (scopectx_t scope)
+{
+    namectx_t ctx = scope->home;
+    name_t *np;
+    nameref_t *ref;
+    int i;
+
+    if (ctx->freehts == 0) {
+        scope->htptr = malloc(sizeof(hashtable_t));
+    } else {
+        scope->htptr = ctx->freehts;
+        ctx->freehts =  scope->htptr->next;
+    }
+    if (scope->htptr == 0) {
+        return;
+    }
+    memset(scope->htptr, 0, sizeof(hashtable_t));
+    for (np = namelist_head(&scope->names); np != 0; np = np->tq_next) {
+        i = hash(np->name, np->namelen);
+        ref = nameref_alloc(ctx, np);
+        if (ref == 0) {
+            destroy_hashtable(scope);
+            return;
+        }
+        namereflist_instail(&scope->htptr->listhead[i], ref);
+    }
+
+} /* create_hashtable */
+
 namectx_t
 nametables_init (void)
 {
@@ -382,7 +460,6 @@ scope_begin (namectx_t ctx, scopectx_t parent)
 scopectx_t
 scope_end (scopectx_t scope)
 {
-    int i;
     namectx_t ctx;
     scopectx_t parent;
 
@@ -391,11 +468,8 @@ scope_end (scopectx_t scope)
     }
     ctx = scope->home;
     parent = scope->parent;
-    if (scope->namecount > 0) {
-        for (i = 0; i < HT_BUCKETS; i++) {
-            namelist_free(&scope->hashtable[i]);
-        }
-    }
+    namelist_free(ctx, &scope->names);
+    destroy_hashtable(scope);
     memset(scope, 0x33, sizeof(struct scopectx_s));
     scope->parent = ctx->freescopes;
     ctx->freescopes = scope;
@@ -418,7 +492,7 @@ scope_copy (scopectx_t src, scopectx_t newparent)
 
     namectx_t ctx;
     scopectx_t dst;
-    int i;
+    name_t *dname;
 
     if (src == 0) {
         return 0;
@@ -428,17 +502,14 @@ scope_copy (scopectx_t src, scopectx_t newparent)
     if (dst == 0) {
         return 0;
     }
-    if (src->namecount > 0) {
-        for (i = 0; i < HT_BUCKETS; i++) {
-            name_t *dname;
-            namelist_copy(dst, &dst->hashtable[i], &src->hashtable[i]);
-            for (dname = namelist_head(&dst->hashtable[i]); dname != 0;
-                 dname = dname->tq_next) {
-                dname->nameflags |= NAME_M_NODCLCHK;
-            }
-        }
+    namelist_copy(dst, &dst->names, &src->names);
+    if (src->htptr != 0) {
+        create_hashtable(dst);
     }
-    dst->namecount = src->namecount;
+    for (dname = namelist_head(&dst->names); dname != 0;
+         dname = dname->tq_next) {
+        dname->nameflags |= NAME_M_NODCLCHK;
+    }
     memcpy(dst->sclassnames, src->sclassnames, sizeof(dst->sclassnames));
     return dst;
 
@@ -480,7 +551,8 @@ scope_setparent (scopectx_t scope, scopectx_t newparent)
 name_t *
 scope_sclass_psectname (scopectx_t scope, storageclass_t cl)
 {
-    while (scope != 0) {
+    scopectx_t nullscope = scope->home->nullscope;
+    while (scope != 0 && scope != nullscope) {
         if (scope->sclassnames[cl]) {
             return scope->sclassnames[cl];
         }
@@ -566,21 +638,34 @@ name_search_internal (scopectx_t curscope, const char *id, size_t len,
 {
     int i;
     name_t *np = 0;
+    nameref_t *ref = 0;
+    scopectx_t nullscope = curscope->home->nullscope;
     scopectx_t scope;
 
-    for (scope = curscope; scope != 0; scope = scope->parent) {
-        if (scope->namecount > 0) {
+    for (scope = curscope; scope != 0 && scope != nullscope; scope = scope->parent) {
+        np = 0;
+        if (scope->htptr != 0) {
+            hashtable_t *table = scope->htptr;
             i = hash(id, len);
-            for (np = namelist_head(&scope->hashtable[i]); np != 0;
-                 np = np->tq_next) {
-                if ((np->nametype != LEXTYPE_NAME || undeclared_ok)
-                    && len == np->namelen &&
-                    memcmp(id, np->name, len) == 0) {
-                    if (ntypep != 0) *ntypep = np->nametype;
-                    if (datapp != 0) *(void **)datapp = np->nameextra;
-                    return np;
+            for (ref = namereflist_head(&table->listhead[i]);
+                 ref != 0; ref = ref->tq_next) {
+                if (ref->np != 0 && len == ref->np->namelen &&
+                    memcmp(id, ref->np->name, len) == 0) {
+                    np = ref->np;
+                    break;
                 }
             }
+        } else {
+            for (np = namelist_head(&scope->names); np != 0; np = np->tq_next) {
+                if (len == np->namelen && memcmp(id, np->name, len) == 0) {
+                    break;
+                }
+            }
+        }
+        if (np != 0 && (np->nametype != LEXTYPE_NAME || undeclared_ok)) {
+            if (ntypep != 0) *ntypep = np->nametype;
+            if (datapp != 0) *(void **)datapp = np->nameextra;
+            return np;
         }
     }
 
@@ -628,14 +713,28 @@ void
 name_insert (scopectx_t scope, name_t *np)
 {
     int i;
+    nameref_t *ref;
+
     if (np == 0 || scope == 0) {
         return;
     }
-    i = hash(np->name, np->namelen);
-    namelist_instail(&scope->hashtable[i], np);
-
-    scope->namecount += 1;
     np->namescope = scope;
+    namelist_instail(&scope->names, np);
+    if (scope->htptr == 0) {
+        if (namelist_length(&scope->names) > NAMECOUNT_THRESHOLD) {
+            create_hashtable(scope);
+        }
+        return;
+    }
+    ref = nameref_alloc(scope->home, np);
+    if (ref == 0) {
+        /* XXX error condition */
+        destroy_hashtable(scope);
+        return;
+    }
+
+    i = hash(np->name, np->namelen);
+    namereflist_instail(&scope->htptr->listhead[i], ref);
 
 } /* name_insert */
 
@@ -665,10 +764,7 @@ name_declare_internal (scopectx_t scope, const char *id, size_t len,
         // of outer definitions
         if (np->namescope != scope) {
             np = 0;
-        } //else if (nt != LEXTYPE_NAME &&
-          //         (!(np->nameflags & NAME_M_NODCLCHK))) {
-          //  return 0;
-          //}
+        }
     } else if (np != 0) {
         if (np->namescope == scope && nt != LEXTYPE_NAME &&
             !(np->nameflags & NAME_M_NODCLCHK)) {
