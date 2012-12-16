@@ -94,13 +94,12 @@ scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen)
 {
     int i = ctx->curbuf;
     if (i >= (SCAN_MAXFILES-1)) {
-        log_signal(ctx->logctx, STC__EXCFILCNT, SCAN_MAXFILES);
+        log_signal(ctx->logctx, 0, STC__EXCFILCNT, SCAN_MAXFILES);
         return 0;
     }
     i = i + 1;
     ctx->bufstack[i].fctx = file_open_input(ctx->fioctx, fname, fnlen);
     if (ctx->bufstack[i].fctx == 0) {
-        /* XXX error condition */
         return 0;
     }
     ctx->bufstack[i].inpfn = 0;
@@ -116,7 +115,7 @@ scan_popen (scanctx_t ctx, scan_input_fn infn, void *fnctx)
 {
     int i = ctx->curbuf;
     if (i >= (SCAN_MAXFILES-1)) {
-        /* XXX error condition */
+        log_signal(ctx->logctx, 0, STC__EXCFILCNT, SCAN_MAXFILES);
         return 0;
     }
     i = i + 1;
@@ -146,8 +145,6 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
         while (curbuf->curpos >= curbuf->linelen) {
             int rc;
             curbuf->curpos = 0;
-            *lineno = curbuf->curline;
-            *column = 0;
             if (curbuf->inpfn != 0) {
                 rc = (curbuf->inpfn)(curbuf->fnctx, curbuf->linebuf,
                                      sizeof(curbuf->linebuf), &curbuf->linelen);
@@ -161,26 +158,35 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                 }
                 ctx->curbuf -= 1;
                 if (rc < 0) {
-                    /* XXX error condition */
+                    log_signal(ctx->logctx, 0, STC__FIOERR,
+                               (curbuf->inpfn == 0 ? file_getname(curbuf->fctx)
+                                : "(internal stream)"));
                     len = outp - ctx->tokbuf;
                     *tok = string_from_chrs(0, ctx->tokbuf, len);
+                    *lineno = curbuf->curline;
+                    *column = 0;
                     return SCANTYPE_ERR_FIO;
                 }
                 if (ctx->curbuf < 0) {
                     len = outp - ctx->tokbuf;
                     *tok = string_from_chrs(0, ctx->tokbuf, len);
+                    *lineno = curbuf->curline;
+                    *column = 0;
                     return SCANTYPE_END;
                 }
                 if ((flags & SCAN_M_ERRONEOF) != 0) {
-                    /* XXX error condition */
+                    log_signal(ctx->logctx, 0, STC__EOFERR,
+                               (curbuf->inpfn == 0 ? file_getname(curbuf->fctx)
+                                : "(internal stream)"));
                     len = outp - ctx->tokbuf;
                     *tok = string_from_chrs(0, ctx->tokbuf, len);
+                    *lineno = curbuf->curline;
+                    *column = 0;
                     return SCANTYPE_ERR_EOF;
                 }
                 curbuf = &ctx->bufstack[ctx->curbuf];
             } else {
                 curbuf->curline += 1;
-                *lineno += 1;
             }
         }
 

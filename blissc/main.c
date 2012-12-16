@@ -58,9 +58,9 @@ int main(int argc, const char * argv[])
 int
 test_scanner (int argc, const char *argv[])
 {
-    scanctx_t ctx;
+    scanctx_t ctx = 0;
     jmp_buf retenv;
-    logctx_t logctx;
+    logctx_t logctx = 0;
     strdesc_t *tok;
     scantype_t toktype;
     unsigned int sflags = SCAN_M_SIGNOK;
@@ -170,10 +170,10 @@ void PRINTLEX(lexeme_t *lex)
 int
 test_parser (int argc, const char *argv[])
 {
-    parse_ctx_t pctx;
+    parse_ctx_t pctx = 0;
     scopectx_t kwdscope;
     jmp_buf retenv;
-    logctx_t logctx;
+    logctx_t logctx = 0;
     lexctx_t lctx;
 //    stgctx_t stg;
     lexeme_t *lex;
@@ -218,11 +218,11 @@ finish:
 int
 test_expr (int argc, const char *argv[])
 {
-    parse_ctx_t pctx;
+    parse_ctx_t pctx = 0;
     stgctx_t stg;
     expr_ctx_t  ectx;
     scopectx_t kwdscope;
-    logctx_t logctx;
+    logctx_t logctx = 0;
     jmp_buf retenv;
 //    lexeme_t *lex;
 //   lextype_t lt;

@@ -19,6 +19,7 @@ static const char *ltnames[] = { DOLEXTYPES };
 #define ALLOC_QTY 512
 
 struct lexctx_s {
+    logctx_t         logctx;
     lexeme_t        *freepool;
     lextype_bind_fn  binders[LEXTYPE_COUNT];
 };
@@ -53,7 +54,7 @@ lexeme_alloc (lexctx_t lctx, lextype_t type, const char *text, size_t len)
     if (lctx->freepool == 0) {
         lctx->freepool = malloc(ALLOC_QTY * sizeof(lexeme_t));
         if (lctx->freepool == 0) {
-            /* XXX error condition */
+            log_signal(lctx->logctx, 0, STC__OUTOFMEM, "lexeme_alloc");
             return &errlex;
         }
         for (i = 0, lex = lctx->freepool; i < ALLOC_QTY-1; i++, lex++) {
@@ -117,7 +118,11 @@ lexeme_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
         errno = 0;
         val = strtol(ltext->ptr, &cp, 10);
         if (errno != 0) {
-            /* XXX error condition */
+            char errbuf[64];
+            errbuf[0] = '\0';
+            strerror_r(errno, errbuf, sizeof(errbuf));
+            log_signal(lctx->logctx, lexeme_textpos_get(lex),
+                       STC__NUMCNVERR, errbuf, strlen(errbuf));
             return -1;
         }
         lexeme_val_setsigned(lex, val);
@@ -140,12 +145,13 @@ lexeme_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
 }
 
 lexctx_t
-lexeme_init (void)
+lexeme_init (logctx_t logctx)
 {
     lexctx_t lctx = malloc(sizeof(struct lexctx_s));
 
     if (lctx != 0) {
         memset(lctx, 0, sizeof(struct lexctx_s));
+        lctx->logctx = logctx;
     }
     return lctx;
 }
@@ -156,6 +162,11 @@ lexeme_finish (lexctx_t lctx)
     free(lctx);
 }
 
+logctx_t
+lexeme_logctx (lexctx_t lctx)
+{
+    return lctx->logctx;
+}
 /*
  * lexeme_create
  *
@@ -169,7 +180,7 @@ lexeme_create (lexctx_t lctx, lextype_t type, strdesc_t *tok)
     lexeme_t *lex;
 
     if (type < LEXTYPE_MIN || type > LEXTYPE_MAX) {
-        /* XXX error condition */
+        log_signal(lctx->logctx, 0, STC__INTCMPERR, "lexeme_create");
         return &errlex;
     }
     lex  = lexeme_alloc(lctx, LEXTYPE_UNBOUND, tok->ptr, tok->len);
@@ -209,7 +220,7 @@ lexeme_copy (lexctx_t lctx, lexeme_t *orig)
     lex = lexeme_alloc(lctx, orig->type, orig->text.ptr,
                        (size_t)orig->text.len);
     if (lex == 0) {
-        /* XXX error condition */
+        log_signal(lctx->logctx, 0, STC__INTCMPERR, "lexeme_copy");
         return &errlex;
     }
     lex->boundtype = orig->boundtype;

@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "nametable.h"
+#include "logging.h"
 #include "strings.h"
 #include "lexeme.h"
 
@@ -96,6 +97,7 @@ struct scopectx_s {
  * Master name table context
  */
 struct namectx_s {
+    logctx_t             logctx;
     struct scopectx_s   *freescopes;
     hashtable_t         *freehts;
     nameref_t           *freerefs;
@@ -137,6 +139,7 @@ void name_value_signed_set (name_t *np, long v) { np->nameextra[0] = (void *) v;
 void name_value_unsigned_set (name_t *np, unsigned long v) { np->nameextra[0] = (void *) v; }
 void *nametables_symctx_get (namectx_t ctx) { return ctx->symctx; }
 void nametables_symctx_set (namectx_t ctx, void *ptr) { ctx->symctx = ptr; }
+textpos_t name_defpos (name_t *np) { return np->namedclpos; }
 
 /*
  * name_alloc
@@ -158,7 +161,7 @@ name_alloc (namectx_t ctx, lextype_t type,
         int j;
         ctx->freenames[i] = malloc(nsize*NAME_ALLOCOUNT);
         if (ctx->freenames[i] == 0) {
-            /* XXX error condition */
+            log_signal(ctx->logctx, 0, STC__OUTOFMEM, "name_alloc");
             return 0;
         }
         memset(ctx->freenames[i], 0, nsize*NAME_ALLOCOUNT);
@@ -400,12 +403,13 @@ create_hashtable (scopectx_t scope)
 } /* create_hashtable */
 
 namectx_t
-nametables_init (void)
+nametables_init (logctx_t logctx)
 {
     namectx_t master = malloc(sizeof(struct namectx_s));
 
     if (master != 0) {
         memset(master, 0, sizeof(struct namectx_s));
+        master->logctx = logctx;
         master->nullscope = scope_begin(master, 0);
         master->globalscope = scope_begin(master, 0);
         // Set up the default size and freelist index
@@ -433,7 +437,7 @@ scope_begin (namectx_t ctx, scopectx_t parent)
         int i;
         ctx->freescopes = malloc(sizeof(struct scopectx_s)*SCOPE_ALLOCOUNT);
         if (ctx->freescopes == 0) {
-            /* XXX error condition */
+            log_signal(ctx->logctx, 0, STC__OUTOFMEM, "scope_begin");
             return 0;
         }
         memset(ctx->freescopes, 0, sizeof(struct scopectx_s)*SCOPE_ALLOCOUNT);
@@ -751,7 +755,7 @@ name_insert (scopectx_t scope, name_t *np)
     }
     ref = nameref_alloc(scope->home, np);
     if (ref == 0) {
-        /* XXX error condition */
+        log_signal(scope->home->logctx, 0, STC__OUTOFMEM, "name_insert");
         destroy_hashtable(scope);
         return;
     }
@@ -794,12 +798,12 @@ name_declare_internal (scopectx_t scope, const char *id, size_t len,
             // Redeclaration of FORWARDs is allowed, but only if
             // the type matches
             if (!(np->nameflags & NAME_M_FORWARD) || nt != type) {
-                /* XXX error condition - redeclaration */
+                log_signal(namectx->logctx, pos, STC__REDECLARE, id, len);
                 return 0;
             }
         }
         if ((np->nameflags & NAME_M_RESERVED) != 0) {
-            /* XXX error condition - reserved word */
+            log_signal(namectx->logctx, pos, STC__RSVDECL, id, len);
             return 0;
         }
     }
@@ -895,7 +899,7 @@ tempname_get (namectx_t ctx)
 {
     ctx->tmpcount += 1;
     if (ctx->tmpcount > 999999) {
-        /* XXX error condition */
+        log_signal(ctx->logctx, 0, STC__EXCTNCNT);
     }
     return string_printf(0, "%%TMP$%06u", ctx->tmpcount);
 }
@@ -909,6 +913,11 @@ name_declare_builtin (scopectx_t scope, strdesc_t *namestr, textpos_t pos)
         return 0;
     }
     np = name_copy(np, scope);
+    if (np == 0) {
+        logctx_t logctx = scope->home->logctx;
+        log_signal(logctx, pos, STC__INTCMPERR, "name_declare_builtin");
+        return 0;
+    }
     np->nameflags &= ~NAME_M_BUILTIN;
     np->nameflags |= NAME_M_DECLARED;
     name_insert(scope, np);

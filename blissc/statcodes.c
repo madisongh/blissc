@@ -18,7 +18,7 @@ static const char *mcnames[] = {
 };
 #undef STATCODE
 
-#define STATCODE(msg,typ,nam,txt) #txt,
+#define STATCODE(msg,typ,nam,txt) txt,
 static const char *mctext[] = {
     STATCODES
 };
@@ -61,15 +61,20 @@ stc_msg_vformat (statcode_t statcode, char *buf, size_t bufsiz, va_list ap)
 {
     int len;
     char tmpbuf[32];
-    char *outp = buf;
+    char *outp;
     const char *fmt;
     unsigned int msgno = stc_msgno(statcode);
     unsigned int sev = stc_severity(statcode);
 
     if (msgno >= MSG_COUNT) {
-        return snprintf("%c-UNKNOWN: unknown message code %u", bufsiz, buf,
+        return snprintf(buf, bufsiz, "%%BLISS-%c-UNKNOWN: unknown message code %u",
                        sevchars[sev], msgno);
     }
+
+    len = snprintf(buf, bufsiz, "%%BLISS-%c-%s, ", sevchars[sev], mcnames[msgno]);
+    if (len >= bufsiz) len = (int) bufsiz - 1;
+    outp = buf + len;
+    bufsiz -= len;
 
     fmt = mctext[msgno];
 

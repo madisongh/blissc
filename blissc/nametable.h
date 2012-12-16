@@ -12,6 +12,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "lexeme.h"
+#include "logging.h"
 #include "utils.h"
 #include "strings.h"
 
@@ -88,6 +89,7 @@ name_t *name_declare(scopectx_t scope, namedef_t *def, textpos_t pos,
 name_t *name_declare_nocheck(scopectx_t scope, namedef_t *def, textpos_t pos,
                              void *datap, size_t datasize, void *datapp);
 lextype_t name_type(name_t *np);
+textpos_t name_defpos(name_t *np);
 void *name_extraspace(name_t *np);
 void *name_value_pointer(name_t *np);
 long name_value_signed(name_t *np);
@@ -99,7 +101,7 @@ int name_is_declared(scopectx_t scope, const char *id, size_t len);
 scopectx_t name_scope(name_t *np);
 lexeme_t *name_to_lexeme(lexctx_t lctx, name_t *np, textpos_t pos);
 strdesc_t *name_string(name_t *np);
-namectx_t nametables_init(void);
+namectx_t nametables_init(logctx_t logctx);
 scopectx_t nametables_globalscope(namectx_t ctx);
 void *nametables_symctx_get(namectx_t ctx);
 void nametables_symctx_set(namectx_t ctx, void *p);

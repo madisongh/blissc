@@ -11,10 +11,6 @@
 //  happens -- specifically, conversion of operators and delimiters,
 //  and the primitive numeric and string literals.
 //
-//  This module also has the upper layer of lexeme memory management,
-//  with knowledge about the 'data' portion of lexeme types that
-//  need to have memory freed.    XXX - may need to revisit this
-//
 //  Created by Matthew Madison on 10/23/12.
 //  Copyright (c) 2012 Matthew Madison. All rights reserved.
 //
@@ -100,7 +96,7 @@ static lexeme_t endlex = { 0, LEXTYPE_END, LEXTYPE_END };
 
 /*
  * Operators that are keywords.  These are common enough to put down
- * at this level. XXX - revisit
+ * at this level.
  */
 #define DODEFS \
 DODEF(AND) DODEF(EQV) DODEF(OR) \
@@ -218,8 +214,9 @@ lexer_init (scopectx_t kwdscope, logctx_t logctx)
     if (ctx != 0) {
         memset(ctx, 0, sizeof(struct lexer_ctx_s));
         ctx->logctx = logctx;
+        log_fetchfn_set(logctx, (filename_fetch_fn) lexer_filename, ctx);
         ctx->signok = 1;
-        ctx->lexctx = lexeme_init();
+        ctx->lexctx = lexeme_init(logctx);
     }
 
     return ctx;
@@ -263,7 +260,7 @@ lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen)
     lexchain_t *chain = lexchain_alloc();
 
     if (chain == 0) {
-        /* XXX error condition */
+        log_signal(ctx->logctx, 0, STC__OUTOFMEM, "lexer_fopen");
         return 0;
     }
     chain->sctx = scan_init(ctx->logctx);
@@ -294,7 +291,7 @@ lexer_popen (lexer_ctx_t ctx, scan_input_fn infn, void *fnctx)
     lexchain_t *chain = lexchain_alloc();
 
     if (chain == 0) {
-        /* XXX error condition */
+        log_signal(ctx->logctx, 0, STC__OUTOFMEM, "lexer_popen");
         return 0;
     }
     chain->sctx = scan_init(ctx->logctx);
@@ -376,7 +373,7 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek)
             type = scan_getnext(chain->sctx, sflags, &tok,
                                 &lineno, &column);
             if (!scan_ok(type)) {
-                /* XXX error condition */
+                log_signal(ctx->logctx, 0, STC__INTCMPERR, "lexer___next");
                 lex = &errlex;
                 string_free(tok);
                 break;
@@ -473,7 +470,7 @@ lexer_insert (lexer_ctx_t ctx, lexeme_t *lex)
     if (chain == 0) {
         chain = lexchain_alloc();
         if (chain == 0) {
-            /* XXX error condition */
+            log_signal(ctx->logctx, 0, STC__OUTOFMEM, "lexer_insert");
             return;
         }
         chain->nextchain = ctx->chain;
@@ -495,7 +492,7 @@ lexer_insert_seq (lexer_ctx_t ctx, lexseq_t *seq)
     if (chain == 0) {
         chain = lexchain_alloc();
         if (chain == 0) {
-            /* XXX error condition */
+            log_signal(ctx->logctx, 0, STC__OUTOFMEM, "lexer_insert_seq");
             return;
         }
         chain->nextchain = ctx->chain;

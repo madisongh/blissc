@@ -13,6 +13,7 @@
 #include "storage.h"
 #include "nametable.h"
 #include "lexeme.h"
+#include "logging.h"
 #include "utils.h"
 
 #undef DOEXPTYPE
@@ -673,6 +674,7 @@ stgctx_t expr_stg_ctx(expr_ctx_t);
 machinedef_t *expr_machinedef(expr_ctx_t);
 namectx_t expr_namectx(expr_ctx_t);
 lexctx_t expr_lexmemctx(expr_ctx_t);
+logctx_t expr_logctx(expr_ctx_t);
 expr_node_t *expr_parse_arglist(expr_ctx_t ctx, expr_node_t *rtn);
 initval_t *expr_initval_add(expr_ctx_t ctx, initval_t *ivlist, expr_node_t *exp,
                             unsigned int width);

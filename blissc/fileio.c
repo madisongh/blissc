@@ -67,6 +67,7 @@ file_open_input (fioctx_t fio, const char *fname, size_t fnlen)
     filectx_t ctx = malloc(sizeof(struct filectx_s));
     if (ctx == 0)
         return ctx;
+    memset(ctx, 0, sizeof(struct filectx_s));
     ctx->fname = malloc(fnlen+1);
     if (ctx->fname == 0) {
         free(ctx);
@@ -80,7 +81,7 @@ file_open_input (fioctx_t fio, const char *fname, size_t fnlen)
         char errbuf[64];
         errbuf[0] = '\0';
         strerror_r(errno, errbuf, sizeof(errbuf));
-        log_signal(fio->logctx, STC__FIOERR, errbuf);
+        log_signal(fio->logctx, 0, STC__FIOERR, errbuf);
         free(ctx);
         return 0;
     }
@@ -109,7 +110,7 @@ file_close (filectx_t ctx)
         prev = cur;
     }
     if (cur == 0) {
-        log_signal(fio->logctx, STC__INTCMPERR, "file_close");
+        log_signal(fio->logctx, 0, STC__INTCMPERR, "file_close");
         return;
     }
     if (prev == 0) {
@@ -144,7 +145,7 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
             if (cp != 0) {
                 size_t count = cp - bp;
                 if (count > bufsiz) {
-                    log_signal(ctx->fio->logctx, STC__LNTOOLONG, file_getname(ctx));
+                    log_signal(ctx->fio->logctx, 0, STC__LNTOOLONG, file_getname(ctx));
                     status = -1;
                     break;
                 }
@@ -155,7 +156,7 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
                 break;
             }
             if (remain > bufsiz) {
-                log_signal(ctx->fio->logctx, STC__LNTOOLONG, file_getname(ctx));
+                log_signal(ctx->fio->logctx, 0, STC__LNTOOLONG, file_getname(ctx));
                 status = -1;
                 break;
             }
@@ -168,7 +169,7 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
             char errbuf[64];
             errbuf[0] = '\0';
             strerror_r(errno, errbuf, sizeof(errbuf));
-            log_signal(ctx->fio->logctx, STC__FIOERR, errbuf);
+            log_signal(ctx->fio->logctx, 0, STC__FIOERR, errbuf);
             status = -1;
             break;
         }

@@ -9,6 +9,7 @@
 #ifndef blissc_lexeme_h
 #define blissc_lexeme_h
 
+#include "logging.h"
 #include "strings.h"
 #include "utils.h"
 
@@ -179,8 +180,9 @@ typedef int (*lextype_bind_fn)(lexctx_t lctx, void *pctx, quotelevel_t ql,
              quotemodifier_t qm, lextype_t lt, condstate_t cs,
              lexeme_t *orig, lexseq_t *result);
 
-lexctx_t lexeme_init(void);
+lexctx_t lexeme_init(logctx_t logctx);
 void lexeme_finish(lexctx_t lctx);
+logctx_t lexeme_logctx(lexctx_t lctx);
 lexeme_t *lexeme_copy(lexctx_t lctx, lexeme_t *orig);
 void lexeme_free(lexctx_t lctx, lexeme_t *lex);
 lexeme_t *lexeme_create(lexctx_t lctx, lextype_t type, strdesc_t *dsc);

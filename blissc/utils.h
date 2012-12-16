@@ -28,18 +28,20 @@ typedef uint64_t textpos_t;
 
 static inline __unused textpos_t textpos_create(int fno, unsigned int lno,
                                                 unsigned int cno) {
-    return (textpos_t)(((uint64_t)fno & ~(1LLU<<TEXTPOS_S_FILENO)) << TEXTPOS_V_FILENO)
-                    | (((uint64_t)lno & ~(1LLU<<TEXTPOS_S_LINENO)) << TEXTPOS_V_LINENO)
-                    | (((uint64_t)cno & ~(1LLU<<TEXTPOS_S_COLNUM)) << TEXTPOS_S_COLNUM);
+    return (textpos_t) (
+                (((uint64_t) fno & ~(-1LL<<TEXTPOS_S_FILENO)) << TEXTPOS_V_FILENO)
+            | (((uint64_t) lno & ~(-1LL<<TEXTPOS_S_LINENO)) << TEXTPOS_V_LINENO)
+            | (((uint64_t) cno & ~(-1LL<<TEXTPOS_S_COLNUM)) << TEXTPOS_V_COLNUM)
+                        );
 }
-static inline __unused int textpos_fileno(textpos_t t) {
-    return (int)((t >> TEXTPOS_V_FILENO) & ~(1LLU<<TEXTPOS_S_FILENO));
+static inline __unused unsigned int textpos_fileno(textpos_t t) {
+    return (unsigned int)((t >> TEXTPOS_V_FILENO) & ~(-1LL<<TEXTPOS_S_FILENO));
 }
-static inline __unused int textpos_lineno(textpos_t t) {
-    return (int)((t >> TEXTPOS_V_LINENO) & ~(1LLU<<TEXTPOS_S_LINENO));
+static inline __unused unsigned int textpos_lineno(textpos_t t) {
+    return (unsigned int)((t >> TEXTPOS_V_LINENO) & ~(-1LL<<TEXTPOS_S_LINENO));
 }
-static inline __unused int textpos_colnum(textpos_t t) {
-    return (int)((t >> TEXTPOS_V_COLNUM) & ~(1LLU<<TEXTPOS_S_COLNUM));
+static inline __unused unsigned int textpos_colnum(textpos_t t) {
+    return (unsigned int)((t >> TEXTPOS_V_COLNUM) & ~(-1LL<<TEXTPOS_S_COLNUM));
 }
 
 

@@ -1506,10 +1506,13 @@ declare_builtin (parse_ctx_t pctx, scopectx_t scope)
     textpos_t pos;
 
     while (1) {
-        if (!parse_decl_name(pctx, scope, &namestr, &pos)) {
-            /* XXX error condition */
-        }
-        if (!name_declare_builtin(scope, namestr, pos)) {
+        namestr = 0;
+        if (parse_decl_name(pctx, scope, &namestr, &pos)) {
+            if (!name_declare_builtin(scope, namestr, pos)) {
+                /* XXX error condition */
+            }
+            string_free(namestr);
+        } else {
             /* XXX error condition */
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
@@ -1519,7 +1522,6 @@ declare_builtin (parse_ctx_t pctx, scopectx_t scope)
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1)) {
         /* XXX error condition */
     }
-    string_free(namestr);
     return 1;
 
 }

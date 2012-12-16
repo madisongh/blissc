@@ -263,7 +263,7 @@ parser_init (namectx_t namectx, machinedef_t *mach, scopectx_t *kwdscopep,
     int i;
 
     if (namectx == 0) {
-        namectx = nametables_init();
+        namectx = nametables_init(logctx);
     }
     kwdscope = scope_begin(namectx, 0);
     for (i = 0; i < sizeof(parser_names)/sizeof(parser_names[0]); i++) {
@@ -518,7 +518,8 @@ parser_punct_separator (parse_ctx_t pctx)
             break;
         case PUNCT_OPERSEP_NOGROUP:
             if (!is_operator(pctx->separator)) {
-                /* XXX error condition */
+                log_signal(pctx->logctx, 0,
+                           STC__INTCMPERR, "parser_punct_separator");
                 return 0;
             }
             lex = lexeme_create(pctx->lmemctx, pctx->separator, &operstrs[pctx->separator-LEXTYPE_OP_MIN]);
@@ -558,7 +559,7 @@ parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
         status = lexeme_bind(pctx->lmemctx, pctx, ql, pctx->quotemodifier,
                              pctx->condstate[pctx->condlevel], lex, &result);
         if (status < 0) {
-            /* XXX error condition */
+            log_signal(pctx->logctx, pctx->curpos, STC__INTCMPERR, "parser_next");
             return LEXTYPE_NONE;
         }
         if (status > 0) {
@@ -573,12 +574,12 @@ parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
             sval = lexeme_signedval(lex);
             if (sval < 0) {
                 if ((pctx->valmask & (-sval)) != (-sval)) {
-                    /* XXX error condition, truncate */
+                    log_signal(pctx->logctx, pctx->curpos, STC__NUMLITTRC, sval);
                     lexeme_val_setsigned(lex, sval | ~pctx->valmask);
                     string_printf(&lex->text, "%ld", (sval | ~pctx->valmask));
                 }
             } else if ((pctx->valmask & sval) != sval) {
-                /* XXX error condition, truncate */
+                log_signal(pctx->logctx, pctx->curpos, STC__NUMLITTRC, sval);
                 lexeme_val_setsigned(lex, sval & pctx->valmask);
                 string_printf(&lex->text, "%ld", (sval & pctx->valmask));
             }
@@ -591,7 +592,8 @@ parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
                 if (lexfuncs[lt-LEXTYPE_LXF_MIN] != 0) {
                     status = lexfuncs[lt-LEXTYPE_LXF_MIN](pctx, ql, lt);
                     if (status < 0) {
-                        /* XXX error condition */
+                        log_signal(pctx->logctx, pctx->curpos,
+                                   STC__INTCMPERR, "parser_next");
                     } else if (status > 0) {
                         lexeme_free(pctx->lmemctx, lex);
                         continue;
@@ -864,7 +866,7 @@ parse_QUOTE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     lextype_t lt;
 
     if (ql < QL_NAME) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__QUOFNCERR);
         return 1;
     }
 
@@ -875,7 +877,7 @@ parse_QUOTE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     if (!is_name(lt) &&
         lt != LEXTYPE_DELIM_COMMA &&
         lt != LEXTYPE_LXF_DELIM_PERCENT) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__QUOFNCERR);
         return 1;
     }
 
@@ -885,7 +887,7 @@ parse_QUOTE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         if (np != 0) {
             // The lexical conditional functions are not %QUOTE-able
             if (lt >= LEXTYPE_LXF_IF && lt <= LEXTYPE_LXF_FI) {
-                /* XXX error condition */
+                log_signal(pctx->logctx, pctx->curpos, STC__QUOFNCERR);
                 return 1;
             }
         }
@@ -913,25 +915,25 @@ parse_unquote_expand (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     lextype_t lt;
 
     if (ql < ((curlt == LEXTYPE_LXF_EXPAND) ? QL_MACRO : QL_NAME)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__QUOFNCERR);
         return 1;
     }
     lex = lexer_peek(pctx->lexctx, pctx->no_eof);
     lt = lexeme_boundtype(lex);
     if (!is_name(lt) && !is_lexfunc(lt, 0)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__QUOFNCERR);
         return 1;
     }
     if (lt == LEXTYPE_NAME) {
         np = name_search(pctx->curscope, lex->text.ptr, lex->text.len, &lt);
         if (np == 0) {
-            /* XXX error condition */
+            log_signal(pctx->logctx, pctx->curpos, STC__QUOFNCERR);
             return 1;
         }
     }
     if ((curlt == LEXTYPE_LXF_EXPAND) &&
         !(is_lexfunc(lt, 0) || lt == LEXTYPE_NAME_MACRO)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__QUOFNCERR);
         return 1;
     }
     pctx->quotemodifier = (curlt == LEXTYPE_LXF_EXPAND ? QM_EXPAND : QM_UNQUOTE);
@@ -958,7 +960,7 @@ parse_string_literal (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     strdesc_t *str = lexeme_text(lex);
 
     if (lt != LEXTYPE_STRING || (curlt == LEXTYPE_LXF_ASCIC && str->len > 255)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__INVSTRLIT);
         lexeme_free(pctx->lmemctx, lex);
     } else {
         if (curlt == LEXTYPE_LXF_ASCIZ) {
@@ -992,13 +994,13 @@ parse_numeric_literal (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     int base[] = { 2, 8, 10, 16 };
 
     if (lt != LEXTYPE_STRING) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__INVSTRLIT);
         lexeme_free(pctx->lmemctx, lex);
         return 1;
     }
-    if (!string_numval(lexeme_text(lex),
-                       base[curlt-LEXTYPE_LXF_B], &val)) {
-        /* XXX error condition */
+    str = lexeme_text(lex);
+    if (!string_numval(str, base[curlt-LEXTYPE_LXF_B], &val)) {
+        log_signal(pctx->logctx, pctx->curpos, STC__NUMCNVERR, str->ptr, str->len);
         lexeme_free(pctx->lmemctx, lex);
         return 1;
     }
@@ -1023,7 +1025,7 @@ parse_C (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt) {
     lextype_t lt = parser_next(pctx, ql, &lex);
     strdesc_t *str = lexeme_text(lex);
     if (lt != LEXTYPE_STRING || str->len != 1) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__INVSTRLIT);
     } else {
         char buf[8];
         int len = snprintf(buf, sizeof(buf), "%ld", (long)(*str->ptr & 0x7f));
@@ -1058,7 +1060,7 @@ string_params (parse_ctx_t pctx, int already_have_open_paren)
         lt = parser_next(pctx, QL_NORMAL, &lex);
         lexeme_free(pctx->lmemctx, lex);
         if (lt != LEXTYPE_DELIM_LPAR) {
-            /* XXX error condition */
+            log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, "(");
             return &errlex;
         }
     }
@@ -1097,7 +1099,7 @@ string_params (parse_ctx_t pctx, int already_have_open_paren)
             break;
         }
         if (lt != LEXTYPE_DELIM_COMMA) {
-            /* XXX error condition */
+            log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, ",");
             lexeme_free(pctx->lmemctx, lex);
             parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
             return &errlex;
@@ -1144,18 +1146,18 @@ parse_EXACTSTRING (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     strdesc_t *str;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 0)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, "(");
         return 1;
     }
     if (!expr_parse_ctce(pctx->expctx, &lex)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__EXPCTCE);
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
     len = lexeme_unsignedval(lex);
     lexeme_free(pctx->lmemctx, lex);
     if (len > STRING_MAXLEN) {
-        /* XXX error condition - string too long */
+        log_signal(pctx->logctx, pctx->curpos, STC__INVSTRLIT);
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
@@ -1164,13 +1166,13 @@ parse_EXACTSTRING (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         return 1;
     }
     if (!expr_parse_ctce(pctx->expctx, &lex)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__EXPCTCE);
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
     fillchr = lexeme_unsignedval(lex) & 0xff;
     if (lexeme_signedval(lex) > 255) {
-        /* XXX error condition - invalid char */
+        log_signal(pctx->logctx, pctx->curpos, STC__INVCHRVAL, lexeme_text(lex));
         lexeme_free(pctx->lmemctx, lex);
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
@@ -1189,7 +1191,7 @@ parse_EXACTSTRING (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 
     lex = string_params(pctx, 1);
     if (lexeme_boundtype(lex) != LEXTYPE_STRING) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__INVSTRLIT);
         lexeme_free(pctx->lmemctx, lex);
         return 1;
     }
@@ -1198,12 +1200,12 @@ parse_EXACTSTRING (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         strdesc_t *filldsc;
         filldsc = string_alloc(0, len - str->len);
         if (filldsc == 0) {
-            /* XXX error condition */
+            log_signal(pctx->logctx, pctx->curpos, STC__OUTOFMEM);
         } else {
             memset(filldsc->ptr, fillchr, filldsc->len);
             str = string_append(str, filldsc);
             if (str == 0) {
-                /* XXX error condition */
+                log_signal(pctx->logctx, pctx->curpos, STC__OUTOFMEM);
             }
             string_free(filldsc);
         }
@@ -1234,7 +1236,7 @@ parse_CHARCOUNT (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     int len;
 
     if (lexeme_boundtype(lex) != LEXTYPE_STRING) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__INVSTRLIT);
         lexer_insert(pctx->lexctx, lex);
         return 1;
     }
@@ -1268,7 +1270,7 @@ parse_CHAR (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     long val;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 0)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, "(");
         return 1;
     }
 
@@ -1276,13 +1278,16 @@ parse_CHAR (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     INITSTR(chdsc, &ch, 1);
     while (1) {
         if (!expr_parse_ctce(pctx->expctx, &lex)) {
+            log_signal(pctx->logctx, pctx->curpos, STC__EXPCTCE);
             hit_error = 1;
             skip_to_paren = 1;
             break;
         }
         val = lexeme_signedval(lex);
         if (val > 255) {
-            /* XXX error condition */
+            strdesc_t *text = lexeme_text(lex);
+            log_signal(pctx->logctx, pctx->curpos, STC__NUMCNVERR,
+                       text->ptr, text->len);
             skip_to_paren = 1;
             hit_error = 1;
             lexeme_free(pctx->lmemctx, lex);
@@ -1297,7 +1302,7 @@ parse_CHAR (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
             break;
         }
         if (lt != LEXTYPE_DELIM_COMMA) {
-            /* XXX error condition */
+            log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, ",");
             skip_to_paren = 1;
             hit_error = 1;
             break;
@@ -1334,7 +1339,7 @@ parse_EXPLODE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     static strdesc_t comma = STRDEF(",");
 
     if (lexeme_boundtype(lex) != LEXTYPE_STRING) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__INVSTRLIT);
         lexer_insert(pctx->lexctx, lex);
         return 1;
     }
@@ -1380,12 +1385,12 @@ parse_REMOVE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     lextype_t rpar[1] = {LEXTYPE_DELIM_RPAR};
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 0)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, "(");
         return 1;
     }
 
     if (!parse_lexeme_seq(pctx, 0, QL_NAME, rpar, 1, &result, 0)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__SYNTAXERR);
         lexseq_free(pctx->lmemctx, &result);
         return 1;
     }
@@ -1458,6 +1463,7 @@ parse_name_qname (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     int status;
 
     if (lexeme_boundtype(lex) != LEXTYPE_STRING) {
+        log_signal(pctx->logctx, pctx->curpos, STC__INVSTRLIT);
         lexer_insert(pctx->lexctx, lex);
         return 1;
     }
@@ -1467,7 +1473,8 @@ parse_name_qname (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
                          (curlt == LEXTYPE_LXF_QUOTENAME ? QM_QUOTE : QM_NONE),
                          pctx->condstate[pctx->condlevel], result, &resseq);
     if (status < 0) {
-        /* XXX error condition */
+        strdesc_t *text = lexeme_text(lex);
+        log_signal(pctx->logctx, pctx->curpos, STC__INVNAME, text);
         lexeme_free(pctx->lmemctx, result);
         return status;
     } else if (status > 0) {
@@ -1496,13 +1503,13 @@ parse_NULL (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     lextype_t which;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, "(");
         return 1;
     }
 
     while (1) {
         if (!parse_lexeme_seq(pctx, 0, QL_NAME, terms, 2, &seq, &which)) {
-            /* XXX error condition */
+            log_signal(pctx->logctx, pctx->curpos, STC__SYNTAXERR);
             return 1;
         }
         if (lexseq_length(&seq) != 0) {
@@ -1533,7 +1540,7 @@ parse_IDENTICAL (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     lextype_t terms[2] = { LEXTYPE_DELIM_COMMA, LEXTYPE_DELIM_RPAR };
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, "(");
         return 1;
     }
 
@@ -1542,7 +1549,7 @@ parse_IDENTICAL (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         parser_lexeme_add(pctx, LEXTYPE_NUMERIC,
                         (lexemes_match(&chain[0], &chain[1]) ? &one : &zero));
     } else {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__SYNTAXERR);
     }
 
     lexseq_free(pctx->lmemctx, &chain[0]);
@@ -1607,7 +1614,7 @@ parse_IF (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     pctx->no_eof += 1;
 
     if (!expr_parse_ctce(pctx->expctx, &lex)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__EXPCTCE);
         pctx->no_eof -= 1;
         return 1;
     }
@@ -1616,14 +1623,14 @@ parse_IF (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     lexeme_free(pctx->lmemctx, lex);
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_LXF_THEN, 0, 1)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__KWDEXP, "%THEN");
         pctx->no_eof -= 1;
         return 1;
     }
 
     if (pctx->condstate[pctx->condlevel] != COND_NORMAL) {
         if (pctx->condlevel >= sizeof(pctx->condstate)/sizeof(pctx->condstate[0])) {
-            /* XXX error condition */
+            log_signal(pctx->logctx, pctx->curpos, STC__INTCMPERR, "parse_IF");
             pctx->no_eof -= 1;
             return 0;
         }
@@ -1645,7 +1652,7 @@ parse_ELSE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 {
     condstate_t curstate = pctx->condstate[pctx->condlevel];
     if (curstate != COND_CWA && curstate != COND_CWC) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__UNEXPCOND);
         return 1;
     }
     pctx->condstate[pctx->condlevel] = (curstate == COND_CWA ? COND_AWA : COND_AWC);
@@ -1667,7 +1674,7 @@ parse_FI (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 {
     condstate_t curstate = pctx->condstate[pctx->condlevel];
     if (curstate == COND_NORMAL) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__UNEXPCOND);
         return 1;
     }
     pctx->condstate[pctx->condlevel] = COND_NORMAL;
@@ -1693,13 +1700,13 @@ parse_REQUIRE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     strdesc_t *str;
 
     if (lexeme_boundtype(lex) != LEXTYPE_STRING) {
-        /* XXX - error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__INVSTRLIT);
         lexeme_free(pctx->lmemctx, lex);
         return 1;
     }
     str = lexeme_text(lex);
     if (!parser_fopen(pctx, str->ptr, str->len)) {
-        /* XXX - error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__REQFILERR, str);
     }
     lexeme_free(pctx->lmemctx, lex);
     return 1;
@@ -1718,12 +1725,12 @@ parse_ASSIGN (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     lexeme_t *lex;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, "(");
         return 1;
     }
     parser_next(pctx, QL_NAME, &lex);
     if (lexeme_boundtype(lex) != LEXTYPE_NAME_COMPILETIME) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__CTNAMEXP);
         lexeme_free(pctx->lmemctx, lex);
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
@@ -1731,18 +1738,18 @@ parse_ASSIGN (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     np = lexeme_ctx_get(lex);
     lexeme_free(pctx->lmemctx, lex);
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, ",");
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
     if (!expr_parse_ctce(pctx->expctx, &lex)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__EXPCTCE);
     } else {
         compiletime_assign(np, lexeme_signedval(lex));
         lexeme_free(pctx->lmemctx, lex);
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 0)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, ")");
     }
 
     return 1;
@@ -1765,14 +1772,16 @@ parse_NUMBER (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     long val;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, "(");
         return 1;
     }
     rlex = 0;
     lt = parser_next(pctx, QL_NORMAL, &lex);
     if (lt == LEXTYPE_STRING) {
         if (!string_numval(lexeme_text(lex), 10, &val)) {
-            /* XXX error condition */
+            strdesc_t *text = lexeme_text(lex);
+            log_signal(pctx->logctx, pctx->curpos, STC__NUMCNVERR,
+                       text->ptr, text->len);
             lexeme_free(pctx->lmemctx, lex);
             rlex = lexeme_create(pctx->lmemctx, LEXTYPE_STRING, &zero);
         } else {
@@ -1783,11 +1792,11 @@ parse_NUMBER (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         parser_insert(pctx, lex);
         if (!expr_parse_ctce(pctx->expctx, &rlex)) {
             rlex = lexeme_create(pctx->lmemctx, LEXTYPE_STRING, &zero);
-            /* XXX error condition*/
+            log_signal(pctx->logctx, pctx->curpos, STC__EXPCTCE);
         }
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, ")");
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         if (rlex != 0) {
             lexeme_free(pctx->lmemctx, rlex);
@@ -1814,13 +1823,14 @@ parse_DECLARED (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     lexeme_t *lex, *rlex = 0;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 0)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, "(");
         return 1;
     }
     parser_next(pctx, QL_NAME, &lex);
     boundlt = lexeme_boundtype(lex);
     if (!is_name(boundlt)) {
-        /* XXX error condition */
+        strdesc_t *text = lexeme_text(lex);
+        log_signal(pctx->logctx, pctx->curpos, STC__INVNAME, text);
         lexer_insert(pctx->lexctx, lex);
     } else {
         strdesc_t *text = lexeme_text(lex);
@@ -1831,7 +1841,7 @@ parse_DECLARED (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         lexeme_free(pctx->lmemctx, lex);
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, ")");
         lexeme_free(pctx->lmemctx, rlex);
         rlex = 0;
     }
@@ -1862,12 +1872,12 @@ parse_nbits_func (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     machinedef_t *mach = pctx->mach;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, "(");
         return 1;
     }
     while (1) {
         if (!expr_parse_ctce(pctx->expctx, &lex)) {
-            /* XXX error condition */
+            log_signal(pctx->logctx, pctx->curpos, STC__EXPCTCE);
             parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
             return 1;
         }
@@ -1889,18 +1899,19 @@ parse_nbits_func (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
             break;
         }
         if (lt != LEXTYPE_DELIM_COMMA) {
-            /* XXX error condition */
+            log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, ",");
             parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
             return 1;
         }
     }
     if (maxbits > machine_scalar_bits(mach) - (curlt == LEXTYPE_LXF_NBITS ? 1 : 0)) {
-        /* XXX error condition */
-    } else {
-        bcstr = string_printf(0, "%ld", maxbits);
-        parser_lexeme_add(pctx, LEXTYPE_NUMERIC, bcstr);
-        string_free(bcstr);
+        log_signal(pctx->logctx, pctx->curpos, STC__NBITSERR,
+                   maxbits, machine_scalar_bits(mach));
+        maxbits = machine_scalar_bits(mach);
     }
+    bcstr = string_printf(0, "%ld", maxbits);
+    parser_lexeme_add(pctx, LEXTYPE_NUMERIC, bcstr);
+    string_free(bcstr);
     return 1;
 
 } /* parse_nbits_func */
@@ -1918,31 +1929,32 @@ parse_msgfunc (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 {
     lexeme_t *lex = string_params(pctx, 0);
     lextype_t lt = lexeme_boundtype(lex);
+    textpos_t pos = lexeme_textpos_get(lex);
 
     if (lt == LEXTYPE_STRING) {
         strdesc_t *text = lexeme_text(lex);
         switch (curlt) {
             case LEXTYPE_LXF_PRINT:
-                log_print(pctx->logctx, text);
+                log_print(pctx->logctx, pos, text);
                 break;
             case LEXTYPE_LXF_MESSAGE:
-                log_message(pctx->logctx, text);
+                log_message(pctx->logctx, pos, text);
                 break;
             case LEXTYPE_LXF_ERROR:
-                log_message(pctx->logctx, text);
+                log_message(pctx->logctx, pos, text);
                 break;
             case LEXTYPE_LXF_INFORM:
-                log_inform(pctx->logctx, text);
+                log_inform(pctx->logctx, pos, text);
                 break;
             case LEXTYPE_LXF_WARN:
-                log_warn(pctx->logctx, text);
+                log_warn(pctx->logctx, pos, text);
                 break;
             default:
-                log_signal(pctx->logctx, STC__INTCMPERR, "parse_msgfunc[1]");
+                log_signal(pctx->logctx, pos, STC__INTCMPERR, "parse_msgfunc[1]");
                 break;
         }
     } else {
-        log_signal(pctx->logctx, STC__INTCMPERR, "parse_msgfunc[2]");
+        log_signal(pctx->logctx, pos, STC__INTCMPERR, "parse_msgfunc[2]");
     }
 
     lexeme_free(pctx->lmemctx, lex);
@@ -1985,27 +1997,27 @@ parse_FIELDEXPAND (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     name_t *fnp;
 
     if (!(parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1))) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, "(");
         return 1;
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NAME_FIELD, &lex, 1)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__FLDNAMEXP);
         return 1;
     }
     fnp = lexeme_ctx_get(lex);
     if (fnp == 0) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__INTCMPERR, "parse_FIELDEXPAND");
         return 1;
     }
     lexeme_free(pctx->lmemctx, lex);
     lex = 0;
     if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
         if (!expr_parse_ctce(pctx->expctx, &lex)) {
-            /* XXX error condition */
+            log_signal(pctx->logctx, pctx->curpos, STC__EXPCTCE);
         }
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, ")");
     }
     if (lex == 0) {
         lexseq_t tmpseq;
@@ -2017,7 +2029,7 @@ parse_FIELDEXPAND (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         lexeme_t *rlex = field_extract(fnp, which);
         lexeme_free(pctx->lmemctx, lex);
         if (rlex == 0) {
-            /* XXX error condition */
+            log_signal(pctx->logctx, pctx->curpos, STC__FLDEXPERR);
             parser_insert(pctx, lexeme_create(pctx->lmemctx, LEXTYPE_NUMERIC, &zero));
         } else {
             parser_insert(pctx, lexeme_copy(pctx->lmemctx, rlex));
@@ -2044,15 +2056,15 @@ parse_ALLOCATION (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     int status = 0;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, "(");
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NAME_DATA, &lex, 1)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__SEGNAMEXP);
     } else {
         status = expr_get_allocation(pctx->expctx, lexeme_text(lex), &units);
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
-        /* XXX error condition */
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, ")");
     }
 
     if (status) {

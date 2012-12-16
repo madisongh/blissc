@@ -17,6 +17,7 @@
 #include "nametable.h"
 #include "lexeme.h"
 #include "machinedef.h"
+#include "logging.h"
 
 #undef DOEXPTYPE
 #define DOEXPTYPE(t_) "EXPTYPE_" #t_,
@@ -29,6 +30,7 @@ struct expr_ctx_s {
     namectx_t           namectx;
     lexctx_t            lctx;
     machinedef_t       *mach;
+    logctx_t            logctx;
     expr_node_t        *freenodes;
     expr_dispatch_fn    dispatchers[LEXTYPE_EXPKWD_MAX-LEXTYPE_EXPKWD_MIN+1];
     expr_dispatch_fn    name_dispatchers[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1];
@@ -521,6 +523,7 @@ expr_init (parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope)
     ectx->stg = stg;
     ectx->mach = parser_get_machinedef(pctx);
     ectx->namectx = scope_namectx(kwdscope);
+    ectx->logctx = parser_logctx(pctx);
     exprseq_init(&ectx->exprseq);
 
     for (i = 0; i < sizeof(expr_names)/sizeof(expr_names[0]); i++) {
@@ -563,6 +566,7 @@ namectx_t expr_namectx (expr_ctx_t ctx) { return ctx->namectx; }
 stgctx_t expr_stg_ctx (expr_ctx_t ctx) { return ctx->stg; }
 machinedef_t *expr_machinedef (expr_ctx_t ctx) { return ctx->mach; }
 lexctx_t expr_lexmemctx (expr_ctx_t ctx) { return ctx->lctx; }
+logctx_t expr_logctx (expr_ctx_t ctx) { return ctx->logctx; }
 
 void
 expr_push_routine (expr_ctx_t ctx, name_t *np)

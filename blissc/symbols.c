@@ -48,6 +48,7 @@ struct sym_routine_s {
 typedef struct sym_routine_s sym_routine_t;
 
 struct symctx_s {
+    logctx_t        logctx;
     stgctx_t        stg;
     data_attr_t     data_defaults;
     routine_attr_t  routine_defaults;
@@ -152,7 +153,8 @@ bind_literal (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
         return 0;
     }
     if ((lit->attr.flags & SYM_M_NOVALUE)) {
-        /* XXX error condition */
+        log_signal(lexeme_logctx(lctx), lexeme_textpos_get(lex),
+                   STC__LITNOVAL, lexeme_text(lex));
         val = 0;
     } else {
         val = getvalue(lit->attr.value, lit->attr.width,
@@ -245,6 +247,7 @@ symbols_init (expr_ctx_t ctx)
     };
 
     memset(symctx, 0, sizeof(struct symctx_s));
+    symctx->logctx = lexeme_logctx(lctx);
     symctx->data_defaults.units = machine_scalar_units(mach);
     symctx->literal_defaults.width = machine_scalar_bits(mach);
     symctx->stg = expr_stg_ctx(ctx);
@@ -339,9 +342,10 @@ datasym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     if (np != 0) {
         if (sym->attr.flags & SYM_M_FORWARD) {
             if (attrp->flags & SYM_M_FORWARD) {
-                /* XXX error condition - redeclaration */
-            } else if (!compare_data_attrs(&sym->attr, attrp)) {
-                /* XXX error condition */
+                log_signal(symctx->logctx, pos, STC__REDECLARE, dsc->ptr, dsc->len);
+            } else if (!(attrp->flags & SYM_M_PENDING) &&
+                       !compare_data_attrs(&sym->attr, attrp)) {
+                log_signal(symctx->logctx, pos, STC__ATTRNCMPT, dsc);
             }
         }
         memcpy(&sym->attr, attrp, sizeof(data_attr_t));
@@ -363,6 +367,10 @@ datasym_attr_update (name_t *np, data_attr_t *attrp)
         gsym = name_extraspace(sym->globalsym);
         if (!(gsym->attr.flags & SYM_M_PENDING) &&
             !compare_data_attrs(&gsym->attr, attrp)) {
+            strdesc_t *dsc = name_string(np);
+            symctx_t symctx = nametables_symctx_get(scope_namectx(name_scope(np)));
+            log_signal(symctx->logctx, name_defpos(np), STC__ATTRNCMPT, dsc);
+            string_free(dsc);
             return 0;
         }
     }
@@ -485,13 +493,14 @@ litsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
             if (gsym->attr.width != attrp->width ||
                 (gsym->attr.flags & SYM_M_SIGNEXT)
                 != (attrp->flags & SYM_M_SIGNEXT)) {
+                log_signal(symctx->logctx, pos, STC__ATTRNCMPT, dsc);
                 return 0;
             }
         }
         if (gnp == 0) {
             gnp = name_declare(gscope, &ndef, pos, 0, 0, &gsym);
             if (gnp == 0) {
-                /* XXX error condition */
+                log_signal(symctx->logctx, pos, STC__INTCMPERR, "listsym_declare");
             }
             if (gsym != 0) memcpy(&gsym->attr, attrp, sizeof(literal_attr_t));
         }
@@ -583,9 +592,10 @@ rtnsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     if (np != 0) {
         if (sym->attr.flags & SYM_M_FORWARD) {
             if (attrp->flags & SYM_M_FORWARD) {
-                /* XXX error condition - redeclaration */
-            } else if (!compare_routine_attrs(&sym->attr, attrp)) {
-                /* XXX error condition */
+                log_signal(symctx->logctx, pos, STC__REDECLARE, dsc->ptr, dsc->len);
+            } else if ((attrp->flags & SYM_M_PENDING) == 0 &&
+                       !compare_routine_attrs(&sym->attr, attrp)) {
+                log_signal(symctx->logctx, pos, STC__ATTRNCMPT, dsc);
             }
         }
         memcpy(&sym->attr, attrp, sizeof(routine_attr_t));
@@ -607,6 +617,10 @@ rtnsym_attr_update (name_t *np, routine_attr_t *attrp)
         gsym = name_extraspace(sym->globalsym);
         if (!(gsym->attr.flags & SYM_M_PENDING) &&
             !compare_routine_attrs(&gsym->attr, attrp)) {
+            strdesc_t *dsc = name_string(np);
+            symctx_t symctx = nametables_symctx_get(scope_namectx(name_scope(np)));
+            log_signal(symctx->logctx, name_defpos(np), STC__ATTRNCMPT, dsc);
+            string_free(dsc);
             return 0;
         }
     }
