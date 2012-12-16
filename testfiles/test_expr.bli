@@ -78,9 +78,12 @@ GLOBAL ROUTINE testrtn (ABC, DEF : REF BLOCK[,BYTE] FIELD (DSC_FIELDS)) : NOVALU
 BEGIN
     LABEL
         blklabel1, blklabel2;
+    FORWARD ROUTINE forwardrtntest;
+    FORWARD forwarddatatest;
     LOCAL
         GHI : WORD;
-        
+    GLOBAL forwarddatatest;
+
     GHI = 64;
         
     blklabel1:BEGIN
