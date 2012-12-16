@@ -13,6 +13,7 @@
 #include "lexeme.h"
 #include "scanner.h"
 #include "machinedef.h"
+#include "logging.h"
 
 typedef enum {
     PUNCT_COMMASEP_NOGROUP,
@@ -26,13 +27,14 @@ struct parse_ctx_s;
 typedef struct parse_ctx_s *parse_ctx_t;
 
 parse_ctx_t parser_init(namectx_t namectx, machinedef_t *mach,
-                        scopectx_t *kwdscopep);
+                        scopectx_t *kwdscopep, logctx_t logctx);
 int parser_fopen(parse_ctx_t pctx, const char *fname, size_t fnlen);
 int parser_popen(parse_ctx_t pctx, scan_input_fn infn, void *fnctx);
 void parser_finish(parse_ctx_t pctx);
 void *parser_get_expctx(parse_ctx_t pctx);
 void parser_set_expctx(parse_ctx_t pctx, void *ectx);
 lexctx_t parser_lexmemctx(parse_ctx_t pctx);
+logctx_t parser_logctx(parse_ctx_t pctx);
 lextype_t parser_next(parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lex);
 void parser_insert(parse_ctx_t pctx, lexeme_t *lex);
 void parser_insert_seq(parse_ctx_t pctx, lexseq_t *seq);

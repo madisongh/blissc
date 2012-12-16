@@ -12,6 +12,7 @@
 #include <string.h>
 #include "fileio.h"
 #include "scanner.h"
+#include "logging.h"
 #include "strings.h"
 #include "utils.h"
 
@@ -29,6 +30,7 @@ struct bufctx_s {
 };
 
 struct scanctx_s {
+    logctx_t        logctx;
     fioctx_t        fioctx;
     struct bufctx_s bufstack[SCAN_MAXFILES];
     int             curbuf;
@@ -65,13 +67,14 @@ const static char valid_ident_char[256] = {
 };
 
 scanctx_t
-scan_init (void)
+scan_init (logctx_t logctx)
 {
     scanctx_t ctx = malloc(sizeof(struct scanctx_s));
     if (ctx != 0) {
         memset(ctx, 0, sizeof(struct scanctx_s));
+        ctx->logctx = logctx;
         ctx->curbuf = -1;
-        ctx->fioctx = fileio_init();
+        ctx->fioctx = fileio_init(logctx);
     }
     return ctx;
 }
@@ -91,7 +94,7 @@ scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen)
 {
     int i = ctx->curbuf;
     if (i >= (SCAN_MAXFILES-1)) {
-        /* XXX error condition */
+        log_signal(ctx->logctx, STC__EXCFILCNT, SCAN_MAXFILES);
         return 0;
     }
     i = i + 1;

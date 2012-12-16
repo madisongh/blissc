@@ -19,6 +19,7 @@
 #include "declarations.h"
 #include "macros.h"
 #include "symbols.h"
+#include "logging.h"
 #include "machinedef.h"
 #include "utils.h"
 
@@ -40,6 +41,7 @@ struct parse_ctx_s {
     punctclass_t    punctclass;
     lextype_t       separator;
     lexctx_t        lmemctx;
+    logctx_t        logctx;
 };
 
 typedef int (*lexfunc_t)(parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt);
@@ -252,7 +254,8 @@ name_XXX_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
  * pointer to be stored in the block.
  */
 parse_ctx_t
-parser_init (namectx_t namectx, machinedef_t *mach, scopectx_t *kwdscopep)
+parser_init (namectx_t namectx, machinedef_t *mach, scopectx_t *kwdscopep,
+             logctx_t logctx)
 {
     parse_ctx_t pctx;
     scopectx_t kwdscope;
@@ -270,13 +273,14 @@ parser_init (namectx_t namectx, machinedef_t *mach, scopectx_t *kwdscopep)
     pctx = malloc(sizeof(struct parse_ctx_s));
     if (pctx != 0) {
         memset(pctx, 0, sizeof(struct parse_ctx_s));
+        pctx->logctx   = logctx;
         pctx->namectx  = namectx;
         pctx->kwdscope = kwdscope;
         if (kwdscopep != 0) {
             *kwdscopep = kwdscope;
         }
         pctx->curscope = scope_begin(namectx, kwdscope);
-        pctx->lexctx = lexer_init(pctx->kwdscope);
+        pctx->lexctx = lexer_init(pctx->kwdscope, logctx);
         if (pctx->lexctx != 0) {
             pctx->lmemctx = lexer_lexctx(pctx->lexctx);
         }
@@ -368,6 +372,11 @@ parser_in_declaration (parse_ctx_t pctx)
 lexctx_t
 parser_lexmemctx (parse_ctx_t pctx) {
     return pctx->lmemctx;
+}
+
+logctx_t
+parser_logctx (parse_ctx_t pctx) {
+    return pctx->logctx;
 }
 
 /*
@@ -1912,12 +1921,32 @@ parse_msgfunc (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 
     if (lt == LEXTYPE_STRING) {
         strdesc_t *text = lexeme_text(lex);
-        printf("%% %-*.*s\n", text->len, text->len, text->ptr);
+        switch (curlt) {
+            case LEXTYPE_LXF_PRINT:
+                log_print(pctx->logctx, text);
+                break;
+            case LEXTYPE_LXF_MESSAGE:
+                log_message(pctx->logctx, text);
+                break;
+            case LEXTYPE_LXF_ERROR:
+                log_message(pctx->logctx, text);
+                break;
+            case LEXTYPE_LXF_INFORM:
+                log_inform(pctx->logctx, text);
+                break;
+            case LEXTYPE_LXF_WARN:
+                log_warn(pctx->logctx, text);
+                break;
+            default:
+                log_signal(pctx->logctx, STC__INTCMPERR, "parse_msgfunc[1]");
+                break;
+        }
     } else {
-        fprintf(stderr, "*** wrong lextype(%s) for %s ***\n",
-                lextype_name(lt), lextype_name(curlt));
+        log_signal(pctx->logctx, STC__INTCMPERR, "parse_msgfunc[2]");
     }
+
     lexeme_free(pctx->lmemctx, lex);
+
     return 1;
 
 } /* parse_msg_func */

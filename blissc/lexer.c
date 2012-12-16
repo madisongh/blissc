@@ -26,6 +26,7 @@
 #include "lexeme.h"
 #include "lexer.h"
 #include "scanner.h"
+#include "logging.h"
 #include "strings.h"
 
 struct saved_filename_s {
@@ -61,6 +62,7 @@ typedef struct lexchain_s lexchain_t;
  * marker.
  */
 struct lexer_ctx_s {
+    logctx_t                 logctx;
     lexctx_t                 lexctx;
     struct saved_filename_s *saved_filenames;
     lexchain_t              *chain;
@@ -203,7 +205,7 @@ filename_lookup (lexer_ctx_t lctx, const char *name, size_t len,
  * One-time lexer initialization, to register the operator names.
  */
 lexer_ctx_t 
-lexer_init (scopectx_t kwdscope)
+lexer_init (scopectx_t kwdscope, logctx_t logctx)
 {
     lexer_ctx_t ctx;
     int i;
@@ -215,6 +217,7 @@ lexer_init (scopectx_t kwdscope)
     ctx = malloc(sizeof(struct lexer_ctx_s));
     if (ctx != 0) {
         memset(ctx, 0, sizeof(struct lexer_ctx_s));
+        ctx->logctx = logctx;
         ctx->signok = 1;
         ctx->lexctx = lexeme_init();
     }
@@ -263,7 +266,7 @@ lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen)
         /* XXX error condition */
         return 0;
     }
-    chain->sctx = scan_init();
+    chain->sctx = scan_init(ctx->logctx);
     if (chain->sctx == 0) {
         lexchain_free(ctx->lexctx, chain);
         return 0;
@@ -294,7 +297,7 @@ lexer_popen (lexer_ctx_t ctx, scan_input_fn infn, void *fnctx)
         /* XXX error condition */
         return 0;
     }
-    chain->sctx = scan_init();
+    chain->sctx = scan_init(ctx->logctx);
     if (chain->sctx == 0) {
         lexchain_free(ctx->lexctx, chain);
         return 0;

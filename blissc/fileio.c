@@ -12,6 +12,8 @@
 #include <string.h>
 #include <unistd.h>
 #include "fileio.h"
+#include "logging.h"
+#include <errno.h>
 
 struct filectx_s {
     struct filectx_s *next;
@@ -25,6 +27,7 @@ struct filectx_s {
 };
 
 struct fioctx_s {
+    logctx_t         logctx;
     filectx_t        input_files;
 };
 
@@ -36,11 +39,12 @@ struct fioctx_s {
  */
 
 fioctx_t
-fileio_init (void)
+fileio_init (logctx_t logctx)
 {
     fioctx_t fio = malloc(sizeof(struct fioctx_s));
     if (fio != 0) {
         memset(fio, 0, sizeof(struct fioctx_s));
+        fio->logctx = logctx;
     }
     return fio;
 }
@@ -73,7 +77,10 @@ file_open_input (fioctx_t fio, const char *fname, size_t fnlen)
     ctx->fnlen = fnlen;
     ctx->fd = open(ctx->fname, O_RDONLY);
     if (ctx->fd < 0) {
-        /* XXX error condition */
+        char errbuf[64];
+        errbuf[0] = '\0';
+        strerror_r(errno, errbuf, sizeof(errbuf));
+        log_signal(fio->logctx, STC__FIOERR, errbuf);
         free(ctx);
         return 0;
     }
@@ -102,7 +109,7 @@ file_close (filectx_t ctx)
         prev = cur;
     }
     if (cur == 0) {
-        /* XXX error condition */
+        log_signal(fio->logctx, STC__INTCMPERR, "file_close");
         return;
     }
     if (prev == 0) {
@@ -137,7 +144,7 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
             if (cp != 0) {
                 size_t count = cp - bp;
                 if (count > bufsiz) {
-                    /* XXX error condition */
+                    log_signal(ctx->fio->logctx, STC__LNTOOLONG, file_getname(ctx));
                     status = -1;
                     break;
                 }
@@ -148,7 +155,7 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
                 break;
             }
             if (remain > bufsiz) {
-                /* XXX error condition */
+                log_signal(ctx->fio->logctx, STC__LNTOOLONG, file_getname(ctx));
                 status = -1;
                 break;
             }
@@ -158,7 +165,10 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
         }
         ret = read(ctx->fd, ctx->filebuf, sizeof(ctx->filebuf));
         if (ret < 0) {
-            /* XXX error condition */
+            char errbuf[64];
+            errbuf[0] = '\0';
+            strerror_r(errno, errbuf, sizeof(errbuf));
+            log_signal(ctx->fio->logctx, STC__FIOERR, errbuf);
             status = -1;
             break;
         }

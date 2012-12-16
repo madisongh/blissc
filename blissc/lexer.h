@@ -12,12 +12,13 @@
 #include "lexeme.h"
 #include "nametable.h"
 #include "scanner.h"
+#include "logging.h"
 #include "strings.h"
 
 struct lexer_ctx_s;
 typedef struct lexer_ctx_s *lexer_ctx_t;
 
-lexer_ctx_t lexer_init(scopectx_t kwdscope);
+lexer_ctx_t lexer_init(scopectx_t kwdscope, logctx_t logctx);
 lexctx_t lexer_lexctx(lexer_ctx_t lctx);
 strdesc_t *lexer_filename(lexer_ctx_t lctx, int filename_index);
 int lexer_fopen(lexer_ctx_t ctx, const char *fname, size_t fnlen);
