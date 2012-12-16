@@ -23,6 +23,8 @@
 		7AC12EC01659194A009C84F5 /* utils.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AC12EBF1659194A009C84F5 /* utils.c */; };
 		7AC12EC7165944B4009C84F5 /* storage.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AC12EC6165944B4009C84F5 /* storage.c */; };
 		7AD8D0FF1666B7EA002AB41D /* structures.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AD8D0FE1666B7E9002AB41D /* structures.c */; };
+		7ADCC897167E23CF00D09FA4 /* statcodes.c in Sources */ = {isa = PBXBuildFile; fileRef = 7ADCC896167E23CF00D09FA4 /* statcodes.c */; };
+		7ADCC89C167E422A00D09FA4 /* logging.c in Sources */ = {isa = PBXBuildFile; fileRef = 7ADCC89B167E422900D09FA4 /* logging.c */; };
 		7AF573D9164936EE005C965F /* macros.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AF573D8164936EE005C965F /* macros.c */; };
 /* End PBXBuildFile section */
 
@@ -78,6 +80,10 @@
 		7AC12EC6165944B4009C84F5 /* storage.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = storage.c; sourceTree = "<group>"; };
 		7AD8D0FE1666B7E9002AB41D /* structures.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; path = structures.c; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.c; };
 		7ADC81891649CD660056600E /* macros.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = macros.h; sourceTree = "<group>"; };
+		7ADCC896167E23CF00D09FA4 /* statcodes.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = statcodes.c; sourceTree = "<group>"; };
+		7ADCC899167E23E200D09FA4 /* statcodes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = statcodes.h; sourceTree = "<group>"; };
+		7ADCC89A167E421A00D09FA4 /* logging.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = logging.h; sourceTree = "<group>"; };
+		7ADCC89B167E422900D09FA4 /* logging.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = logging.c; sourceTree = "<group>"; };
 		7AF573D8164936EE005C965F /* macros.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = macros.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -124,6 +130,8 @@
 				7A7FD5181636C65200B2D7FC /* lexeme.h */,
 				7A7FD5141636C29C00B2D7FC /* lexer.c */,
 				7A7FD5171636C2A700B2D7FC /* lexer.h */,
+				7ADCC89B167E422900D09FA4 /* logging.c */,
+				7ADCC89A167E421A00D09FA4 /* logging.h */,
 				7AC12EC316591C0A009C84F5 /* machinedef.h */,
 				7AF573D8164936EE005C965F /* macros.c */,
 				7ADC81891649CD660056600E /* macros.h */,
@@ -134,6 +142,8 @@
 				7A9E1C14163DA45A009ACBD0 /* parser.h */,
 				7A9D4CAA1635CEA30013AE09 /* scanner.c */,
 				7A9D4CA91635CE970013AE09 /* scanner.h */,
+				7ADCC896167E23CF00D09FA4 /* statcodes.c */,
+				7ADCC899167E23E200D09FA4 /* statcodes.h */,
 				7AC12EC6165944B4009C84F5 /* storage.c */,
 				7AC12EC41659303B009C84F5 /* storage.h */,
 				7A95BCEB1641CC2F002F851E /* strings.c */,
@@ -220,6 +230,8 @@
 				7AD8D0FF1666B7EA002AB41D /* structures.c in Sources */,
 				7AB8A9AD16722B3500B91750 /* symbols.c in Sources */,
 				7A13E03616775C9600C4F14D /* execfuncs.c in Sources */,
+				7ADCC897167E23CF00D09FA4 /* statcodes.c in Sources */,
+				7ADCC89C167E422A00D09FA4 /* logging.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
