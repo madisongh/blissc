@@ -1011,10 +1011,15 @@ declare_data (expr_ctx_t ctx, scopectx_t scope, lextype_t lt, decltype_t dt)
         }
         memset(&attr, 0, sizeof(attr));
         if (stackonly) attr.flags |= SYM_M_STACKONLY;
+        if (dt == DCL_FORWARD) attr.flags |= SYM_M_FORWARD;
         attr.psect = psname;
         attr.flags |= SYM_M_PENDING;
         np = datasym_declare(scope, namestr, sc, &attr, pos);
-        datasym_seg_set(np, seg);
+        if (np == 0) {
+            /* XXX error condition */
+        } else {
+            datasym_seg_set(np, seg);
+        }
 
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
             status = handle_data_attrs(ctx, scope, dt, seg, &attr, np, 0);
@@ -1321,7 +1326,6 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
     stgctx_t stg = expr_stg_ctx(ctx);
     strdesc_t *namestr;
     textpos_t pos;
-    scopectx_t argscope;
     psect_t *psect = 0;
     seg_t *seg;
     name_t *np;
@@ -1345,7 +1349,6 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
 
     while (1) {
         routine_attr_t attr;
-        argscope = 0;
         if (!parse_decl_name(pctx, scope, &namestr, &pos)) {
             /* XXX error condition */
             return 0;
@@ -1361,7 +1364,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
             seg = seg_alloc_static(stg, pos, psect);
         }
 
-        if (dt != DCL_EXTERNAL) {
+        if (dt != DCL_EXTERNAL && dt != DCL_FORWARD) {
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
                 if (!parse_formals(ctx, scope, &attr.argscope,
                                    &attr.inargs, &attr.outargs)) {
@@ -1380,6 +1383,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
                 return 0;
             }
         }
+        if (dt == DCL_FORWARD) attr.flags |= SYM_M_FORWARD;
         attr.flags |= SYM_M_PENDING;
         np = rtnsym_declare(scope, namestr, sc, &attr, pos);
         if (is_bind || dt == DCL_NORMAL || dt == DCL_GLOBAL) {
@@ -1405,8 +1409,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
                     }
                 }
                 if (attr.argscope != 0) {
-                    argscope = scope_copy(attr.argscope, 0);
-                    parser_scope_set(pctx, argscope);
+                    parser_scope_push(pctx, attr.argscope);
                 }
             }
             if (!expr_expr_next(ctx, &exp)) {
@@ -1420,7 +1423,9 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
                 ivlist = initval_expr_add(stg, 0, 1, 1, exp, 32, 0);
                 seg_initval_set(stg, seg, ivlist);
             } else {
-                if (argscope != 0) parser_scope_end(pctx);
+                if (attr.argscope != 0) {
+                    parser_scope_pop(pctx);
+                }
                 frame_end(stg);
                 rtnsym_expr_set(np, exp);
             }
@@ -1491,6 +1496,33 @@ undeclare (parse_ctx_t pctx, scopectx_t scope)
     
 } /* undeclare */
 
+/*
+ * BUILTIN
+ */
+static int
+declare_builtin (parse_ctx_t pctx, scopectx_t scope)
+{
+    strdesc_t *namestr;
+    textpos_t pos;
+
+    while (1) {
+        if (!parse_decl_name(pctx, scope, &namestr, &pos)) {
+            /* XXX error condition */
+        }
+        if (!name_declare_builtin(scope, namestr, pos)) {
+            /* XXX error condition */
+        }
+        if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
+            break;
+        }
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1)) {
+        /* XXX error condition */
+    }
+    string_free(namestr);
+    return 1;
+
+}
 
 
 /*
@@ -1596,6 +1628,9 @@ parse_declaration (expr_ctx_t ctx)
     }
 
     switch (lt) {
+        case LEXTYPE_DCL_BUILTIN:
+            status = declare_builtin(pctx, scope);
+            break;
         case LEXTYPE_DCL_BIND:
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DCL_ROUTINE, 0, 1)) {
                 status = declare_routine(ctx, scope, dtypes[which], 1);
@@ -1688,7 +1723,7 @@ declare_module (expr_ctx_t ctx)
     }
     memset(&ndef, 0, sizeof(ndef));
     ndef.lt = LEXTYPE_NAME_MODULE;
-    ndef.flags = 0;
+    ndef.flags = NAME_M_DECLARED;
     ndef.name = text->ptr;
     ndef.namelen = text->len;
     np = name_declare(scope, &ndef, pos, 0, 0, 0);

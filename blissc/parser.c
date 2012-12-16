@@ -186,11 +186,12 @@ name_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
     }
 
     lexeme_ctx_set(lex, np);
-    lex->boundtype = (np == 0 ? LEXTYPE_NAME : nt);
     if (np == 0) {
-        lex->type = LEXTYPE_NAME;
+        lex->boundtype = lex->type = LEXTYPE_NAME;
         return 0;
     }
+
+    lex->boundtype = nt;
 
     // Now that we've resolved the name, repeat the
     // binding process on the resulting lexeme.
@@ -198,6 +199,45 @@ name_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
     return lexeme_bind(lctx, ctx, ql, qm, cs, lex, result);
 
 } /* name_bind */
+
+/*
+ * name_XXX_bind
+ *
+ * Default binding routine for LEXTYPE_NAME_xxx lextypes.  This can
+ * be overridden if special handling is required.
+ */
+static int
+name_XXX_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
+               lextype_t lt, condstate_t cs, lexeme_t *lex, lexseq_t *result)
+{
+    if (cs == COND_CWA || cs == COND_AWC) {
+        lexeme_free(lctx, lex);
+        return 1;
+    }
+
+    if (qm == QM_QUOTE) {
+        lex->type = LEXTYPE_UNBOUND;
+        lex->boundtype = LEXTYPE_NAME;
+        return 0;
+    }
+
+    if (ql == QL_MACRO && lt != LEXTYPE_NAME_MAC_PARAM) {
+        lex->type = LEXTYPE_UNBOUND;
+        lex->boundtype = LEXTYPE_NAME;
+        return 0;
+    }
+
+    if (ql == QL_NAME && lt != LEXTYPE_NAME_MACRO) {
+        lex->type = LEXTYPE_UNBOUND;
+        lex->boundtype = LEXTYPE_NAME;
+        return 0;
+    }
+
+    lex->type = lt;
+
+    return 0;
+
+} /* name_XXX_bind */
 
 /*
  *  --- Public API for this module ---
@@ -212,10 +252,11 @@ name_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
  * pointer to be stored in the block.
  */
 parse_ctx_t
-parser_init (namectx_t namectx, machinedef_t *mach)
+parser_init (namectx_t namectx, machinedef_t *mach, scopectx_t *kwdscopep)
 {
     parse_ctx_t pctx;
     scopectx_t kwdscope;
+    lextype_t lt;
     int i;
 
     if (namectx == 0) {
@@ -231,6 +272,9 @@ parser_init (namectx_t namectx, machinedef_t *mach)
         memset(pctx, 0, sizeof(struct parse_ctx_s));
         pctx->namectx  = namectx;
         pctx->kwdscope = kwdscope;
+        if (kwdscopep != 0) {
+            *kwdscopep = kwdscope;
+        }
         pctx->curscope = scope_begin(namectx, kwdscope);
         pctx->lexctx = lexer_init(pctx->kwdscope);
         if (pctx->lexctx != 0) {
@@ -240,6 +284,10 @@ parser_init (namectx_t namectx, machinedef_t *mach)
         pctx->punctclass = PUNCT_SEMISEP_NOGROUP;
     }
 
+    // Register the default binding routine for names
+    for (lt = LEXTYPE_NAME_MIN; lt <= LEXTYPE_NAME_MAX; lt++) {
+        lextype_register(pctx->lmemctx, lt, name_XXX_bind);
+    }
     lextype_register(pctx->lmemctx, LEXTYPE_NAME, name_bind);
 
     pctx->mach = mach;
@@ -589,13 +637,19 @@ parser_scope_get (parse_ctx_t pctx)
 } /* parser_scope_get */
 
 scopectx_t
-parser_scope_set (parse_ctx_t pctx, scopectx_t newscope)
+parser_scope_push (parse_ctx_t pctx, scopectx_t newscope)
 {
     scope_setparent(newscope, pctx->curscope);
     pctx->curscope = newscope;
     return newscope;
 }
 
+scopectx_t
+parser_scope_pop (parse_ctx_t pctx)
+{
+    pctx->curscope = scope_getparent(pctx->curscope);
+    return pctx->curscope;
+}
 /*
  * parser_scope_begin
  *

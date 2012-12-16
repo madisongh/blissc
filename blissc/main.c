@@ -163,6 +163,7 @@ int
 test_parser (int argc, const char *argv[])
 {
     parse_ctx_t pctx;
+    scopectx_t kwdscope;
     lexctx_t lctx;
 //    stgctx_t stg;
     lexeme_t *lex;
@@ -172,7 +173,7 @@ test_parser (int argc, const char *argv[])
     machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32, .signext_supported=1 };
 
 //    stg = storage_init(&machdef);
-    pctx = parser_init(0, &machdef);
+    pctx = parser_init(0, &machdef, &kwdscope);
     lctx = parser_lexmemctx(pctx);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
@@ -206,6 +207,7 @@ test_expr (int argc, const char *argv[])
     parse_ctx_t pctx;
     stgctx_t stg;
     expr_ctx_t  ectx;
+    scopectx_t kwdscope;
 //    lexeme_t *lex;
 //   lextype_t lt;
 //    int linewidth;
@@ -214,8 +216,8 @@ test_expr (int argc, const char *argv[])
         .signext_supported=1, .max_align=2, .reg_count = 16 };
 
     stg = storage_init(&machdef);
-    pctx = parser_init(0, &machdef);
-    ectx = expr_init(pctx, stg, scope_getparent(parser_scope_get(pctx)));
+    pctx = parser_init(0, &machdef, &kwdscope);
+    ectx = expr_init(pctx, stg, kwdscope);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;

@@ -428,6 +428,7 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
 
     memset(&ndef, 0, sizeof(ndef));
     ndef.lt = LEXTYPE_NAME_MACRO;
+    ndef.flags = NAME_M_DECLARED;
     while (1) {
         if (!parse_decl_name(pctx, scope, &ltext, &pos)) {
             /* XXX error condition */

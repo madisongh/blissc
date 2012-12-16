@@ -45,6 +45,8 @@ typedef struct namereflist_s namereflist_t;
 
 #define NAME_M_RESERVED (1<<0) // error if the name is redefined
 #define NAME_M_DECLARED (1<<1) // set if explicitly declared
+#define NAME_M_FORWARD  (1<<2)
+#define NAME_M_BUILTIN  (1<<3)
 #define NAME_M_FLAGMASK (0xFFFF) // others are reserved for internal use
 
 DEFINE_TQ_FUNCS(namereflist, namereflist_t, nameref_t)
@@ -117,4 +119,6 @@ strdesc_t *tempname_get(namectx_t ctx);
 nameref_t *nameref_alloc(namectx_t ctx, name_t *np);
 void nameref_free(namectx_t ctx, nameref_t *nr);
 void namereflist_free(namectx_t ctx, namereflist_t *reflist);
+name_t *scope_nextname(scopectx_t scope, void **ctxp);
+int name_declare_builtin(scopectx_t scope, strdesc_t *str, textpos_t pos);
 #endif

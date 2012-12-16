@@ -28,6 +28,7 @@ typedef enum {
 #define SYM_M_STACKONLY (1<<5)
 #define SYM_M_RESERVED  (1<<6)
 #define SYM_M_PENDING   (1<<7)
+#define SYM_M_FORWARD   (1<<8)
 
 struct literal_attr_s {
     unsigned long value;
@@ -87,6 +88,7 @@ void rtnsym_seg_set(name_t *np, seg_t *seg);
 routine_attr_t *rtnsym_attr(name_t *np);
 int sym_undeclare(scopectx_t scope, strdesc_t *dsc);
 int sym_addrs_comparable(name_t *np_a, name_t *np_b);
+void sym_check_dangling_forwards(scopectx_t scope);
 name_t *psect_declare(scopectx_t scope, strdesc_t *dsc,
                       unsigned int psflags, textpos_t pos);
 psect_t *psect_search(scopectx_t scope, strdesc_t *namedsc);

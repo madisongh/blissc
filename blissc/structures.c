@@ -345,6 +345,7 @@ declare_structure (expr_ctx_t ctx, scopectx_t scope)
         }
         memset(&ndef, 0, sizeof(ndef));
         ndef.lt = LEXTYPE_NAME_STRUCTURE;
+        ndef.flags = NAME_M_DECLARED;
         ndef.name = struname->ptr;
         ndef.namelen = struname->len;
         np = name_declare(scope, &ndef, pos, 0, 0, &stru);
@@ -413,6 +414,7 @@ parse_fields (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
         memset(&ndef, 0, sizeof(ndef));
         ndef.name = fldname->ptr;
         ndef.namelen = fldname->len;
+        ndef.flags = NAME_M_DECLARED;
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 1)) {
             /* XXX error condition */
         }
@@ -697,7 +699,7 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
     macparam_special(myscope, name_string(struname), &seq);
     lexseq_free(lctx, &seq);
     if (fldscope != 0) {
-        parser_scope_set(pctx, fldscope);
+        parser_scope_push(pctx, fldscope);
     }
     for (ref = namereflist_head(&stru->accformals); ref != 0; ref = ref->tq_next) {
         if (ref->np != 0) {
@@ -760,7 +762,7 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
     }
     lexseq_init(&seq);
     lexseq_copy(lctx, &seq, &stru->accbody);
-    parser_scope_set(pctx, myscope);
+    parser_scope_push(pctx, myscope);
     if (!expr_parse_seq(ctx, &seq, &exp)) {
         /* XXX error condition */
         lexseq_free(lctx, &seq);

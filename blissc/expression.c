@@ -697,7 +697,8 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
         }
     }
     if (scope != 0) {
-        parser_scope_end(pctx);
+        parser_scope_pop(pctx);
+        sym_check_dangling_forwards(scope);
     }
     exp = expr_node_alloc(ctx, EXPTYPE_PRIM_BLK, endpos);
     expr_blk_scope_set(exp, scope);
@@ -2329,7 +2330,7 @@ parse_incrdecr (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
         return 0;
     }
     ctx->loopdepth += 1;
-    parser_scope_end(pctx);
+    parser_scope_pop(pctx);
     exp = expr_node_alloc(ctx, EXPTYPE_CTRL_LOOPID, parser_curpos(pctx));
     expr_idloop_scope_set(exp, scope);
     expr_idloop_init_set(exp, fromexp);

@@ -578,6 +578,23 @@ scope_namectx (scopectx_t scope)
     return scope->home;
 }
 
+name_t *
+scope_nextname (scopectx_t scope, void **ctxp)
+{
+    name_t *np, *ctx;
+    if (ctxp == 0) {
+        return 0;
+    }
+    ctx = *ctxp;
+    if (ctx == 0) {
+        *ctxp = np = namelist_head(&scope->names);
+    } else {
+        *ctxp = np = ctx->tq_next;
+    }
+    return np;
+
+} /* scope_nextname */
+
 /*
  * nametype_dataop_register
  *
@@ -662,7 +679,13 @@ name_search_internal (scopectx_t curscope, const char *id, size_t len,
                 }
             }
         }
-        if (np != 0 && (np->nametype != LEXTYPE_NAME || undeclared_ok)) {
+        // If we're searching only for "declared" (i.e., available for use)
+        // names, then make sure it's not an undeclared builtin and that
+        // the name entry has a defined type (rather than the generic NAME).
+        // If 'undeclared_ok' is set, we don't care about that.
+        if (np != 0 && (undeclared_ok ||
+                        ((np->nameflags & NAME_M_BUILTIN) == 0 &&
+                         np->nametype != LEXTYPE_NAME))) {
             if (ntypep != 0) *ntypep = np->nametype;
             if (datapp != 0) *(void **)datapp = np->nameextra;
             return np;
@@ -768,8 +791,12 @@ name_declare_internal (scopectx_t scope, const char *id, size_t len,
     } else if (np != 0) {
         if (np->namescope == scope && nt != LEXTYPE_NAME &&
             !(np->nameflags & NAME_M_NODCLCHK)) {
-            /* XXX error condition - redeclaration */
-            return 0;
+            // Redeclaration of FORWARDs is allowed, but only if
+            // the type matches
+            if (!(np->nameflags & NAME_M_FORWARD) || nt != type) {
+                /* XXX error condition - redeclaration */
+                return 0;
+            }
         }
         if ((np->nameflags & NAME_M_RESERVED) != 0) {
             /* XXX error condition - reserved word */
@@ -794,7 +821,6 @@ name_declare_internal (scopectx_t scope, const char *id, size_t len,
 
     np->nametype = type;
     np->nameflags &= ~NAME_M_NODCLCHK;
-    np->nameflags |= NAME_M_DECLARED;
     np->nameflags &= ~NAME_M_FLAGMASK;
     np->nameflags |= (NAME_M_FLAGMASK & flags);
     np->namedclpos = pos;
@@ -868,5 +894,24 @@ strdesc_t *
 tempname_get (namectx_t ctx)
 {
     ctx->tmpcount += 1;
-    return string_printf(0, "%%TMP$%04u", ctx->tmpcount);
+    if (ctx->tmpcount > 999999) {
+        /* XXX error condition */
+    }
+    return string_printf(0, "%%TMP$%06u", ctx->tmpcount);
+}
+
+int
+name_declare_builtin (scopectx_t scope, strdesc_t *namestr, textpos_t pos)
+{
+    name_t *np = name_search(scope, namestr->ptr, namestr->len, 0);
+
+    if (np == 0 || (np->nameflags & NAME_M_BUILTIN) == 0) {
+        return 0;
+    }
+    np = name_copy(np, scope);
+    np->nameflags &= ~NAME_M_BUILTIN;
+    np->nameflags |= NAME_M_DECLARED;
+    name_insert(scope, np);
+    return 1;
+
 }

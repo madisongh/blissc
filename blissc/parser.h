@@ -25,7 +25,8 @@ typedef enum {
 struct parse_ctx_s;
 typedef struct parse_ctx_s *parse_ctx_t;
 
-parse_ctx_t parser_init(namectx_t namectx, machinedef_t *mach);
+parse_ctx_t parser_init(namectx_t namectx, machinedef_t *mach,
+                        scopectx_t *kwdscopep);
 int parser_fopen(parse_ctx_t pctx, const char *fname, size_t fnlen);
 int parser_popen(parse_ctx_t pctx, scan_input_fn infn, void *fnctx);
 void parser_finish(parse_ctx_t pctx);
@@ -37,7 +38,8 @@ void parser_insert(parse_ctx_t pctx, lexeme_t *lex);
 void parser_insert_seq(parse_ctx_t pctx, lexseq_t *seq);
 void parser_skip_to_delim(parse_ctx_t pctx, lextype_t delimtype);
 scopectx_t parser_scope_get(parse_ctx_t pctx);
-scopectx_t parser_scope_set(parse_ctx_t pctx, scopectx_t newscope);
+scopectx_t parser_scope_push(parse_ctx_t pctx, scopectx_t newscope);
+scopectx_t parser_scope_pop(parse_ctx_t pctx);
 scopectx_t parser_scope_begin(parse_ctx_t pctx);
 scopectx_t parser_scope_end(parse_ctx_t pctx);
 void parser_incr_erroneof(parse_ctx_t pctx);

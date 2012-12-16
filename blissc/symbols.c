@@ -314,8 +314,12 @@ datasym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
 
     memset(&ndef, 0, sizeof(ndef));
     ndef.lt = LEXTYPE_NAME_DATA;
+    ndef.flags = NAME_M_DECLARED;
     ndef.name = dsc->ptr;
     ndef.namelen = dsc->len;
+    if (attrp->flags & SYM_M_FORWARD) {
+        ndef.flags |= NAME_M_FORWARD;
+    }
 
     if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
         scopectx_t gscope = nametables_globalscope(namectx);
@@ -333,6 +337,13 @@ datasym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     }
     np = name_declare(scope, &ndef, pos, 0, 0, &sym);
     if (np != 0) {
+        if (sym->attr.flags & SYM_M_FORWARD) {
+            if (attrp->flags & SYM_M_FORWARD) {
+                /* XXX error condition - redeclaration */
+            } else if (!compare_data_attrs(&sym->attr, attrp)) {
+                /* XXX error condition */
+            }
+        }
         memcpy(&sym->attr, attrp, sizeof(data_attr_t));
         if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
             sym->globalsym = gnp;
@@ -405,6 +416,7 @@ compiletime_declare (scopectx_t scope, strdesc_t *dsc, long val, textpos_t pos)
 
     memset(&ndef, 0, sizeof(ndef));
     ndef.lt = LEXTYPE_NAME_COMPILETIME;
+    ndef.flags = NAME_M_DECLARED;
     ndef.name = dsc->ptr;
     ndef.namelen = dsc->len;
     np = name_declare(scope, &ndef, pos, 0, 0, 0);
@@ -422,6 +434,7 @@ label_declare (scopectx_t scope, strdesc_t *dsc, textpos_t pos)
 
     memset(&ndef, 0, sizeof(ndef));
     ndef.lt = LEXTYPE_NAME_LABEL;
+    ndef.flags = NAME_M_DECLARED;
     ndef.name = dsc->ptr;
     ndef.namelen = dsc->len;
     return name_declare(scope, &ndef, pos, 0, 0, 0);
@@ -457,6 +470,7 @@ litsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
 
     memset(&ndef, 0, sizeof(ndef));
     ndef.lt = LEXTYPE_NAME_LITERAL;
+    ndef.flags = NAME_M_DECLARED;
     ndef.name = dsc->ptr;
     ndef.namelen = dsc->len;
     ndef.flags = (attrp->flags & SYM_M_RESERVED) ? NAME_M_RESERVED : 0;
@@ -544,8 +558,12 @@ rtnsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
 
     memset(&ndef, 0, sizeof(ndef));
     ndef.lt = LEXTYPE_NAME_ROUTINE;
+    ndef.flags = NAME_M_DECLARED;
     ndef.name = dsc->ptr;
     ndef.namelen = dsc->len;
+    if (attrp->flags & SYM_M_FORWARD) {
+        ndef.flags |= NAME_M_FORWARD;
+    }
 
     if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
         scopectx_t gscope = nametables_globalscope(namectx);
@@ -563,6 +581,13 @@ rtnsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     }
     np = name_declare(scope, &ndef, pos, 0, 0, &sym);
     if (np != 0) {
+        if (sym->attr.flags & SYM_M_FORWARD) {
+            if (attrp->flags & SYM_M_FORWARD) {
+                /* XXX error condition - redeclaration */
+            } else if (!compare_routine_attrs(&sym->attr, attrp)) {
+                /* XXX error condition */
+            }
+        }
         memcpy(&sym->attr, attrp, sizeof(routine_attr_t));
         if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
             sym->globalsym = gnp;
@@ -649,6 +674,7 @@ psect_declare (scopectx_t scope, strdesc_t *dsc,
     }
     memset(&ndef, 0, sizeof(ndef));
     ndef.lt = LEXTYPE_NAME_PSECT;
+    ndef.flags = NAME_M_DECLARED;
     ndef.name = dsc->ptr;
     ndef.namelen = dsc->len;
     np = name_declare(scope, &ndef, pos, 0, 0, 0);
@@ -741,4 +767,30 @@ sym_addrs_comparable (name_t *np_a, name_t *np_b)
         return ext_a == ext_b;
     }
     return 0;
+}
+
+void
+sym_check_dangling_forwards (scopectx_t scope)
+{
+    void *walkctx = 0;
+    name_t *np;
+    int is_dangling;
+
+    for (np = scope_nextname(scope, &walkctx); np != 0;
+         np = scope_nextname(scope, &walkctx)) {
+        is_dangling = 0;
+        if (name_type(np) == LEXTYPE_NAME_DATA) {
+            sym_data_t *dsym = name_extraspace(np);
+            is_dangling = (dsym->attr.flags & SYM_M_FORWARD) != 0;
+        } else if (name_type(np) == LEXTYPE_NAME_ROUTINE) {
+            sym_routine_t *rsym = name_extraspace(np);
+            is_dangling = (rsym->attr.flags & SYM_M_FORWARD) != 0;
+        }
+        if (is_dangling) {
+            strdesc_t *str = name_string(np);
+            printf("FORWARD name not declared: %-*.*s\n",
+                   str->len, str->len, str->ptr);
+            string_free(str);
+        }
+    }
 }
