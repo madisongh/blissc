@@ -301,9 +301,12 @@ expr_node_free (expr_ctx_t ctx, expr_node_t *node)
             string_free(expr_litstring(node));
             break;
 
+        case EXPTYPE_EXECFUN:
+            exprseq_free(ctx, expr_func_arglist(node));
+            break;
+
         case EXPTYPE_NOOP:
         case EXPTYPE_PRIM_SEG:
-        case EXPTYPE_EXECFUN: // TBD XXX
             break;
     }
     memset(node, 0x77, sizeof(expr_node_t));
@@ -423,8 +426,13 @@ expr_node_copy (expr_ctx_t ctx, expr_node_t *node)
                 expr_litstring_set(dst, string_copy(0, expr_litstring(node)));
             }
             break;
+
+        case EXPTYPE_EXECFUN:
+            exprseq_copy(ctx, expr_func_arglist(dst),
+                         expr_func_arglist(node));
+            break;
+
         case EXPTYPE_NOOP:
-        case EXPTYPE_EXECFUN: // TBD XXX
         case EXPTYPE_PRIM_SEG:
             break;
     }
@@ -712,7 +720,7 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
     }
     if (scope != 0) {
         parser_scope_pop(pctx);
-        sym_check_dangling_forwards(scope);
+        sym_check_dangling_forwards(scope, parser_curpos(pctx));
     }
     exp = expr_node_alloc(ctx, EXPTYPE_PRIM_BLK, endpos);
     expr_blk_scope_set(exp, scope);

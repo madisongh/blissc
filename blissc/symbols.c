@@ -708,15 +708,18 @@ psect_search (scopectx_t scope, strdesc_t *dsc)
 psect_t *psect_pointer (name_t *np) { return name_value_pointer(np); }
 
 int
-sym_undeclare (scopectx_t scope, strdesc_t *dsc)
+sym_undeclare (scopectx_t scope, strdesc_t *dsc, textpos_t pos)
 {
     lextype_t type;
     name_t *np = name_search(scope, dsc->ptr, dsc->len, &type);
 
     if (np == 0 || (type < LEXTYPE_NAME_MIN || type > LEXTYPE_NAME_MAX)) {
+        namectx_t namectx = scope_namectx(scope);
+        symctx_t symctx = nametables_symctx_get(namectx);
+        log_signal(symctx->logctx, pos, STC__UNDECUND, dsc);
         return 0;
     }
-    return name_undeclare(scope, np);
+    return name_undeclare(scope, np, pos);
 
 }
 
@@ -784,7 +787,7 @@ sym_addrs_comparable (name_t *np_a, name_t *np_b)
 }
 
 void
-sym_check_dangling_forwards (scopectx_t scope)
+sym_check_dangling_forwards (scopectx_t scope, textpos_t pos)
 {
     void *walkctx = 0;
     name_t *np;
@@ -801,9 +804,9 @@ sym_check_dangling_forwards (scopectx_t scope)
             is_dangling = (rsym->attr.flags & SYM_M_FORWARD) != 0;
         }
         if (is_dangling) {
+            symctx_t symctx = nametables_symctx_get(scope_namectx(scope));
             strdesc_t *str = name_string(np);
-            printf("FORWARD name not declared: %-*.*s\n",
-                   str->len, str->len, str->ptr);
+            log_signal(symctx->logctx, pos, STC__FWDNOTDCL, str);
             string_free(str);
         }
     }

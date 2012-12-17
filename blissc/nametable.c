@@ -877,12 +877,14 @@ name_declare_nocheck (scopectx_t scope, namedef_t *def,
  * from finding the name in an ancestral scope.
  */
 int
-name_undeclare (scopectx_t scope, name_t *np)
+name_undeclare (scopectx_t scope, name_t *np, textpos_t pos)
 {
     namectx_t ctx = scope->home;
     name_t *undeclarednp;
 
     if (np->nameflags & NAME_M_RESERVED) {
+        log_signal(scope->home->logctx, pos, STC__UNDECRSVD,
+                   np->name, np->namelen);
         return 0;
     }
     undeclarednp = name_alloc(ctx, LEXTYPE_NAME, np->name, np->namelen);
@@ -913,6 +915,8 @@ name_declare_builtin (scopectx_t scope, strdesc_t *namestr, textpos_t pos)
     name_t *np = name_search(scope, namestr->ptr, namestr->len, 0);
 
     if (np == 0 || (np->nameflags & NAME_M_BUILTIN) == 0) {
+        logctx_t logctx = scope->home->logctx;
+        log_signal(logctx, pos, STC__NOTBUILTN, namestr);
         return 0;
     }
     np = name_copy(np, scope);

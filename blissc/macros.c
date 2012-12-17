@@ -435,7 +435,7 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
     ndef.flags = NAME_M_DECLARED;
     while (1) {
         if (!parse_decl_name(pctx, scope, &ltext, &pos)) {
-            log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
+            log_signal(parser_logctx(pctx), parser_curpos(pctx),
                        STC__NAMEEXP);
             skip_to_end = 1;
         }
@@ -443,7 +443,7 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
         if (lt != LEXTYPE_DELIM_LPAR &&
             lt != LEXTYPE_OP_ASSIGN &&
             (is_kwdmacro || lt == LEXTYPE_DELIM_LBRACK)) {
-            log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
+            log_signal(parser_logctx(pctx), parser_curpos(pctx),
                        STC__SYNTAXERR);
             skip_to_end = 1;
         }
@@ -458,7 +458,7 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
                 skip_to_end = 1;
             }
             if (namereflist_length(&macro->plist) == 0) {
-                log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
+                log_signal(parser_logctx(pctx), parser_curpos(pctx),
                            STC__NOMACPRMS);
                 skip_to_end = 1;
             }
@@ -520,7 +520,7 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
             break;
         }
         if (lt != LEXTYPE_DELIM_COMMA) {
-            log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
+            log_signal(parser_logctx(pctx), parser_curpos(pctx),
                        STC__DELIMEXP, ",");
             break;
         }

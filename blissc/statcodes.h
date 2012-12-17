@@ -101,7 +101,24 @@ STATCODE( 61,W,OPEREXP,   "operator expected (!SZ)") \
 STATCODE( 62,E,INSFUNARG, "insufficient arguments specified in call to function !SD") \
 STATCODE( 63,W,SGNEXTUNS, "sign extension not supported on target machine") \
 STATCODE( 64,W,LITRNGERR, "invalid range value (!IL) specified for literal") \
-
+STATCODE( 65,E,STOCLSEXP, "storage class expected") \
+STATCODE( 66,W,PSATTRMSM, "psect attributes for !SD do not match previous declaration") \
+STATCODE( 67,E,PSNAMEXP,  "psect name expected") \
+STATCODE( 68,W,AUSIZERR,  "allocation-unit size !IL larger than fullword size") \
+STATCODE( 69,W,INVALIGN,  "invalid alignment value !IL") \
+STATCODE( 70,E,FFSNAMEXP, "field or field-set name expected") \
+STATCODE( 71,E,LTCEREQD,  "link-time constant expression required") \
+STATCODE( 72,W,FLDNOSTRU, "FIELD specified without structure attribute") \
+STATCODE( 73,E,LCLNORTN,  "LOCAL or STACKLOCAL declaration occurs outside of routine") \
+STATCODE( 74,E,REGNORTN,  "REGISTER declaration occurs outside of routine") \
+STATCODE( 75,W,MAPNONDCL, "MAP delcaration of non-existent name !SD") \
+STATCODE( 76,E,RTNATTEXP, "routine attribute expected") \
+STATCODE( 77,E,STRINGEXP, "string expected") \
+STATCODE( 78,E,UNDECRSVD, "attempt to UNDECLARE reserved keyword !SL") \
+STATCODE( 79,E,MODDCLEXP, "MODULE declaration expected") \
+STATCODE( 80,W,NOTBUILTN, "name !SD declared BUILTIN unknown") \
+STATCODE( 81,W,UNDECUND,  "attempt to UNDECLARE unknown name !SD") \
+STATCODE( 82,W,FWDNOTDCL, "FORWARD name not declared: !SD")
 
 #define STATCODE(msg,typ,nam,txt) STC_ENUMERATE(msg,typ,nam)
 typedef enum {
