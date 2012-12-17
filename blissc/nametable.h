@@ -121,6 +121,8 @@ strdesc_t *tempname_get(namectx_t ctx);
 nameref_t *nameref_alloc(namectx_t ctx, name_t *np);
 void nameref_free(namectx_t ctx, nameref_t *nr);
 void namereflist_free(namectx_t ctx, namereflist_t *reflist);
+int namereflist_copy(namectx_t ctx, namereflist_t *dst,
+                     namereflist_t *src);
 name_t *scope_nextname(scopectx_t scope, void **ctxp);
 int name_declare_builtin(scopectx_t scope, strdesc_t *str, textpos_t pos);
 #endif

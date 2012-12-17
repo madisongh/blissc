@@ -72,6 +72,36 @@ STATCODE( 32,W,NBITSERR,  "number of bits (!UI) exceeds fullword size (!UI)") \
 STATCODE( 33,E,FLDNAMEXP, "field name expected") \
 STATCODE( 34,W,FLDEXPERR, "filed expansion error") \
 STATCODE( 35,W,SEGNAMEXP, "data segment name expected") \
+STATCODE( 36,E,EXPREXP,   "expression expected") \
+STATCODE( 37,E,EXPLABEL,  "label expected") \
+STATCODE( 38,E,LBLSCPERR, "scope of label '!SD' is not active") \
+STATCODE( 39,E,EXITNLOOP, "EXITLOOP encountered not in loop context") \
+STATCODE( 40,E,RETNRTN,   "RETURN encountered not in routine context") \
+STATCODE( 41,W,RETNOVAL,  "return value specified for NOVALUE routine") \
+STATCODE( 42,W,NORETVAL,  "no return value specified for non-NOVALUE routine") \
+STATCODE( 43,W,EXPRVALRQ, "expression value required in this context") \
+STATCODE( 44,E,INVLABEL,  "invalid label '!SD'") \
+STATCODE( 45,W,STRLENERR, "string too long for fullword storage") \
+STATCODE( 46,E,DIVBYZERO, "divide by zero error") \
+STATCODE( 47,E,BLOCKEXP,  "expected block expression") \
+STATCODE( 48,W,BNDINVERT, "low bound greater than high bound") \
+STATCODE( 49,E,MULTINRNG, "multiple INRANGE lines in CASE") \
+STATCODE( 50,E,MULTOURNG, "multiple OUTRANGE lines in CASE") \
+STATCODE( 51,E,NUMAFTINR, "numeric literal case not permitted after INRANGE") \
+STATCODE( 52,E,MULNUMCAS, "multiple case lines for same numeric value") \
+STATCODE( 53,E,INSUFCASE, "missing actions for some values of CASE range") \
+STATCODE( 54,E,SELNOSEL,  "no selectors in SELECT expression") \
+STATCODE( 55,W,NAMEEXP,   "name expected") \
+STATCODE( 56,E,STRUNMEXP, "structure name expected") \
+STATCODE( 57,E,NOMACPRMS, "macro definition contains empty parameter list") \
+STATCODE( 58,E,ITERKWMAC, "iteration parameters encountered for KEYWORDMACRO") \
+STATCODE( 59,E,ILLMRECUR, "recursive macro call for non-conditional macro") \
+STATCODE( 60,E,EXPREMAIN, "expected %REMAINING in recursive macro invocation") \
+STATCODE( 61,W,OPEREXP,   "operator expected (!SZ)") \
+STATCODE( 62,E,INSFUNARG, "insufficient arguments specified in call to function !SD") \
+STATCODE( 63,W,SGNEXTUNS, "sign extension not supported on target machine") \
+STATCODE( 64,W,LITRNGERR, "invalid range value (!IL) specified for literal") \
+
 
 #define STATCODE(msg,typ,nam,txt) STC_ENUMERATE(msg,typ,nam)
 typedef enum {

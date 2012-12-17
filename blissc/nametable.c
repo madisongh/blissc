@@ -408,12 +408,15 @@ nametables_init (logctx_t logctx)
     namectx_t master = malloc(sizeof(struct namectx_s));
 
     if (master != 0) {
+        int i;
         memset(master, 0, sizeof(struct namectx_s));
         master->logctx = logctx;
         master->nullscope = scope_begin(master, 0);
         master->globalscope = scope_begin(master, 0);
         // Set up the default size and freelist index
-        master->typevec[0].typesize = cellsize;
+        for (i = 0; i < LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN; i++) {
+            master->typevec[i].typesize = cellsize;
+        }
         master->nfreelists = 1;
         master->freelistindex[0] = 0;
     }

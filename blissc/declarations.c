@@ -18,6 +18,7 @@
 #include "structures.h"
 #include "macros.h"
 #include "storage.h"
+#include "logging.h"
 #include "strings.h"
 #include "utils.h"
 
@@ -74,12 +75,6 @@ static namedef_t decl_names[] = {
     NAMEDEF("NOVALUE", LEXTYPE_ATTR_NOVALUE, NAME_M_RESERVED)
 };
 
-static int bind_compiletime(void *ctx, quotelevel_t ql, quotemodifier_t qm,
-                            lextype_t lt, condstate_t cs, lexeme_t *lex,
-                            lexseq_t *result);
-static int declare_compiletime(expr_ctx_t ctx, scopectx_t scope, lextype_t lt);
-
-
 /*
  * declare_compiletime
  *
@@ -98,17 +93,17 @@ declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
 
     while (1) {
         if (!parser_expect(pctx, QL_NAME, LEXTYPE_NAME, &nlex, 0)) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__NAMEEXP);
             return 0;
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 0)) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__OPEREXP, "=");
             lexeme_free(lctx, nlex);
             return 0;
         } else {
 
             if (!expr_parse_ctce(ctx, &lex)) {
-                /* XXX error condition */
+                expr_signal(ctx, STC__EXPCTCE);
                 lexeme_free(lctx, nlex);
                 return 0;
             } else {
@@ -116,7 +111,7 @@ declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
                                          lexeme_signedval(lex),
                                          lexeme_textpos_get(nlex));
                 if (np == 0) {
-                    /* XXX error condition */
+                    expr_signal(ctx, STC__INTCMPERR, "declare_compiletime");
                 }
                 lexeme_free(lctx, lex);
                 lexeme_free(lctx, nlex);
@@ -129,7 +124,7 @@ declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
             break;
         }
         if (lt != LEXTYPE_DELIM_COMMA) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__DELIMEXP, ",");
             return 0;
         }
 
@@ -161,7 +156,6 @@ parse_decl_name (parse_ctx_t pctx, scopectx_t scope,
         return 1;
     }
 
-    /* XXX error condition - expected name */
     parser_insert(pctx, lex);
     return 0;
 
@@ -191,7 +185,7 @@ declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
 
     while (1) {
         if (!parse_decl_name(pctx, scope, &namestr, &pos)) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__NAMEEXP);
             return 0;
         }
 
@@ -202,12 +196,12 @@ declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
             attr.flags |= SYM_M_NOVALUE;
         } else {
             if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 0)) {
-                /* XXX error condition */
+                expr_signal(ctx, STC__OPEREXP, "=");
                 string_free(namestr);
                 return 0;
             } else {
                 if (!expr_parse_ctce(ctx, &lex)) {
-                    /* XXX error condition */
+                    expr_signal(ctx, STC__EXPCTCE);
                     string_free(namestr);
                     return 0;
                 } else {
@@ -225,24 +219,24 @@ declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
                 long rval;
                 attr.flags |= (lt == LEXTYPE_ATTR_SIGNED) ? SYM_M_SIGNEXT : 0;
                 if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
-                    /* XXX error condition */
+                    expr_signal(ctx, STC__DELIMEXP, "(");
                 }
                 if (!expr_parse_ctce(ctx, &lex)) {
-                    /* XXX error condition */
+                    expr_signal(ctx, STC__EXPCTCE);
                     rval = machine_scalar_bits(mach);
                 } else {
                     rval = lexeme_signedval(lex);
                     lexeme_free(lctx, lex);
                 }
                 if (!machine_signext_supported(mach)) {
-                    /* XXX error condition */
+                    expr_signal(ctx, STC__SGNEXTUNS);
                 } else if (rval < 1 || rval > machine_scalar_bits(mach)) {
-                    /* XXX error condition */
+                    expr_signal(ctx, STC__LITRNGERR, rval);
                 } else {
                     attr.width = (unsigned int) rval;
                 }
                 if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
-                    /* XXX error condition */
+                    expr_signal(ctx, STC__DELIMEXP, ")");
                     string_free(namestr);
                     return 0;
                 }
@@ -257,14 +251,14 @@ declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
                                 : SYMSCOPE_LOCAL)), &attr, pos);
         string_free(namestr);
         if (np == 0) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__INTCMPERR, "declare_literal");
         }
 
         if (lt == LEXTYPE_DELIM_SEMI) {
             break;
         }
         if (lt != LEXTYPE_DELIM_COMMA) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__DELIMEXP, ",");
             return 0;
         }
         
@@ -290,19 +284,21 @@ declare_label (parse_ctx_t pctx, scopectx_t scope)
 
     while (1) {
         if (!parse_decl_name(pctx, scope, &namestr, &pos)) {
-            /* XXX error condition */
+            log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__NAMEEXP);
             return 0;
         }
         np = label_declare(scope, namestr, pos);
         if (np == 0) {
-            /* XXX error condition */
+            log_signal(parser_logctx(pctx), parser_curpos(pctx),
+                       STC__INTCMPERR, "declare_label");
         }
         string_free(namestr);
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1)) {
             break;
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
-            /* XXX error condition - maybe just forgot? */
+            log_signal(parser_logctx(pctx), parser_curpos(pctx),
+                       STC__DELIMEXP, ",");
         }
     }
     return 1;
@@ -342,7 +338,8 @@ psect_attr (parse_ctx_t pctx, unsigned int *attrp)
             break;
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
-            /* XXX error condition */
+            log_signal(parser_logctx(pctx), parser_curpos(pctx),
+                       STC__DELIMEXP, ",");
         }
     }
 
@@ -706,7 +703,9 @@ attr_field (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
             if (lexeme_type(lex) == LEXTYPE_NAME_FIELD) {
                 namereflist_instail(fldset, nameref_alloc(namectx, np));
             } else {
-                namereflist_append(fldset, fieldset_reflist(np));
+                if (!namereflist_copy(namectx, fldset, fieldset_reflist(np))) {
+                    /* XXX error condition */
+                }
             }
             lexeme_free(lctx, lex);
         }

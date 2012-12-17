@@ -10,6 +10,7 @@
 #define blissc_logging_h
 
 #include <setjmp.h>
+#include <stdarg.h>
 #include "strings.h"
 #include "statcodes.h"
 #include "utils.h"
@@ -28,6 +29,7 @@ unsigned int log_infocount(logctx_t ctx);
 unsigned int log_warncount(logctx_t ctx);
 unsigned int log_errcount(logctx_t ctx);
 void log_signal(logctx_t ctx, textpos_t pos, statcode_t code, ...);
+void log_vsignal(logctx_t ctx, textpos_t pos, statcode_t code, va_list ap);
 void log_message(logctx_t ctx, textpos_t pos, strdesc_t *str);
 void log_warn(logctx_t ctx, textpos_t pos, strdesc_t *str);
 void log_error(logctx_t ctx, textpos_t pos, strdesc_t *str);

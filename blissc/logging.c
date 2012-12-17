@@ -56,22 +56,22 @@ log_fetchfn_set(logctx_t ctx, filename_fetch_fn ffn, void *ffctx)
 }
 
 void
-log_signal (logctx_t ctx, textpos_t pos, statcode_t code, ...)
+log_vsignal (logctx_t ctx, textpos_t pos, statcode_t code, va_list ap)
 {
-    va_list ap;
     char logbuf[256];
     int len;
     unsigned int sev = stc_severity(code);
 
-    va_start(ap, code);
     len = stc_msg_vformat(code, logbuf, sizeof(logbuf)-1, ap);
-    va_end(ap);
     logbuf[len] = '\0';
     fprintf(stderr, "%s\n", logbuf);
     if (pos != 0 && ctx->fetchfn != 0) {
         strdesc_t *fname = ctx->fetchfn(ctx->ffctx, textpos_fileno(pos));
-        fprintf(stderr, "-  at %-*.*s:%u:%u\n", fname->len, fname->len, fname->ptr,
-                textpos_lineno(pos), textpos_colnum(pos));
+        if (fname != 0) {
+            fprintf(stderr, "-  at %-*.*s:%u:%u\n",
+                    fname->len, fname->len, fname->ptr,
+                    textpos_lineno(pos), textpos_colnum(pos));
+        }
     }
     switch (sev) {
         case STC_K_ERROR:
@@ -92,6 +92,16 @@ log_signal (logctx_t ctx, textpos_t pos, statcode_t code, ...)
         default:
             break;
     }
+
+} /* log_vsignal */
+
+void
+log_signal (logctx_t ctx, textpos_t pos, statcode_t code, ...)
+{
+    va_list ap;
+    va_start(ap, code);
+    log_vsignal(ctx, pos, code, ap);
+    va_end(ap);
 
 } /* log_signal */
 

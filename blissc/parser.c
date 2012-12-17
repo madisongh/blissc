@@ -70,7 +70,9 @@ typedef int (*lexfunc_t)(parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt);
     DODEF(NBITSU, parse_nbits_func) DODEF(PRINT, parse_msgfunc) \
     DODEF(CTCE, parse_xTCE) DODEF(LTCE, parse_xTCE) \
     DODEF(FIELDEXPAND, parse_FIELDEXPAND) \
-    DODEF(ALLOCATION, parse_ALLOCATION) DODEF(SIZE, parse_SIZE)
+    DODEF(ALLOCATION, parse_ALLOCATION) DODEF(SIZE, parse_SIZE) \
+    DODEF(INFORM, parse_msgfunc) DODEF(ERROR, parse_msgfunc) \
+    DODEF(WARN, parse_msgfunc) DODEF(MESSAGE, parse_msgfunc)
 
 #define DODEF(name_, rtn_) static int rtn_ (parse_ctx_t, quotelevel_t, lextype_t);
 DODEFS

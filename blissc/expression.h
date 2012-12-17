@@ -685,4 +685,5 @@ int expr_parse_SIZE(expr_ctx_t ctx, unsigned int *units);
 void expr_push_routine(expr_ctx_t ctx, name_t *np);
 void expr_pop_routine(expr_ctx_t ctx);
 name_t *expr_current_routine (expr_ctx_t ctx);
+void expr_signal(expr_ctx_t ctx, statcode_t code, ...);
 #endif

@@ -56,7 +56,7 @@ parse_func_args (expr_ctx_t ctx, exprseq_t *arglist)
     while (1) {
         expr_node_t *exp;
         if (!expr_expr_next(ctx, &exp)) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__EXPREXP);
             status = 0;
             break;
         }
@@ -65,7 +65,7 @@ parse_func_args (expr_ctx_t ctx, exprseq_t *arglist)
             break;
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__DELIMEXP, ",");
             status = 0;
             break;
         }
@@ -96,13 +96,13 @@ function_bind (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
     expr_node_t *result = 0;
 
     if (np == 0) {
-        /* XXX error condition */
+        expr_signal(ctx, STC__INTCMPERR, "function_bind");
         return 0;
     }
     
     exprseq_init(&args);
     if (!parse_func_args(ctx, &args)) {
-        /* XXX error condition */
+        expr_signal(ctx, STC__SYNTAXERR);
         return 0;
     }
 
@@ -111,7 +111,9 @@ function_bind (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         int varargs = (func->flags & FUNC_M_VARARGS) != 0;
         if ((varargs && exprseq_length(&args) < func->numargs) ||
             (!varargs && exprseq_length(&args) != func->numargs)) {
-            /* XXX error condition */
+            strdesc_t *fname = name_string(np);
+            expr_signal(ctx, STC__INSFUNARG, fname);
+            string_free(fname);
         } else {
             result = expr_node_alloc(ctx, EXPTYPE_EXECFUN, lexeme_textpos_get(lex));
         }

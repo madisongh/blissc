@@ -341,7 +341,7 @@ declare_structure (expr_ctx_t ctx, scopectx_t scope)
             break;
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LBRACK, 0, 1)) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__DELIMEXP, "[");
         }
         memset(&ndef, 0, sizeof(ndef));
         ndef.lt = LEXTYPE_NAME_STRUCTURE;
@@ -350,32 +350,32 @@ declare_structure (expr_ctx_t ctx, scopectx_t scope)
         ndef.namelen = struname->len;
         np = name_declare(scope, &ndef, pos, 0, 0, &stru);
         if (np == 0) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__INTCMPERR, "declare_structure");
         }
         which = macro_paramlist(pctx, 0, 1, 0, delims, 2,
                                 &stru->acctbl, &stru->accformals);
         if (which < 0) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__SYNTAXERR);
         } else if (which == 1) {
             which = macro_paramlist(pctx, 0, 1, 0, delims, 1,
                                     &stru->allotbl, &stru->alloformals);
             if (which < 0) {
-                /* XXX error condition */
+                expr_signal(ctx, STC__SYNTAXERR);
             }
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 1)) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__OPEREXP, "=");
         }
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LBRACK, 0, 1)) {
             parser_scope_begin(pctx);
             if (!parse_lexeme_seq(pctx, 0, QL_MACRO, delims, 1, &stru->allobody, 0)) {
-                /* XXX error condition */
+                expr_signal(ctx, STC__SYNTAXERR);
             }
             parser_scope_end(pctx);
         }
         parser_scope_begin(pctx);
         if (!parse_lexeme_seq(pctx, 0, QL_MACRO, bodyends, 2, &stru->accbody, &term)) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__SYNTAXERR);
         }
         parser_scope_end(pctx);
 
@@ -408,7 +408,7 @@ parse_fields (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
 
     while (1) {
         if (!parse_decl_name(pctx, scope, &fldname, &fpos)) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__NAMEEXP);
             break;
         }
         memset(&ndef, 0, sizeof(ndef));
@@ -416,7 +416,7 @@ parse_fields (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
         ndef.namelen = fldname->len;
         ndef.flags = NAME_M_DECLARED;
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 1)) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__OPEREXP, "=");
         }
         // Check for fieldset and recurse
         if (fldset == 0 && parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_SET, 0, 1)) {
@@ -424,15 +424,15 @@ parse_fields (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
             ndef.lt = LEXTYPE_NAME_FIELDSET;
             fldnp = name_declare(scope, &ndef, fpos, 0, 0, &frefs);
             if (fldnp == 0) {
-                /* XXX error condition */
+                expr_signal(ctx, STC__INTCMPERR, "parse_fields[1]");
                 break;
             }
             if (!parse_fields(ctx, scope, frefs)) {
-                /* XXX error condition */
+                expr_signal(ctx, STC__SYNTAXERR);
                 return 0;
             }
             if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_TES, 0, 1)) {
-                /* XXX error condition */
+                expr_signal(ctx, STC__KWDEXP, "TES");
             }
             if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
                 break;
@@ -443,27 +443,27 @@ parse_fields (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
         ndef.lt = LEXTYPE_NAME_FIELD;
         fldnp = name_declare(scope, &ndef, fpos, 0, 0, &fseq);
         if (fldnp == 0) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__INTCMPERR, "parse_fields[2]");
             break;
         }
         if (fldset != 0) {
             namereflist_instail(fldset, nameref_alloc(namectx, fldnp));
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LBRACK, 0, 1)) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__DELIMEXP, "]");
         }
         while (1) {
             if (expr_parse_ctce(ctx, &lex)) {
                 lexseq_instail(fseq, lex);
             } else {
-                /* XXX error condition */
+                expr_signal(ctx, STC__EXPCTCE);
                 lexseq_instail(fseq,
                                lexeme_create(parser_lexmemctx(pctx),
                                              LEXTYPE_NUMERIC, &zero));
             }
             which = parser_expect_oneof(pctx, QL_NORMAL, delims, 2, &lex, 1);
             if (which != 0) {
-                /* XXX error condition if < 0 */
+                expr_signal(ctx, STC__DELIMEXP, ",");
                 break;
             }
             lexseq_instail(fseq, lex);
@@ -537,7 +537,7 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
             }
             np = litsym_special(myscope, &aus[i], units);
             if (np == 0) {
-                /* XXX error condition */
+                expr_signal(ctx, STC__INTCMPERR, "structure_allocate[1]");
             }
         }
     }
@@ -545,11 +545,11 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
     if (machine_signext_supported(mach)) {
         np = litsym_special(myscope, &kw_signed, 1);
         if (np == 0) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__INTCMPERR, "structure_allocate[2]");
         }
         np = litsym_special(myscope, &kw_unsigned, 0);
         if (np == 0) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__INTCMPERR, "structure_allocate[3]");
         }
     }
     // Now fill in the default values for the allocation formals, if they
@@ -582,36 +582,41 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
                 np = litsym_special(myscope, alloname, val);
             } else {
                 np = litsym_search(myscope, alloname, &val);
-            } if (np == 0) {
-                /* XXX error condition - missing and no default */
+            }
+            if (np == 0) {
+                // No allocation-actual specified, and no default.
+                // Use zero as default value.  This is OK to do
+                // in contexts where no storage is being allocated
+                // for the structure (e.g., REFs).
                 val = 0;
                 np = litsym_special(myscope, alloname, val);
                 if (np == 0) {
-                    /* XXX error condition */
+                    expr_signal(ctx, STC__INTCMPERR, "structure_allocate[4]");
                 }
             }
+            string_free(alloname);
             // Now copy the declaration into the scope we'll pass back
             // to the caller for later use
             if (scopep != 0) {
                 rnp = litsym_special(retscope, alloname, val);
                 if (rnp == 0) {
-                    /* XXX error condition */
+                    expr_signal(ctx, STC__INTCMPERR, "structure_allocate[5]");
                 }
             }
         }
         if (ref->tq_next != 0 &&
             !parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__DELIMEXP, ",");
         }
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RBRACK, 0, 1)) {
-        /* XXX error condition */
+        expr_signal(ctx, STC__DELIMEXP, "]");
     }
     lexseq_init(&tmpseq);
     lexseq_copy(lctx, &tmpseq, &stru->allobody);
     parser_insert_seq(pctx, &tmpseq);
     if (!expr_parse_ctce(ctx, &lex)) {
-        /* XXX error condition */
+        expr_signal(ctx, STC__EXPCTCE);
         return 0;
     }
     *nunits = (unsigned int)lexeme_unsignedval(lex);
@@ -668,7 +673,7 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
     } else {
         data_attr_t *attr = datasym_attr(symname);
         if (attr == 0) {
-            /* XXX error condition */
+            expr_signal(ctx, STC__INTCMPERR, "structure_reference[1]");
             return 0;
         }
         if (attr->flags & SYM_M_REF) {
@@ -708,7 +713,7 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
             if (delim == LEXTYPE_DELIM_COMMA) {
                 if (!parse_lexeme_seq(pctx, 0, QL_NORMAL, delims, ndelims,
                                       &seq, &delim)) {
-                    /* XXX error condition */
+                    expr_signal(ctx, STC__SYNTAXERR);
                     break;
                 }
                 if (ctce_accessors) {
@@ -719,7 +724,7 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
                     // to have an expr_parse_seq_ctce() that returns a lexeme
                     if (!expr_parse_seq(ctx, &testseq, &exp) ||
                         expr_type(exp) != EXPTYPE_PRIM_LIT) {
-                        /* XXX error condition */
+                        expr_signal(ctx, STC__EXPCTCE);
                     } else {
                         expr_node_free(ctx, exp);
                     }
@@ -757,14 +762,14 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
         }
     }
     if (delim != LEXTYPE_DELIM_RBRACK) {
-        /* XXX error condition */
+        expr_signal(ctx, STC__DELIMEXP, "]");
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RBRACK);
     }
     lexseq_init(&seq);
     lexseq_copy(lctx, &seq, &stru->accbody);
     parser_scope_push(pctx, myscope);
     if (!expr_parse_seq(ctx, &seq, &exp)) {
-        /* XXX error condition */
+        expr_signal(ctx, STC__SYNTAXERR);
         lexseq_free(lctx, &seq);
         parser_scope_end(pctx);
         return 0;
