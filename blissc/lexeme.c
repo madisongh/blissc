@@ -266,6 +266,27 @@ lexseq_copy (lexctx_t lctx, lexseq_t *dst, lexseq_t *src)
 } /* lexseq_copy */
 
 /*
+ * lexseq_copy
+ *
+ * Returns a duplicate of a lexeme sequence,
+ * appended to the destination.
+ */
+int
+lexseq_copy_and_setpos (lexctx_t lctx, lexseq_t *dst, lexseq_t *src,
+                        textpos_t pos)
+{
+    lexeme_t *lex;
+
+    for (lex = lexseq_head(src); lex != 0; lex = lexeme_next(lex)) {
+        lexeme_t *copy = lexeme_copy(lctx, lex);
+        lexeme_textpos_set(copy, pos);
+        lexseq_instail(dst, copy);
+    }
+
+    return 1;
+
+} /* lexseq_copy_and_setpos */
+/*
  * lexemes_match
  *
  * Compares two sequences of lexemes to see if they are

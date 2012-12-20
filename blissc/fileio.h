@@ -20,7 +20,8 @@ typedef struct fioctx_s *fioctx_t;
 fioctx_t fileio_init(logctx_t logctx);
 void fileio_finish(fioctx_t fio);
 
-filectx_t file_open_input(fioctx_t fio, const char *fname, size_t fnlen);
+filectx_t file_open_input(fioctx_t fio, const char *fname,
+                          size_t fnlen, const char *suffix);
 void file_close(filectx_t ctx);
 char *file_getname(filectx_t ctx);
 int file_readline(filectx_t ctx, char *buf, size_t bufsiz, size_t *len);

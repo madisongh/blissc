@@ -22,7 +22,7 @@ int declare_structure(expr_ctx_t ctx, scopectx_t scope);
 int declare_field(expr_ctx_t ctx, scopectx_t scope);
 int structure_allocate(expr_ctx_t ctx, name_t *struname,
                        strudef_t **strup, unsigned int *units,
-                       scopectx_t *scopep);
+                       scopectx_t *scopep, int is_ref);
 expr_node_t *structure_reference(expr_ctx_t pctx, name_t *struname,
                         int ctce_accessors, name_t *segname,
                         lexeme_t *lex);

@@ -297,7 +297,11 @@ parser_init (namectx_t namectx, machinedef_t *mach, scopectx_t *kwdscopep,
     lextype_register(pctx->lmemctx, LEXTYPE_NAME, name_bind);
 
     pctx->mach = mach;
-    pctx->valmask = (1UL << machine_scalar_bits(mach)) - 1;
+    if (machine_scalar_bits(mach) == sizeof(pctx->valmask)*8) {
+        pctx->valmask = -1;
+    } else {
+        pctx->valmask = (1UL << machine_scalar_bits(mach)) - 1;
+    }
 
     return pctx;
 
@@ -325,9 +329,10 @@ parser_finish (parse_ctx_t pctx)
  * Begin parsing a file.
  */
 int
-parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen)
+parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen,
+              const char *suffix)
 {
-    return lexer_fopen(pctx->lexctx, fname, fnlen);
+    return lexer_fopen(pctx->lexctx, fname, fnlen, suffix);
 
 } /* parser_fopen */
 
@@ -396,7 +401,8 @@ parser_insert (parse_ctx_t pctx, lexeme_t *lex)
 void
 parser_insert_seq (parse_ctx_t pctx, lexseq_t *seq) {
 
-    lexer_insert_seq(pctx->lexctx, seq);
+    textpos_t pos = pctx->curpos;
+    lexer_insert_seq_with_pos(pctx->lexctx, seq, pos);
 
 } /* parser_insert_seq */
 
@@ -460,6 +466,13 @@ parser_punctclass_set (parse_ctx_t pctx, punctclass_t cl, lextype_t sep)
 {
     pctx->punctclass = cl;
     pctx->separator = sep;
+}
+
+void
+parser_punctclass_get (parse_ctx_t pctx, punctclass_t *clp, lextype_t *sepp)
+{
+    *clp = pctx->punctclass;
+    *sepp = pctx->separator;
 }
 
 lexeme_t *
@@ -565,7 +578,7 @@ parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
             return LEXTYPE_NONE;
         }
         if (status > 0) {
-            lexer_insert_seq(pctx->lexctx, &result);
+            lexer_insert_seq_with_pos(pctx->lexctx, &result, pctx->curpos);
             pctx->quotemodifier = QM_NONE;
             continue;
         }
@@ -1707,7 +1720,7 @@ parse_REQUIRE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         return 1;
     }
     str = lexeme_text(lex);
-    if (!parser_fopen(pctx, str->ptr, str->len)) {
+    if (!parser_fopen(pctx, str->ptr, str->len, ".req")) {
         log_signal(pctx->logctx, pctx->curpos, STC__REQFILERR, str);
     }
     lexeme_free(pctx->lmemctx, lex);

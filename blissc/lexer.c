@@ -100,7 +100,7 @@ static lexeme_t endlex = { 0, LEXTYPE_END, LEXTYPE_END };
  */
 #define DODEFS \
 DODEF(AND) DODEF(EQV) DODEF(OR) \
-DODEF(NOT) DODEF(XOR) \
+DODEF(NOT) DODEF(XOR) DODEF(MOD) \
 DODEF(EQL) DODEF(EQLU) DODEF(EQLA) \
 DODEF(GEQ) DODEF(GEQU) DODEF(GEQA) \
 DODEF(GTR) DODEF(GTRU) DODEF(GTRA) \
@@ -255,9 +255,11 @@ lexer_filename (lexer_ctx_t lctx, int filename_index)
  * Insert a new file at the front of the stream.
  */
 int
-lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen)
+lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen,
+             const char *suffix)
 {
     lexchain_t *chain = lexchain_alloc();
+    char *actname;
 
     if (chain == 0) {
         log_signal(ctx->logctx, 0, STC__OUTOFMEM, "lexer_fopen");
@@ -268,13 +270,13 @@ lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen)
         lexchain_free(ctx->lexctx, chain);
         return 0;
     }
-    if (!scan_fopen(chain->sctx, fname, fnlen)) {
+    if (!scan_fopen(chain->sctx, fname, fnlen, suffix, &actname)) {
         scan_finish(chain->sctx);
         chain->sctx = 0;
         lexchain_free(ctx->lexctx, chain);
         return 0;
     }
-    chain->filename_index = filename_lookup(ctx, fname, fnlen, 0);
+    chain->filename_index = filename_lookup(ctx, actname, strlen(actname), 0);
     chain->nextchain = ctx->chain;
     ctx->chain = chain;
     return 1;
@@ -480,14 +482,20 @@ lexer_insert (lexer_ctx_t ctx, lexeme_t *lex)
 
 } /* lexer_insert */
 
-void
-lexer_insert_seq (lexer_ctx_t ctx, lexseq_t *seq)
+static void
+lexer_insert_seq_internal (lexer_ctx_t ctx, lexseq_t *seq,
+                           int resetpos, textpos_t pos)
 {
     lexchain_t *chain = ctx->chain;
 
-
     if (seq == 0 || lexseq_length(seq) == 0) {
         return;
+    }
+    if (resetpos) {
+        lexeme_t *lex;
+        for (lex = lexseq_head(seq); lex != 0; lex = lexeme_next(lex)) {
+            lexeme_textpos_set(lex, pos);
+        }
     }
     if (chain == 0) {
         chain = lexchain_alloc();
@@ -499,5 +507,14 @@ lexer_insert_seq (lexer_ctx_t ctx, lexseq_t *seq)
         ctx->chain = chain;
     }
     lexseq_prepend(&chain->seq, seq);
-}
 
+} /* lexer_insert_seq_internal */
+
+void
+lexer_insert_seq (lexer_ctx_t ctx, lexseq_t *seq) {
+    lexer_insert_seq_internal(ctx, seq, 0, 0);
+}
+void
+lexer_insert_seq_with_pos (lexer_ctx_t ctx, lexseq_t *seq, textpos_t pos) {
+    lexer_insert_seq_internal(ctx, seq, 1, pos);
+}

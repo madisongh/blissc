@@ -194,7 +194,7 @@ bind_data (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         expr_seg_name_set(exp, lexeme_ctx_get(lex));
         expr_seg_units_set(exp, sym->attr.units);
         expr_seg_signext_set(exp, (sym->attr.flags & SYM_M_SIGNEXT) != 0);
-        expr_is_ltce_set(exp, seg_addr_is_ltce(sym->seg));
+        expr_is_ltce_set(exp, (sym->seg == 0 ? 0 : seg_addr_is_ltce(sym->seg)));
     }
     return exp;
 
@@ -481,7 +481,7 @@ litsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     ndef.flags = NAME_M_DECLARED;
     ndef.name = dsc->ptr;
     ndef.namelen = dsc->len;
-    ndef.flags = (attrp->flags & SYM_M_RESERVED) ? NAME_M_RESERVED : 0;
+    ndef.flags |= (attrp->flags & SYM_M_RESERVED) ? NAME_M_RESERVED : 0;
 
     if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
         name_t *gnp = 0;
@@ -577,9 +577,10 @@ rtnsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
         scopectx_t gscope = nametables_globalscope(namectx);
         gnp = name_search_typed(scope, dsc->ptr, dsc->len,
-                                LEXTYPE_NAME_DATA, &gsym);
+                                LEXTYPE_NAME_ROUTINE, &gsym);
         if (gnp != 0 && gsym->seg != 0 && !(attrp->flags & SYM_M_PENDING)) {
             if (!compare_routine_attrs(&gsym->attr, attrp)) {
+                log_signal(symctx->logctx, pos, STC__ATTRNCMPT, dsc);
                 return 0; // attribute mismatch
             }
         }
@@ -590,10 +591,9 @@ rtnsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     }
     np = name_declare(scope, &ndef, pos, 0, 0, &sym);
     if (np != 0) {
-        if (sym->attr.flags & SYM_M_FORWARD) {
-            if (attrp->flags & SYM_M_FORWARD) {
-                log_signal(symctx->logctx, pos, STC__REDECLARE, dsc->ptr, dsc->len);
-            } else if ((attrp->flags & SYM_M_PENDING) == 0 &&
+        // It is OK to redeclare EXTERNAL ROUTINEs, I guess
+        if ((sym->attr.flags & SYM_M_FORWARD) || sc == SYMSCOPE_EXTERNAL) {
+            if ((attrp->flags & SYM_M_PENDING) == 0 &&
                        !compare_routine_attrs(&sym->attr, attrp)) {
                 log_signal(symctx->logctx, pos, STC__ATTRNCMPT, dsc);
             }

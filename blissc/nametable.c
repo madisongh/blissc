@@ -798,9 +798,9 @@ name_declare_internal (scopectx_t scope, const char *id, size_t len,
     } else if (np != 0) {
         if (np->namescope == scope && nt != LEXTYPE_NAME &&
             !(np->nameflags & NAME_M_NODCLCHK)) {
-            // Redeclaration of FORWARDs is allowed, but only if
-            // the type matches
-            if (!(np->nameflags & NAME_M_FORWARD) || nt != type) {
+            // Signal REDECLARE only if the type doesn't match;
+            // let the caller handle other redeclaration conditions XXX
+            if (nt != type) {
                 log_signal(namectx->logctx, pos, STC__REDECLARE, id, len);
                 return 0;
             }
@@ -815,7 +815,9 @@ name_declare_internal (scopectx_t scope, const char *id, size_t len,
     // we need to replace the existing entry (and hope that
     // nobody has a dangling pointer to it!).
     if (np != 0 && nt != type) {
-        name_free(np);
+        if (np->namescope == scope) {
+            name_free(np);
+        }
         np = 0;
     }
     if (np == 0) {
@@ -916,7 +918,7 @@ name_declare_builtin (scopectx_t scope, strdesc_t *namestr, textpos_t pos)
 
     if (np == 0 || (np->nameflags & NAME_M_BUILTIN) == 0) {
         logctx_t logctx = scope->home->logctx;
-        log_signal(logctx, pos, STC__NOTBUILTN, namestr);
+        log_signal(logctx, pos, STC__NOTBUILTN, namestr); 
         return 0;
     }
     np = name_copy(np, scope);

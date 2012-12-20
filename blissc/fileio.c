@@ -62,26 +62,42 @@ fileio_finish (fioctx_t fio)
 }
 
 filectx_t
-file_open_input (fioctx_t fio, const char *fname, size_t fnlen)
+file_open_input (fioctx_t fio, const char *fname, size_t fnlen,
+                 const char *suffix)
 {
     filectx_t ctx = malloc(sizeof(struct filectx_s));
+    int add_suffix = 0;
+
     if (ctx == 0)
         return ctx;
     memset(ctx, 0, sizeof(struct filectx_s));
-    ctx->fname = malloc(fnlen+1);
+
+    if (fnlen == 0) {
+        ctx->fname = malloc(strlen(suffix)+1);
+        add_suffix = 1;
+    } else {
+        const char *cp = fname + fnlen;
+        while (--cp >= fname && *cp != '.');
+        add_suffix = !(cp >= fname);
+        ctx->fname = malloc(fnlen + (add_suffix ? strlen(suffix) : 0) + 1);
+    }
     if (ctx->fname == 0) {
         free(ctx);
         return 0;
     }
     memcpy(ctx->fname, fname, fnlen);
-    ctx->fname[fnlen] = '\0';
-    ctx->fnlen = fnlen;
+    if (add_suffix) {
+        strcpy(ctx->fname+fnlen, suffix);
+    } else {
+        ctx->fname[fnlen] = '\0';
+    }
+    ctx->fnlen = fnlen + (add_suffix ? strlen(suffix) : 0);
     ctx->fd = open(ctx->fname, O_RDONLY);
     if (ctx->fd < 0) {
         char errbuf[64];
         errbuf[0] = '\0';
         strerror_r(errno, errbuf, sizeof(errbuf));
-        log_signal(fio->logctx, 0, STC__FIOERR, errbuf);
+        log_signal(fio->logctx, 0, STC__OPENERR, ctx->fname, ctx->fnlen, errbuf);
         free(ctx);
         return 0;
     }

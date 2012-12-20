@@ -74,7 +74,7 @@ test_scanner (int argc, const char *argv[])
     if (ctx == 0) {
         return 999;
     }
-    if (!scan_fopen(ctx, argv[0], strlen(argv[0]))) {
+    if (!scan_fopen(ctx, argv[0], strlen(argv[0]), ".bli", 0)) {
         fprintf(stderr, "scan_fopen failed for %s\n", argv[0]);
         return 998;
     }
@@ -187,7 +187,7 @@ test_parser (int argc, const char *argv[])
 //    stg = storage_init(&machdef);
     pctx = parser_init(0, &machdef, &kwdscope, logctx);
     lctx = parser_lexmemctx(pctx);
-    if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
+    if (!parser_fopen(pctx, argv[0], strlen(argv[0]), ".bli")) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
     }
@@ -228,8 +228,8 @@ test_expr (int argc, const char *argv[])
 //   lextype_t lt;
 //    int linewidth;
 //    char *delim;
-    machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32,
-        .signext_supported=1, .max_align=2, .reg_count = 16 };
+    machinedef_t machdef = { .bpunit=8, .bpval=64, .bpaddr=64,
+        .signext_supported=1, .max_align=3, .reg_count = 16 };
 
     if (setjmp(retenv)) {
         goto finish;
@@ -239,7 +239,7 @@ test_expr (int argc, const char *argv[])
     stg = storage_init(&machdef);
     pctx = parser_init(0, &machdef, &kwdscope, logctx);
     ectx = expr_init(pctx, stg, kwdscope);
-    if (!parser_fopen(pctx, argv[0], strlen(argv[0]))) {
+    if (!parser_fopen(pctx, argv[0], strlen(argv[0]), ".bli")) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
     }

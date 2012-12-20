@@ -331,7 +331,7 @@ macro_paramlist (parse_ctx_t pctx, scopectx_t curscope,
     scopectx_t pscope;
     lexseq_t nullseq;
     namedef_t ndef;
-    int i;
+    int i, did1;
     lextype_t terms[16];
 
     // Need a delimiter array that adds ',' to the
@@ -350,15 +350,19 @@ macro_paramlist (parse_ctx_t pctx, scopectx_t curscope,
     parser_scope_begin(pctx);
     memset(&ndef, 0, sizeof(ndef));
     ndef.lt = LEXTYPE_NAME_MAC_PARAM;
+    did1 = 0;
 
     while (1) {
         lexseq_t *pseq;
         lt = parser_next(pctx, QL_NAME, &lex);
         if (lexeme_boundtype(lex) != LEXTYPE_NAME) {
-            log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
-                       STC__NAMEEXP);
+            if (did1) {
+                log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
+                           STC__NAMEEXP);
+            }
             break;
         }
+        did1 = 1;
         ltext = lexeme_text(lex);
         ndef.name = ltext->ptr;
         ndef.namelen = ltext->len;
@@ -442,7 +446,7 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
         lt = parser_next(pctx, QL_NAME, 0);
         if (lt != LEXTYPE_DELIM_LPAR &&
             lt != LEXTYPE_OP_ASSIGN &&
-            (is_kwdmacro || lt == LEXTYPE_DELIM_LBRACK)) {
+            lt != LEXTYPE_DELIM_LBRACK) {
             log_signal(parser_logctx(pctx), parser_curpos(pctx),
                        STC__SYNTAXERR);
             skip_to_end = 1;
@@ -543,17 +547,21 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
               lexseq_t *result, int *errorout)
 {
     lexctx_t lctx = parser_lexmemctx(pctx);
-    lexeme_t *lex, *bodynext;
+    lexeme_t *lex, *bodynext, *closer, *separator;
     name_t *np;
+    textpos_t pos = parser_curpos(pctx);
     int do_exitmacro, do_exititer, do_errormacro, do_recursion;
 
     do_recursion = do_exitmacro = do_exititer = do_errormacro = 0;
 
+    closer = separator = 0;
     if (macro->type == MACRO_ITER) {
+        separator = parser_punct_separator(pctx);
         lex = parser_punct_grouper(pctx, 0);
         if (lex != 0) {
             lexseq_instail(result, lex);
         }
+        closer = parser_punct_grouper(pctx, 1);
     }
 
     while (1) {
@@ -578,6 +586,7 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
             lextype_t lt;
             bodynext = lexeme_next(lex);
             lex = lexeme_copy(lctx, lex);
+            lexeme_textpos_set(lex, pos);
             lt = lexeme_boundtype(lex);
             if (lt == LEXTYPE_NAME) {
                 lextype_t nlt;
@@ -766,9 +775,8 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
         }
 
         curdepth += 1;
-        lex = parser_punct_separator(pctx);
-        if (lex != 0) {
-            lexseq_instail(result, lex);
+        if (separator != 0) {
+            lexseq_instail(result, lexeme_copy(lctx, separator));
         }
 
     } /* while-1 iteration loop */
@@ -782,9 +790,11 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
     }
 
     if (macro->type == MACRO_ITER) {
-        lex = parser_punct_grouper(pctx, 1);
-        if (lex != 0) {
-            lexseq_instail(result, lex);
+        if (closer != 0) {
+            lexseq_instail(result, closer);
+        }
+        if (separator != 0) {
+            lexeme_free(lctx, separator);
         }
     }
 
@@ -810,6 +820,8 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
     scopectx_t expscope;
     int which, ok;
     int nactuals;
+    punctclass_t pcl;
+    lextype_t psep;
     lextype_t terms[3];
     static strdesc_t comma = STRDEF(",");
 
@@ -819,13 +831,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
         return 1;
     }
 
-    // For keyword macros, prime the scope with the declared
-    // formals, so we can inherit the default values.
-    if (macro->type == MACRO_KWD) {
-        expscope = scope_copy(macro->ptable, 0);
-    } else {
-        expscope = scope_begin(scope_namectx(parser_scope_get(pctx)), 0);
-    }
+    parser_punctclass_get(pctx, &pcl, &psep);
 
     nactuals = 0;
     lexseq_init(&extras);
@@ -833,9 +839,16 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
     // Simple macros with no formal arguments get no processing
     // of parameter lists whatsoever.
     if (macro->type == MACRO_SIMPLE && namereflist_length(&macro->plist) == 0) {
-        expscope = 0;
+        expscope = scope_begin(scope_namectx(parser_scope_get(pctx)), 0);
         which = 3;
     } else {
+        // For keyword macros, prime the scope with the declared
+        // formals, so we can inherit the default values.
+        if (macro->type == MACRO_KWD) {
+            expscope = scope_copy(macro->ptable, 0);
+        } else {
+            expscope = scope_begin(scope_namectx(parser_scope_get(pctx)), 0);
+        }
 
         lt = parser_next(pctx, QL_NORMAL, &lex);
         if (macro->type == MACRO_KWD) {
@@ -971,6 +984,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
     } /* if which < 3 */
 
     scope_setparent(expscope, parser_scope_get(pctx));
+    parser_punctclass_set(pctx, pcl, psep);
 
     ok = prepare_body(pctx, expscope, macro, 0, nactuals,
                       &extras, result, 0);
@@ -978,6 +992,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
     if (!ok) {
         lexseq_free(lctx, result);
     }
+
     scope_end(expscope);
 
     return 1;

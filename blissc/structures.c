@@ -38,7 +38,7 @@ static strdesc_t dot = STRDEF(".");
 
 static char *predeclared_bitvector =
     "STRUCTURE BITVECTOR[I;N] = "
-    "[(N+(%BPUNIT-1)/%BPUNIT](BITVECTOR+I/%BPUNIT)<I MOD %BPUNIT,1,0>;";
+    "[(N+(%BPUNIT-1))/%BPUNIT](BITVECTOR+I/%BPUNIT)<I MOD %BPUNIT,1,0>;";
 static char *predeclared_vector_u_s =
     "STRUCTURE VECTOR [I;N,UNIT=%UPVAL,EXT=0] ="
     "[N*UNIT](VECTOR+I*UNIT)<0,%BPUNIT*UNIT,EXT>;";
@@ -463,7 +463,9 @@ parse_fields (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
             }
             which = parser_expect_oneof(pctx, QL_NORMAL, delims, 2, &lex, 1);
             if (which != 0) {
-                expr_signal(ctx, STC__DELIMEXP, ",");
+                if (which < 0) {
+                    expr_signal(ctx, STC__DELIMEXP, ",");
+                }
                 break;
             }
             lexseq_instail(fseq, lex);
@@ -498,26 +500,33 @@ declare_field (expr_ctx_t ctx, scopectx_t scope)
 int
 structure_allocate (expr_ctx_t ctx, name_t *struname,
                     strudef_t **strup, unsigned int *nunits,
-                    scopectx_t *scopep)
+                    scopectx_t *scopep, int is_ref)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     strudef_t *stru = name_extraspace(struname);
     machinedef_t *mach = expr_machinedef(ctx);
     lexctx_t lctx = expr_lexmemctx(ctx);
-    int i;
     lexeme_t *lex;
     lexseq_t tmpseq;
     scopectx_t myscope, retscope;
     nameref_t *ref;
     name_t *np;
-    static strdesc_t aus[4] = {
-        STRDEF("BYTE"), STRDEF("WORD"), STRDEF("LONG"), STRDEF("QUAD") };
-    static strdesc_t kw_signed = STRDEF("SIGNED");
-    static strdesc_t kw_unsigned = STRDEF("UNSIGNED");
+    int nomoreactuals;
+    int nobrackets = 0;
+    int allowed_aus = 0;
+    static lextype_t aus[4] = { LEXTYPE_AU_BYTE, LEXTYPE_AU_WORD,
+        LEXTYPE_AU_LONG, LEXTYPE_AU_QUAD };
+    static lextype_t su[2] = { LEXTYPE_ATTR_UNSIGNED, LEXTYPE_ATTR_SIGNED };
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LBRACK, 0, 1)) {
-        *nunits = 0;
-        return 1;
+        nobrackets = 1;
+    }
+
+    // Set up for matching the allocation-unit names to byte counts,
+    // but only on byte-addressable machines
+    if (machine_unit_bits(mach) == 8) {
+        for (allowed_aus = 0; allowed_aus < 4 &&
+             machine_scalar_units(mach) >= (1<<allowed_aus); allowed_aus++);
     }
 
     myscope = parser_scope_begin(pctx);
@@ -525,33 +534,6 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
         retscope = scope_begin(scope_namectx(myscope), 0);
     }
 
-    // Predeclare the allocation-unit names to their corresponding
-    // values, but only for machines that have 8-bit units, and
-    // only those names that correspond to a number of units that
-    // is less than or equal to a fullword.
-    if (machine_unit_bits(mach) == 8) {
-        for (i = 0; i < 4; i++) {
-            unsigned int units = 1<<i;
-            if (machine_scalar_units(mach) < units) {
-                break;
-            }
-            np = litsym_special(myscope, &aus[i], units);
-            if (np == 0) {
-                expr_signal(ctx, STC__INTCMPERR, "structure_allocate[1]");
-            }
-        }
-    }
-    // and the sign-extension keywords, where supported
-    if (machine_signext_supported(mach)) {
-        np = litsym_special(myscope, &kw_signed, 1);
-        if (np == 0) {
-            expr_signal(ctx, STC__INTCMPERR, "structure_allocate[2]");
-        }
-        np = litsym_special(myscope, &kw_unsigned, 0);
-        if (np == 0) {
-            expr_signal(ctx, STC__INTCMPERR, "structure_allocate[3]");
-        }
-    }
     // Now fill in the default values for the allocation formals, if they
     // have any
     for (ref = namereflist_head(&stru->alloformals); ref != 0; ref = ref->tq_next) {
@@ -562,7 +544,6 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
             lexseq_init(&seq);
             lexseq_copy(lctx, &seq, macparam_lexseq(ref->np));
             if (lexseq_length(&seq) > 0 && expr_parse_seq(ctx, &seq, &exp)) {
-                // XXX any CTCE should be good here
                 if (expr_type(exp) == EXPTYPE_PRIM_LIT)
                     litsym_special(myscope, alloname,
                                    (unsigned int) expr_litval(exp));
@@ -571,16 +552,33 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
         }
     }
     // Now parse the allocation actuals
+    nomoreactuals = nobrackets;
     for (ref = namereflist_head(&stru->alloformals); ref != 0; ref = ref->tq_next) {
         if (ref->np != 0) {
             name_t *rnp;
             strdesc_t *alloname = name_string(ref->np);
             unsigned long val;
-            if (expr_parse_ctce(ctx, &lex)) {
-                val = lexeme_unsignedval(lex);
-                lexeme_free(lctx, lex);
-                np = litsym_special(myscope, alloname, val);
-            } else {
+            int i = -1;
+            if (!nomoreactuals) {
+                if (allowed_aus > 0) {
+                    i = parser_expect_oneof(pctx, QL_NORMAL, aus,
+                                            allowed_aus, 0, 1);
+                }
+                if (i >= 0) {
+                    val = 1L << i;
+                } else if (machine_signext_supported(mach)) {
+                    i = parser_expect_oneof(pctx, QL_NORMAL, su, 2, 0, 1);
+                }
+                if (i >= 0) {
+                    val = i;
+                } else if (expr_parse_ctce(ctx, &lex)) {
+                    val = lexeme_unsignedval(lex);
+                    lexeme_free(lctx, lex);
+                    np = litsym_special(myscope, alloname, val);
+                    i = 0;
+                }
+            }
+            if (i < 0) {
                 np = litsym_search(myscope, alloname, &val);
             }
             if (np == 0) {
@@ -604,23 +602,28 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
                 }
             }
         }
-        if (ref->tq_next != 0 &&
+        if (!nomoreactuals &&
             !parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
-            expr_signal(ctx, STC__DELIMEXP, ",");
+            nomoreactuals = 1;
         }
-    }
-    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RBRACK, 0, 1)) {
+    } /* loop through all of the allocation parameters */
+    if (!nobrackets &&
+        !parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RBRACK, 0, 1)) {
         expr_signal(ctx, STC__DELIMEXP, "]");
     }
-    lexseq_init(&tmpseq);
-    lexseq_copy(lctx, &tmpseq, &stru->allobody);
-    parser_insert_seq(pctx, &tmpseq);
-    if (!expr_parse_ctce(ctx, &lex)) {
-        expr_signal(ctx, STC__EXPCTCE);
-        return 0;
+    if (lexseq_length(&stru->allobody) == 0) {
+        *nunits = (is_ref ? machine_addr_units(mach) : 0);
+    } else {
+        lexseq_init(&tmpseq);
+        lexseq_copy(lctx, &tmpseq, &stru->allobody);
+        parser_insert_seq(pctx, &tmpseq);
+        if (!expr_parse_ctce(ctx, &lex)) {
+            expr_signal(ctx, STC__EXPCTCE);
+            return 0;
+        }
+        *nunits = (unsigned int)lexeme_unsignedval(lex);
+        lexeme_free(lctx, lex);
     }
-    *nunits = (unsigned int)lexeme_unsignedval(lex);
-    lexeme_free(lctx, lex);
     if (scopep != 0) *scopep = retscope;
     parser_scope_end(pctx);
     if (strup != 0) *strup = stru;
@@ -687,7 +690,9 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
         // Semicolons (and allocation-formals) not allowed in this case
         ndelims = 2;
         delim = LEXTYPE_DELIM_COMMA;
-        myscope = scope_copy(attr->struscope, 0);
+        myscope = ((attr->struscope == 0)
+                   ? scope_begin(expr_namectx(ctx), 0)
+                   : scope_copy(attr->struscope, 0));
         // Bring in the field names, so they can be used in the
         // the structure expression
         if (namereflist_length(&attr->fields) > 0) {

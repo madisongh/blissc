@@ -850,7 +850,8 @@ handle_data_attrs (expr_ctx_t ctx, scopectx_t scope, decltype_t dt,
             if (saw_stru) {
                 attr->struc = lexeme_ctx_get(lex);
                 structure_allocate(ctx, attr->struc, 0,
-                                   &attr->units, &attr->struscope);
+                                   &attr->units, &attr->struscope,
+                                   (attr->flags & SYM_M_REF) != 0);
                 saw_au = saw_ext = -1;
                 if (saw_preset == -1) saw_preset = 0;
                 if (saw_field == -1) saw_field = 0;
@@ -1419,9 +1420,17 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
                 rtnsym_expr_set(np, exp);
             }
         }
-        if (seg != 0) seg_commit(stg, seg);
-        attr.flags &= ~SYM_M_PENDING;
-        rtnsym_attr_update(np, &attr);
+        if (seg != 0) {
+            if (np == 0) {
+                seg_free(stg, seg);
+            } else {
+                seg_commit(stg, seg);
+            }
+        }
+        if (np != 0) {
+            attr.flags &= ~SYM_M_PENDING;
+            rtnsym_attr_update(np, &attr);
+        }
         if (which == 0) { // the semicolon
             break;
         } else if (which == 1) { // the comma
@@ -1454,7 +1463,7 @@ declare_require (parse_ctx_t pctx)
         log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__DELIMEXP, ";");
     }
     str = lexeme_text(lex);
-    parser_fopen(pctx, str->ptr, str->len); // errors handled within
+    parser_fopen(pctx, str->ptr, str->len, ".req"); // errors handled within
     lexeme_free(parser_lexmemctx(pctx), lex);
     return 1;
 

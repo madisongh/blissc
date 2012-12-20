@@ -90,7 +90,8 @@ scan_finish (scanctx_t ctx)
 }
 
 int
-scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen)
+scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen,
+            const char *suffix, char **actnamep)
 {
     int i = ctx->curbuf;
     if (i >= (SCAN_MAXFILES-1)) {
@@ -98,7 +99,7 @@ scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen)
         return 0;
     }
     i = i + 1;
-    ctx->bufstack[i].fctx = file_open_input(ctx->fioctx, fname, fnlen);
+    ctx->bufstack[i].fctx = file_open_input(ctx->fioctx, fname, fnlen, suffix);
     if (ctx->bufstack[i].fctx == 0) {
         return 0;
     }
@@ -107,6 +108,7 @@ scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen)
     ctx->bufstack[i].curpos = 0;
     ctx->bufstack[i].linelen = 0;
     ctx->curbuf = i;
+    if (actnamep) *actnamep = file_getname(ctx->bufstack[i].fctx);
     return 1;
 }
 

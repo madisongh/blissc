@@ -194,6 +194,8 @@ int lexeme_bind(lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
 
 void lexseq_free(lexctx_t lctx, lexseq_t *seq);
 int lexseq_copy(lexctx_t lctx, lexseq_t *dst, lexseq_t *src);
+int lexseq_copy_and_setpos(lexctx_t lctx, lexseq_t *dst,
+                           lexseq_t *src, textpos_t pos);
 int lexemes_match(lexseq_t *a, lexseq_t *b);
 
 static inline __unused lexeme_t *lexeme_next (lexeme_t *lex) {

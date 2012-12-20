@@ -63,7 +63,7 @@ STATCODE( 23,E,INVSTRLIT, "invalid string literal") \
 STATCODE( 24,W,EXPCTCE,   "expected compile-time constant expression") \
 STATCODE( 25,E,INVCHRVAL, "invalid character value '!SD'") \
 STATCODE( 26,W,INVNAME,   "invalid name '!SD'") \
-STATCODE( 27,E,SYNTAXERR, "syntax error") \
+STATCODE( 27,F,SYNTAXERR, "syntax error") \
 STATCODE( 28,W,KWDEXP,    "keyword '!SZ' expected") \
 STATCODE( 29,W,UNEXPCOND, "unexpected lexical conditional") \
 STATCODE( 30,E,REQFILERR, "error opening REQUIRE file !SD") \
@@ -77,7 +77,7 @@ STATCODE( 37,E,EXPLABEL,  "label expected") \
 STATCODE( 38,E,LBLSCPERR, "scope of label '!SD' is not active") \
 STATCODE( 39,E,EXITNLOOP, "EXITLOOP encountered not in loop context") \
 STATCODE( 40,E,RETNRTN,   "RETURN encountered not in routine context") \
-STATCODE( 41,W,RETNOVAL,  "return value specified for NOVALUE routine") \
+STATCODE( 41,I,RETNOVAL,  "return value specified for NOVALUE routine") \
 STATCODE( 42,W,NORETVAL,  "no return value specified for non-NOVALUE routine") \
 STATCODE( 43,W,EXPRVALRQ, "expression value required in this context") \
 STATCODE( 44,E,INVLABEL,  "invalid label '!SD'") \
@@ -118,7 +118,8 @@ STATCODE( 78,E,UNDECRSVD, "attempt to UNDECLARE reserved keyword !SL") \
 STATCODE( 79,E,MODDCLEXP, "MODULE declaration expected") \
 STATCODE( 80,W,NOTBUILTN, "name !SD declared BUILTIN unknown") \
 STATCODE( 81,W,UNDECUND,  "attempt to UNDECLARE unknown name !SD") \
-STATCODE( 82,W,FWDNOTDCL, "FORWARD name not declared: !SD")
+STATCODE( 82,W,FWDNOTDCL, "FORWARD name not declared: !SD") \
+STATCODE( 83,F,OPENERR,   "error opening file !SL: !SZ")
 
 #define STATCODE(msg,typ,nam,txt) STC_ENUMERATE(msg,typ,nam)
 typedef enum {
