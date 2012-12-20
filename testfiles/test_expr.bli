@@ -86,7 +86,7 @@ BEGIN
 
     GHI = 64;
         
-    blklabel1:BEGIN
+    blklabel1:BEGIN %INFORM('hi there')
                 DEF[DSC$W_LENGTH] = .GHI;
                 DEF[DSC$B_DTYPE] = DSC$K_DTYPE_T;
                 DEF[DSC$B_CLASS] = DSC$K_CLASS_S;

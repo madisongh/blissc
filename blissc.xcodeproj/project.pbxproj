@@ -66,6 +66,50 @@
 		7A9D4CAA1635CEA30013AE09 /* scanner.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = scanner.c; sourceTree = "<group>"; };
 		7A9E1C12163DA445009ACBD0 /* parser.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; path = parser.c; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.c; };
 		7A9E1C14163DA45A009ACBD0 /* parser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = parser.h; sourceTree = "<group>"; };
+		7AA04DA11682CDB500A2D348 /* bliss-11.cld */ = {isa = PBXFileReference; lastKnownFileType = text; path = "bliss-11.cld"; sourceTree = "<group>"; };
+		7AA04DA21682CDB500A2D348 /* bliss.req */ = {isa = PBXFileReference; lastKnownFileType = text; path = bliss.req; sourceTree = "<group>"; };
+		7AA04DA31682CDB500A2D348 /* bliss.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = bliss.txt; sourceTree = "<group>"; };
+		7AA04DA41682CDB500A2D348 /* bliss11.bbprojectd */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = bliss11.bbprojectd; sourceTree = "<group>"; };
+		7AA04DA51682CDB500A2D348 /* bliss_an.cld */ = {isa = PBXFileReference; lastKnownFileType = text; path = bliss_an.cld; sourceTree = "<group>"; };
+		7AA04DA61682CDB500A2D348 /* changes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = changes.txt; sourceTree = "<group>"; };
+		7AA04DA71682CDB500A2D348 /* code.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = code.bli; sourceTree = "<group>"; };
+		7AA04DA81682CDB500A2D348 /* cswo.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = cswo.bli; sourceTree = "<group>"; };
+		7AA04DA91682CDB500A2D348 /* debug.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = debug.bli; sourceTree = "<group>"; };
+		7AA04DAA1682CDB500A2D348 /* declar.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = declar.bli; sourceTree = "<group>"; };
+		7AA04DAB1682CDB500A2D348 /* delay.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = delay.bli; sourceTree = "<group>"; };
+		7AA04DAC1682CDB500A2D348 /* driver.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = driver.bli; sourceTree = "<group>"; };
+		7AA04DAD1682CDB500A2D348 /* e.b11 */ = {isa = PBXFileReference; lastKnownFileType = text; path = e.b11; sourceTree = "<group>"; };
+		7AA04DAE1682CDB500A2D348 /* errcodes.req */ = {isa = PBXFileReference; lastKnownFileType = text; path = errcodes.req; sourceTree = "<group>"; };
+		7AA04DAF1682CDB500A2D348 /* errmsg.req */ = {isa = PBXFileReference; lastKnownFileType = text; path = errmsg.req; sourceTree = "<group>"; };
+		7AA04DB01682CDB500A2D348 /* externals.req */ = {isa = PBXFileReference; lastKnownFileType = text; path = externals.req; sourceTree = "<group>"; };
+		7AA04DB11682CDB500A2D348 /* fin2ls.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = fin2ls.bli; sourceTree = "<group>"; };
+		7AA04DB21682CDB500A2D348 /* final.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = final.bli; sourceTree = "<group>"; };
+		7AA04DB31682CDB500A2D348 /* final_tables.req */ = {isa = PBXFileReference; lastKnownFileType = text; path = final_tables.req; sourceTree = "<group>"; };
+		7AA04DB41682CDB500A2D348 /* finlst.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = finlst.bli; sourceTree = "<group>"; };
+		7AA04DB51682CDB500A2D348 /* flowan.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = flowan.bli; sourceTree = "<group>"; };
+		7AA04DB61682CDB500A2D348 /* glodec.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = glodec.bli; sourceTree = "<group>"; };
+		7AA04DB71682CDB500A2D348 /* io.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = io.bli; sourceTree = "<group>"; };
+		7AA04DB81682CDB500A2D348 /* lexan.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = lexan.bli; sourceTree = "<group>"; };
+		7AA04DB91682CDB500A2D348 /* listc.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = listc.bli; sourceTree = "<group>"; };
+		7AA04DBA1682CDB500A2D348 /* lstpkg.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = lstpkg.bli; sourceTree = "<group>"; };
+		7AA04DBB1682CDB500A2D348 /* makefile.com */ = {isa = PBXFileReference; lastKnownFileType = text; path = makefile.com; sourceTree = "<group>"; };
+		7AA04DBC1682CDB500A2D348 /* mem.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = mem.bli; sourceTree = "<group>"; };
+		7AA04DBD1682CDB500A2D348 /* ncse.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = ncse.bli; sourceTree = "<group>"; };
+		7AA04DBE1682CDB500A2D348 /* once.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = once.bli; sourceTree = "<group>"; };
+		7AA04DBF1682CDB500A2D348 /* print.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = print.bli; sourceTree = "<group>"; };
+		7AA04DC01682CDB500A2D348 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
+		7AA04DC11682CDB500A2D348 /* Readme.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Readme.txt; sourceTree = "<group>"; };
+		7AA04DC21682CDB500A2D348 /* reshuf.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = reshuf.bli; sourceTree = "<group>"; };
+		7AA04DC31682CDB500A2D348 /* rms.req */ = {isa = PBXFileReference; lastKnownFileType = text; path = rms.req; sourceTree = "<group>"; };
+		7AA04DC41682CDB500A2D348 /* room.req */ = {isa = PBXFileReference; lastKnownFileType = text; path = room.req; sourceTree = "<group>"; };
+		7AA04DC51682CDB500A2D348 /* routines.req */ = {isa = PBXFileReference; lastKnownFileType = text; path = routines.req; sourceTree = "<group>"; };
+		7AA04DC61682CDB500A2D348 /* syntax.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = syntax.bli; sourceTree = "<group>"; };
+		7AA04DC71682CDB500A2D348 /* t.b11 */ = {isa = PBXFileReference; lastKnownFileType = text; path = t.b11; sourceTree = "<group>"; };
+		7AA04DC81682CDB500A2D348 /* tables.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = tables.bli; sourceTree = "<group>"; };
+		7AA04DC91682CDB500A2D348 /* tnbind.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = tnbind.bli; sourceTree = "<group>"; };
+		7AA04DCA1682CDB500A2D348 /* tnlow.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = tnlow.bli; sourceTree = "<group>"; };
+		7AA04DCB1682CDB500A2D348 /* try.bli */ = {isa = PBXFileReference; lastKnownFileType = text; path = try.bli; sourceTree = "<group>"; };
+		7AA04DCC1682CDB500A2D348 /* x.b11 */ = {isa = PBXFileReference; lastKnownFileType = text; path = x.b11; sourceTree = "<group>"; };
 		7AB5ED811642A3AB0063EC94 /* expression.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; path = expression.c; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.c; };
 		7AB5ED841642A3B80063EC94 /* expression.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = expression.h; sourceTree = "<group>"; };
 		7AB8A9AC16722B3500B91750 /* symbols.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = symbols.c; sourceTree = "<group>"; };
@@ -134,6 +178,7 @@
 				7ADCC89A167E421A00D09FA4 /* logging.h */,
 				7AC12EC316591C0A009C84F5 /* machinedef.h */,
 				7AF573D8164936EE005C965F /* macros.c */,
+				7AA04DA01682CDB500A2D348 /* bliss11 */,
 				7ADC81891649CD660056600E /* macros.h */,
 				7A9D4C9D1635A88F0013AE09 /* main.c */,
 				7A995E0F163C2F82003BEAC7 /* nametable.c */,
@@ -162,6 +207,58 @@
 			);
 			path = blissc;
 			sourceTree = "<group>";
+		};
+		7AA04DA01682CDB500A2D348 /* bliss11 */ = {
+			isa = PBXGroup;
+			children = (
+				7AA04DA11682CDB500A2D348 /* bliss-11.cld */,
+				7AA04DA21682CDB500A2D348 /* bliss.req */,
+				7AA04DA31682CDB500A2D348 /* bliss.txt */,
+				7AA04DA41682CDB500A2D348 /* bliss11.bbprojectd */,
+				7AA04DA51682CDB500A2D348 /* bliss_an.cld */,
+				7AA04DA61682CDB500A2D348 /* changes.txt */,
+				7AA04DA71682CDB500A2D348 /* code.bli */,
+				7AA04DA81682CDB500A2D348 /* cswo.bli */,
+				7AA04DA91682CDB500A2D348 /* debug.bli */,
+				7AA04DAA1682CDB500A2D348 /* declar.bli */,
+				7AA04DAB1682CDB500A2D348 /* delay.bli */,
+				7AA04DAC1682CDB500A2D348 /* driver.bli */,
+				7AA04DAD1682CDB500A2D348 /* e.b11 */,
+				7AA04DAE1682CDB500A2D348 /* errcodes.req */,
+				7AA04DAF1682CDB500A2D348 /* errmsg.req */,
+				7AA04DB01682CDB500A2D348 /* externals.req */,
+				7AA04DB11682CDB500A2D348 /* fin2ls.bli */,
+				7AA04DB21682CDB500A2D348 /* final.bli */,
+				7AA04DB31682CDB500A2D348 /* final_tables.req */,
+				7AA04DB41682CDB500A2D348 /* finlst.bli */,
+				7AA04DB51682CDB500A2D348 /* flowan.bli */,
+				7AA04DB61682CDB500A2D348 /* glodec.bli */,
+				7AA04DB71682CDB500A2D348 /* io.bli */,
+				7AA04DB81682CDB500A2D348 /* lexan.bli */,
+				7AA04DB91682CDB500A2D348 /* listc.bli */,
+				7AA04DBA1682CDB500A2D348 /* lstpkg.bli */,
+				7AA04DBB1682CDB500A2D348 /* makefile.com */,
+				7AA04DBC1682CDB500A2D348 /* mem.bli */,
+				7AA04DBD1682CDB500A2D348 /* ncse.bli */,
+				7AA04DBE1682CDB500A2D348 /* once.bli */,
+				7AA04DBF1682CDB500A2D348 /* print.bli */,
+				7AA04DC01682CDB500A2D348 /* README */,
+				7AA04DC11682CDB500A2D348 /* Readme.txt */,
+				7AA04DC21682CDB500A2D348 /* reshuf.bli */,
+				7AA04DC31682CDB500A2D348 /* rms.req */,
+				7AA04DC41682CDB500A2D348 /* room.req */,
+				7AA04DC51682CDB500A2D348 /* routines.req */,
+				7AA04DC61682CDB500A2D348 /* syntax.bli */,
+				7AA04DC71682CDB500A2D348 /* t.b11 */,
+				7AA04DC81682CDB500A2D348 /* tables.bli */,
+				7AA04DC91682CDB500A2D348 /* tnbind.bli */,
+				7AA04DCA1682CDB500A2D348 /* tnlow.bli */,
+				7AA04DCB1682CDB500A2D348 /* try.bli */,
+				7AA04DCC1682CDB500A2D348 /* x.b11 */,
+			);
+			name = bliss11;
+			path = testfiles/bliss11;
+			sourceTree = SOURCE_ROOT;
 		};
 /* End PBXGroup section */
 
