@@ -1,13 +1,20 @@
-//
-//  utils.c
-//  blissc
-//
-//  Utility routines
-//
-//  Created by Matthew Madison on 11/18/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			utils.c
+ *
+ *	Abstract:		Miscellaneous utility functions
+ *
+ *  Module description:
+ *		This module contains miscellaneous utility functions
+ *		used by other modules.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		 20-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdio.h>
 
 /*
@@ -17,7 +24,8 @@
  * a binary integer value.
  */
 long
-bits_needed (unsigned long val) {
+bits_needed (unsigned long val)
+{
     long count = 0;
     while (val != 0) {
         count += 1;

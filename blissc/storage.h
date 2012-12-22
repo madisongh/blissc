@@ -1,14 +1,16 @@
-//
-//  storage.h
-//  blissc
-//
-//  Created by Matthew Madison on 11/18/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_storage_h
-#define blissc_storage_h
-
+#ifndef storage_h__
+#define storage_h__
+/*
+ *++
+ *	File:			storage.h
+ *
+ *	Abstract:		Storage-tracking definitions.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 #include <stdint.h>
 #include "machinedef.h"
 #include "nametable.h"
@@ -16,7 +18,6 @@
 #include "utils.h"
 
 typedef struct stgctx_s *stgctx_t;
-
 
 #define PSECT_M_ATTR_WRITE   (1<<0)
 #define PSECT_M_ATTR_EXEC    (1<<1)
@@ -28,7 +29,6 @@ typedef struct stgctx_s *stgctx_t;
 #undef DOSEGTYPE
 #define DOSEGTYPES \
     DOSEGTYPE(STATIC) DOSEGTYPE(STACK) \
-    DOSEGTYPE(LITERAL) \
     DOSEGTYPE(REGISTER)
 #define DOSEGTYPE(t_) SEGTYPE_##t_,
 typedef enum {
@@ -44,7 +44,6 @@ struct initval_s;
 typedef struct initval_s initval_t;
 struct seg_s;
 typedef struct seg_s seg_t;
-
 
 seg_t *seg_alloc_static(stgctx_t ctx, textpos_t defpos, psect_t *psect);
 seg_t *seg_alloc_stack(stgctx_t ctx, textpos_t defpos, int stackonly);
@@ -96,5 +95,4 @@ frame_t *frame_begin(stgctx_t ctx, textpos_t defpos, void *routine);
 frame_t *frame_end(stgctx_t ctx);
 frame_t *storage_curframe(stgctx_t ctx);
 
-#undef SIU
-#endif
+#endif /* storage_h__ */

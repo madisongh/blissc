@@ -1,11 +1,20 @@
-//
-//  statcodes.c
-//  blissc
-//
-//  Created by Matthew Madison on 12/16/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			statcodes.c
+ *
+ *	Abstract:		Status codes and messages
+ *
+ *  Module description:
+ *		This module implements the message formatting
+ *		parts of the status code facility.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		21-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -30,18 +39,7 @@ static const char sevchars[8] = "?SI??WEF";
 /*
  * stc_msg_format
  *
- * Message formatting.  Do NOT use sprintf-style
- * formatting codes!
- *
- * Directives:
- *  !SL = text with length (char *str, int len)
- *  !SZ = null-terminated string (char *azstr)
- *  !SD = string descriptor (strdesc_t *sdsc)
- *  !U{I,S,L} = unsigned int, short, long
- *  !I{I,S,L} = signed int, short, long
- *  !X{I,S,L} = hexadecimal int, short, long
- *  !P = pointer
- *  !! = exclamation point
+ * Message formatting, with variable-length arg list.
  */
 int
 stc_msg_format (statcode_t statcode, char *buf, size_t bufsiz, ...)
@@ -56,6 +54,22 @@ stc_msg_format (statcode_t statcode, char *buf, size_t bufsiz, ...)
 
 } /* stc_msg_format */
 
+/*
+ * stc_msg_vformat
+ *
+ * The core formatting routine.
+ * Do NOT use sprintf-style formatting codes in
+ * message strings! Use the formatting directives
+ * below:
+ *  !SL = text with length (char *str, int len)
+ *  !SZ = null-terminated string (char *azstr)
+ *  !SD = string descriptor (strdesc_t *sdsc)
+ *  !U{I,S,L} = unsigned int, short, long
+ *  !I{I,S,L} = signed int, short, long
+ *  !X{I,S,L} = hexadecimal int, short, long
+ *  !P = pointer
+ *  !! = exclamation point
+ */
 int
 stc_msg_vformat (statcode_t statcode, char *buf, size_t bufsiz, va_list ap)
 {

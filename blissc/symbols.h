@@ -1,14 +1,16 @@
-//
-//  symbols.h
-//  blissc
-//
-//  Created by Matthew Madison on 12/7/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_symbols_h
-#define blissc_symbols_h
-
+#ifndef symbols_h__
+#define symbols_h__
+/*
+ *++
+ *	File:			symbols.h
+ *
+ *	Abstract:		Definitions for symbol names
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 #include "expression.h"
 #include "storage.h"
 #include "nametable.h"
@@ -93,4 +95,5 @@ name_t *psect_declare(scopectx_t scope, strdesc_t *dsc,
                       unsigned int psflags, textpos_t pos);
 psect_t *psect_search(scopectx_t scope, strdesc_t *namedsc);
 psect_t *psect_pointer(name_t *np);
-#endif
+
+#endif /* symbols_h__ */

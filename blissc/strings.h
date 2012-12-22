@@ -1,16 +1,21 @@
-//
-//  strings.h
-//  blissc
-//
-//  Created by Matthew Madison on 10/31/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_strings_h
-#define blissc_strings_h
-
+#ifndef strings_h__
+#define strings_h__
+/*
+ *++
+ *	File:			strings.h
+ *
+ *	Abstract:		String-handling definitions.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 #include <string.h>
 
+/*
+ * String descriptor structure.
+ */
 typedef struct {
     unsigned short flags;
 #define STR_M_STATIC (1<<0)
@@ -18,13 +23,17 @@ typedef struct {
     char           *ptr;
 } strdesc_t;
 
+/*
+ * Macros for static string descriptor setup
+ * at declaration time.
+ */
 #define STRDEF(s) { STR_M_STATIC, sizeof(s)-1, s }
 #define STRZDEF(s) { STR_M_STATIC, sizeof(s), s }
-#define INITSTR(dsc, s, l) do { \
-(dsc).flags = STR_M_STATIC; \
-(dsc).len = (l); (dsc).ptr = (s); \
-} while(0)
 
+/*
+ * Inline routine for initializing a static string
+ * descriptor.
+ */
 static inline __unused strdesc_t *
 strdesc_init (strdesc_t *dsc, char *s, size_t len)
 {
@@ -34,6 +43,10 @@ strdesc_init (strdesc_t *dsc, char *s, size_t len)
     return dsc;
 }
 
+/*
+ * STRING_MAXLEN is maximum length for a literal string that
+ * the compiler will accept.
+ */
 #define STRING_MAXLEN 1024
 
 int stringpool_init(void);
@@ -49,4 +62,4 @@ int strings_eql(strdesc_t *a, strdesc_t *b);
 strdesc_t *string_printf(strdesc_t *dst, const char *fmt, ...);
 int string_numval(strdesc_t *str, int base, long *valp);
 
-#endif
+#endif /* strings_h__ */

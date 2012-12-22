@@ -55,7 +55,7 @@ parse_func_args (expr_ctx_t ctx, exprseq_t *arglist)
     status = 1;
     while (1) {
         expr_node_t *exp;
-        if (!expr_expr_next(ctx, &exp)) {
+        if (!expr_parse_expr(ctx, &exp)) {
             expr_signal(ctx, STC__EXPREXP);
             status = 0;
             break;

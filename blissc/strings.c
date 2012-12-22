@@ -1,11 +1,50 @@
-//
-//  strings.c
-//  blissc
-//
-//  Created by Matthew Madison on 10/31/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			strings.c
+ *
+ *	Abstract:		Dynamic string management.
+ *
+ *  Module description:
+ *		This module contains all of the memory management
+ *		for dynamic strings, along with functions for manipulating
+ *		strings via string descriptors.
+ *
+ *		Note that descriptors are embedded in each string cell,
+ *		and the descriptor-based API will return pointers to
+ *		dynamically-allocated descriptors.  However, callers
+ *		can create their own descriptors, if it's more
+ *		convenient to do so, and statically-allocated strings
+ *		(i.e., strings not allocated by this module) can be
+ *		referenced through descriptors.
+ *
+ *		Strings are allocated out of memory pools.  Three pools
+ *		are maintained here, 'small', 'medium', and 'large'.
+ *		When a request is made to allocate space for a string,
+ *		the length specified in the request is used to select the
+ *		pool, based on the SMALLSZ, MEDSZ, and LRGSZ definitions
+ *		below.  Lookaside lists are kept with each pool, so
+ *		string cells will get reused after being freed.  The
+ *		lists are pre-allocated with ALLOCOUNT entries at
+ * 		initialization time.
+ *
+ *		XXX The choice of sizes here is based on an educated guess
+ *		of string-size frequency in a typical compilation.  Some
+ *		instrumentation and analysis is called for to tune the
+ *		cell sizes for each pool -- or to select a different
+ *		implementation, if that would provide a better balance
+ *		between heap usage/fragmentation and speed.
+ *
+ *		XXX The string pool headers are static structures; this
+ *		should probably be fixed so that they, too, are dynamically
+ * 		allocated.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		21-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,15 +80,14 @@ static struct stringpool_s  pool[POOL_COUNT] = {
     { 0, SMALLSZ }, { 0, MEDSZ }, { 0, LRGSZ }
 };
 
-static inline int
-is_static (strdesc_t *dsc)
-{
-    return ((dsc->flags & STR_M_STATIC) != 0);
+/*
+ * Internal utility routines.
+ */
+static inline int is_static (strdesc_t *dsc) {
+	return ((dsc->flags & STR_M_STATIC) != 0);
 }
 
-static inline int
-size_to_pool (size_t len)
-{
+static inline int size_to_pool (size_t len) {
     int i;
     for (i = 0; i < POOL_COUNT; i++) {
         if (len <= pool[i].maxsize) {
@@ -59,11 +97,16 @@ size_to_pool (size_t len)
     return POOL_NONE;
 }
 
-static inline string_t *
-desc_to_str (strdesc_t *dsc)
-{
+static inline string_t *desc_to_str (strdesc_t *dsc) {
     return is_static(dsc) ? 0 : (string_t *)(dsc->ptr - sizeof(string_t));
 }
+
+
+/*
+ * stringpool_expand
+ *
+ * Add more entries to a string pool's lookaside list.
+ */
 static int
 stringpool_expand (int idx)
 {
@@ -90,8 +133,15 @@ stringpool_expand (int idx)
     str->next = pool[idx].freelist;
     pool[idx].freelist = (string_t *) more;
     return 1;
-}
 
+} /* stringpool_expand */
+
+
+/*
+ * stringpool_init
+ *
+ * Initialize the string pools.
+ */
 int
 stringpool_init (void)
 {
@@ -103,8 +153,16 @@ stringpool_init (void)
         }
     }
     return 1;
-}
 
+} /* stringpool_init */
+
+/*
+ * string___alloc
+ *
+ * Internal allocation routine.  Identifies
+ * the string pool and triggers its expansion,
+ * if needed.
+ */
 static string_t *
 string___alloc (size_t len)
 {
@@ -123,8 +181,14 @@ string___alloc (size_t len)
     pool[i].freelist = str->next;
     str->next = 0;
     return str;
-}
 
+} /* string___alloc */
+
+/*
+ * string___free
+ *
+ * Return a string cell to its pool's lookaside list.
+ */
 static void
 string___free (string_t *str)
 {
@@ -133,8 +197,17 @@ string___free (string_t *str)
     }
     str->next = pool[str->poolindex].freelist;
     pool[str->poolindex].freelist = str;
-}
 
+} /* string___free */
+
+/*
+ * string_from_chrs
+ *
+ * Allocates a dynamic string from a C-style character pointer/
+ * length pair, and returns a pointer to a descriptor for the
+ * string.
+ *
+ */
 strdesc_t *
 string_from_chrs (strdesc_t *dest, const char *cp, size_t len)
 {
@@ -152,8 +225,15 @@ string_from_chrs (strdesc_t *dest, const char *cp, size_t len)
     dest->len = len;
     memcpy(dest->ptr, cp, len);
     return dest;
-}
 
+} /* string_from_chrs */
+
+/*
+ * ascic_string_from_chrs
+ *
+ * Allocates a dynamic string in %ASCIC form - that is,
+ * prefixed with a length byte.
+ */
 strdesc_t *
 ascic_string_from_chrs (strdesc_t *dest, const char *cp, size_t len)
 {
@@ -171,8 +251,18 @@ ascic_string_from_chrs (strdesc_t *dest, const char *cp, size_t len)
     memcpy(dest->ptr+1, cp, len);
     *(dest->ptr) = (len & 0xff);
     return dest;
-}
 
+} /* ascic_string_from_chrs */
+
+/*
+ * string_append
+ *
+ * Appends one string to another.  Will allocate
+ * a new string (and descriptor) if the concatenated
+ * string is too long to fit into the destination's
+ * current cell size, so callers must use the pointer
+ * returned by this routine to access the result.
+ */
 strdesc_t *
 string_append (strdesc_t *trg, strdesc_t *add)
 {
@@ -198,8 +288,17 @@ string_append (strdesc_t *trg, strdesc_t *add)
     memcpy(newstr->desc.ptr + trg->len, add->ptr, add->len);
     string___free(str);
     return &newstr->desc;
-}
 
+} /* string_append */
+
+/*
+ * string_free
+ *
+ * Public API for freeing a string via a string
+ * descriptor.  It's OK to pass a null pointer or
+ * a pointer to a static string descriptor; they will
+ * be silently ignored.
+ */
 void
 string_free (strdesc_t *dsc)
 {
@@ -207,8 +306,18 @@ string_free (strdesc_t *dsc)
         return;
     }
     string___free(desc_to_str(dsc));
-}
 
+} /* string_free */
+
+/*
+ * string_alloc
+ *
+ * Public API for allocating a string and descriptor
+ * for a string cell that will hold at least 'len'
+ * characters.  If a destination descriptor is
+ * provided, it will be set to point to the allocated
+ * string.
+ */
 strdesc_t *
 string_alloc (strdesc_t *dest, size_t len)
 {
@@ -223,8 +332,16 @@ string_alloc (strdesc_t *dest, size_t len)
     dest->ptr = str->desc.ptr;
     dest->len = len;
     return dest;
-}
 
+} /* string_alloc */
+
+/*
+ * string_copy
+ *
+ * Makes a copy of a string.  Returns a pointer
+ * to the copy's descriptor (which will be the 'dest'
+ * descriptor, if 'dest' is non-null).
+ */
 strdesc_t *
 string_copy (strdesc_t *dest, strdesc_t *src)
 {
@@ -251,8 +368,15 @@ string_copy (strdesc_t *dest, strdesc_t *src)
     dest->len = src->len;
     memcpy(dest->ptr, src->ptr, src->len);
     return dest;
-}
 
+} /* string_copy */
+
+/*
+ * strings_eql
+ *
+ * Returns 1 if the two strings are the same
+ * length and compare for equality, zero otherwise.
+ */
 int
 strings_eql (strdesc_t *a, strdesc_t *b)
 {
@@ -260,8 +384,17 @@ strings_eql (strdesc_t *a, strdesc_t *b)
         return 0;
     }
     return memcmp(a->ptr, b->ptr, a->len) == 0;
-}
 
+} /* strings_eql */
+
+/*
+ * string_printf
+ *
+ * Provides printf() formatting into a dynamically
+ * allocated string.  Note that to keep things simple,
+ * the sprintf() is done into a local buffer first,
+ * and then copied to the dynamic string.
+ */
 strdesc_t *
 string_printf (strdesc_t *dst, const char *fmt, ...)
 {
@@ -276,6 +409,13 @@ string_printf (strdesc_t *dst, const char *fmt, ...)
 
 } /* string_printf */
 
+/*
+ * string_numval
+ *
+ * Uses strtol() to parse a numeric value from a string.
+ * Any radix value supported by strtol() may be specified
+ * for 'base', but typical values are 8, 10, and 16.
+ */
 int
 string_numval (strdesc_t *str, int base, long *valp)
 {
@@ -294,4 +434,5 @@ string_numval (strdesc_t *str, int base, long *valp)
     }
     *valp = numval;
     return 1;
-}
+
+} /* string_numval */

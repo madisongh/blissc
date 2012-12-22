@@ -1,19 +1,27 @@
-//
-//  utils.h
-//  blissc
-//
-//  Created by Matthew Madison on 11/18/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_utils_h
-#define blissc_utils_h
-
+#ifndef utils_h__
+#define utils_h__
+/*
+ *++
+ *	File:			utils.h
+ *
+ *	Abstract:		Miscellaneous utility functions.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--	
+ */
 #include <stdlib.h>
 #include <stdint.h>
 
 /*
- * Text positions
+ * Text position tracking.  A textpos is a 64-bit integer, divided
+ * up into a file index number (the indices are tracked by the lexer),
+ * a line number, and a column number.  Every lexeme scanned carries
+ * its text position; positions get saved with declarations.
+ *
+ * NB: If this is ported to a 32-bit host system, some adjustments
+ *     may need to be made.
  */
 typedef uint64_t textpos_t;
 
@@ -45,6 +53,14 @@ static inline __unused unsigned int textpos_colnum(textpos_t t) {
 }
 
 
+/*
+ * Width-related functions.  These handle things like bit counting and
+ * translation of integers between the host's "long" format and the target's
+ * specific width/sign-extension format.
+ *
+ * NB: This code cannot handle widths larger than the size of a 'long' on 
+ *     the host system.
+ */
 long bits_needed(unsigned long);
 
 static inline __unused long getvalue(long val, unsigned int width, int signext) {
@@ -61,8 +77,46 @@ static inline __unused long getmvalue(long val, unsigned long mask, int signext)
     return (signext && (val < 0) ? -result : result);
 }
 
-// Singly-linked tail queue implementation, as inline functions
-
+/*
+ * Tail-queue implementation.  A tail-queue consists of a header
+ * that tracks the head and tail of the queue, along with a count of
+ * the elements in the queue.  Queue elements only include a single
+ * 'next' pointer.
+ *
+ * TQ_HDR_FIELDS(typename) should be included in a structure declaration for
+ * the tail-queue header.  The typename should be the struct tag or typedef
+ * for the enclosing structure.
+ *
+ * TQ_ENT_FIELDS(typename) should be included in a structure declaration for
+ * the elements.  The typename should be the struct tag or typedef for the
+ * enclosing structure.
+ *
+ * DEFINE_TQ_FUNCS(prefix, hdrtype, enttype) should be used to instantiate
+ * a set of inline functions for manipulating the tail queue.  The specified
+ * prefix will be prepended to the function names.  The hdrtype and enttype
+ * parameters should be the type names ('struct <tag>' or typedef'ed type)
+ * for the queue header and queue entry structures, respectively.
+ *
+ * Functions (<p> represents the prefix mentioned above):
+ * <p>_init:		initializes the tail-queue header fields.
+ * <p>_empty:		returns 1 if the queue is empty.
+ * <p>_inshead: 	insert an entry at the head of the queue.
+ * <p>_instail:		insert an entry at the tail of the queue.
+ * <p>_append:		append one queue to another.
+ * <p>_prepend:		prepend one queue at the front of another.
+ * <p>_remhead:		remove the entry at the head of the queue.
+ * <p>_remtail:		remove the entry at the tail of the queue.
+ * <p>_remove:		remove an arbitrary entry from the queue.
+ * <p>_head:		return a pointer to the first element in the queue.
+ * <p>_tail:		return a pointer to the last element in the queue.
+ * <p>_length:		return the number of entries in the queue.
+ *
+ * Note that the 'remove' function is the most expensive, requiring
+ * a linear search of the queue until the entry is found.  If you need
+ * to do arbitrary removes frequently, a different queue implementation
+ * would probably be in order.
+ *
+ */
 #define TQ_HDR_FIELDS(enttype_) \
     enttype_ *tq_head; \
     enttype_ *tq_tail; \
@@ -90,8 +144,10 @@ static inline __unused void pfx_##_append (hdrtype_ *dst, hdrtype_ *addon) { \
 static inline __unused void pfx_##_prepend (hdrtype_ *dst, hdrtype_ *addon) { \
     if (addon->tq_count == 0) return; \
     if (dst->tq_count == 0) { \
-        dst->tq_head = addon->tq_head; dst->tq_tail = addon->tq_tail; dst->tq_count = addon->tq_count;} \
-    else { addon->tq_tail->tq_next = dst->tq_head; dst->tq_head = addon->tq_head; dst->tq_count += addon->tq_count; } \
+        dst->tq_head = addon->tq_head; dst->tq_tail = addon->tq_tail; \
+        dst->tq_count = addon->tq_count;} else { \
+        addon->tq_tail->tq_next = dst->tq_head; dst->tq_head = addon->tq_head; \
+        dst->tq_count += addon->tq_count; } \
     addon->tq_head = addon->tq_tail = 0; addon->tq_count = 0; } \
 static inline __unused enttype_ * pfx_##_remhead (hdrtype_ *h) { \
     enttype_ *e = h->tq_head; if (e == 0) return e; \
@@ -110,4 +166,4 @@ static inline __unused enttype_ * pfx_##_head (hdrtype_ *h) { return h->tq_head;
 static inline __unused enttype_ * pfx_##_tail (hdrtype_ *h) { return h->tq_tail; } \
 static inline __unused int pfx_##_length (hdrtype_ *h) { return h->tq_count; }
 
-#endif
+#endif /* utils_h__ */

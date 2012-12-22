@@ -1,13 +1,16 @@
-//
-//  nametable.h
-//  blissc
-//
-//  Created by Matthew Madison on 10/27/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_nametable_h
-#define blissc_nametable_h
+#ifndef nametable_h__
+#define nametable_h__
+/*
+ *++
+ *	File:			nametable.h
+ *
+ *	Abstract:		Name table definitions.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 
 #include <string.h>
 #include <stdint.h>
@@ -31,6 +34,10 @@ typedef struct namectx_s *namectx_t;
 struct name_s;
 typedef struct name_s name_t;
 
+// A 'nameref' is simply a pointer to a name table entry.
+// Sequences of such references are commonly used, so we
+// provide a basic type for the references themselves and
+// a tail queue they can be maintained in.
 struct nameref_s {
     TQ_ENT_FIELDS(struct nameref_s)
     struct name_s    *np;
@@ -41,7 +48,16 @@ struct namereflist_s {
     TQ_HDR_FIELDS(nameref_t)
 };
 typedef struct namereflist_s namereflist_t;
+DEFINE_TQ_FUNCS(namereflist, namereflist_t, nameref_t)
 
+
+// Definitions for name table entries themselves.  Name tables
+// are used to store and quickly search for identifiers of any
+// kind -- keywords, function names, symbol names, etc. -- so
+// an extension mechanism is provided for modules to hook into
+// to store additional information with the name.
+
+// The LRM limits names to 31 characters (NAME_SIZE-1).
 #define NAME_SIZE       32
 
 #define NAME_M_RESERVED (1<<0) // error if the name is redefined
@@ -50,8 +66,12 @@ typedef struct namereflist_s namereflist_t;
 #define NAME_M_BUILTIN  (1<<3)
 #define NAME_M_FLAGMASK (0xFFFF) // others are reserved for internal use
 
-DEFINE_TQ_FUNCS(namereflist, namereflist_t, nameref_t)
-
+// To add more information to a name table entry, a module must register,
+// providing the size of the extension and, optionally, pointers to
+// constructor, destructor, and copy-constructor functions.  The nametable
+// module will automatically manage the extension cell itself, but if the
+// extension in turn points to other allocated memory, that must be managed
+// by the registering module.
 typedef int (*name_datainit_fn)(void *ctx, name_t *np, void *p);
 typedef void (*name_datafree_fn)(void *ctx, name_t *np, void *p);
 typedef int (*name_datacopy_fn)(void *ctx, name_t *dst, void *dp, name_t *src, void *sp);
@@ -65,10 +85,6 @@ struct nametype_vectors_s {
 };
 typedef struct nametype_vectors_s nametype_vectors_t;
 
-/*
- * Macros for building static tables of reserved keywords
- * and predeclared names
- */
 struct namedef_s {
     lextype_t       lt;
     unsigned int    flags;
@@ -76,6 +92,8 @@ struct namedef_s {
     char            *name;
 };
 typedef struct namedef_s namedef_t;
+
+// Convenience macro for setting up static namedefs
 #define NAMEDEF(n_, lt_, f_) { (lt_), (f_), sizeof(n_)-1, (n_) }
 
 name_t *name_search(scopectx_t scope, const char *id,
@@ -125,4 +143,5 @@ int namereflist_copy(namectx_t ctx, namereflist_t *dst,
                      namereflist_t *src);
 name_t *scope_nextname(scopectx_t scope, void **ctxp);
 int name_declare_builtin(scopectx_t scope, strdesc_t *str, textpos_t pos);
-#endif
+
+#endif /* nametable_h__ */

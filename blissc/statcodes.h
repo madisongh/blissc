@@ -1,29 +1,43 @@
-//
-//  statcodes.h
-//  blissc
-//
-//  Created by Matthew Madison on 12/16/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_statcodes_h
-#define blissc_statcodes_h
-
+#ifndef statcodes_h__
+#define statcodes_h__
+/*
+ *++
+ *	File:			statcodes.h
+ *
+ *	Abstract:		Status code and message definitions.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 #include <string.h>
 #include <stdint.h>
 #include <stdarg.h>
 
+// The statcode_t type is represented as an enum in C, but
+// it's really a 32-bit integer of which 3 bits are used to
+// represent a severity code and 29 bits are used for a
+// message number.
 #define STC_V_SEVERITY   29
 #define STC_S_SEVERITY    3
 #define STC_V_MSGNO       0
 #define STC_S_MSGNO      29
 
+// Note the pattern here - the high-order bit is
+// set for severity levels that should be treated as
+// failures, making the OK/FAIL a simple sign check
+// on the status code.  The remaining two bits are
+// used to differentiate the levels of OK-ness or
+// or failure.
 #define STC_K_SUCCESS   1  // 001
 #define STC_K_INFO      2  // 010
 #define STC_K_WARN      5  // 101
 #define STC_K_ERROR     6  // 110
 #define STC_K_FATAL     7  // 111
 
+// Macros to compose status codes by packing the fields into the
+// right bit positions.
 #define STC_MAKECODE(sev_, msgno_) \
     (((sev_)<<STC_V_SEVERITY)|(((msgno_)&~((-1)<<STC_S_MSGNO))<<STC_V_MSGNO))
 #define STC_CODE_S(m_) STC_MAKECODE(STC_K_SUCCESS,(m_))
@@ -32,8 +46,7 @@
 #define STC_CODE_E(m_) STC_MAKECODE(STC_K_ERROR,(m_))
 #define STC_CODE_F(m_) STC_MAKECODE(STC_K_FATAL,(m_))
 
-#define STC_ENUMERATE(mno_,type_,name_) STC__##name_ = STC_CODE_##type_((mno_)),
-
+// Factory macros
 #undef STATCODE
 #define STATCODES \
 STATCODE(  0,S,NORMAL,    "normal successful completion") \
@@ -121,18 +134,20 @@ STATCODE( 81,W,UNDECUND,  "attempt to UNDECLARE unknown name !SD") \
 STATCODE( 82,W,FWDNOTDCL, "FORWARD name not declared: !SD") \
 STATCODE( 83,F,OPENERR,   "error opening file !SL: !SZ")
 
-#define STATCODE(msg,typ,nam,txt) STC_ENUMERATE(msg,typ,nam)
+#define STATCODE(msg,typ,nam,txt) STC__##nam =  STC_CODE_##typ(msg),
 typedef enum {
 STATCODES
 } statcode_t;
 #undef STATCODE
 
-static inline __unused unsigned int stc_severity (statcode_t s) { return (s >> STC_V_SEVERITY) & ~((-1) << STC_S_SEVERITY); }
-static inline __unused unsigned int stc_msgno (statcode_t s) { return (s >> STC_V_MSGNO) & ~((-1) << STC_S_MSGNO); }
+static inline __unused unsigned int stc_severity (statcode_t s) {
+	return (s >> STC_V_SEVERITY) & ~((-1) << STC_S_SEVERITY); }
+static inline __unused unsigned int stc_msgno (statcode_t s) {
+	return (s >> STC_V_MSGNO) & ~((-1) << STC_S_MSGNO); }
 static inline __unused int stc_success (statcode_t s) { return (int) s >= 0; }
 static inline __unused int stc_fail (statcode_t s) { return (int) s < 0; }
 
 int stc_msg_format(statcode_t statcode, char *buf, size_t bufsiz, ...);
 int stc_msg_vformat(statcode_t statcode, char *buf, size_t bufsiz, va_list ap);
 
-#endif
+#endif /* statcodes_h__ */

@@ -1,11 +1,39 @@
-//
-//  symbols.c
-//  blissc
-//
-//  Created by Matthew Madison on 12/7/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			symbols.c
+ *
+ *	Abstract:		Symbol management.
+ *
+ *  Module description:
+ *		This module contains the routines that manage information
+ *		about symbols: LITERALs, data symbols, and routines.  These
+ *		are usually just called 'names' in the LRM, but I use 'symbol'
+ *		to distinguish these names from names of other things.
+ *		COMPILETIME names are also handled in this module, even though
+ *		they are purely lexical entities.  LABELs are also managed
+ *      here.
+ *
+ *		This module layers on top of the generic name table management
+ *		routines, which provide the underlying memory management and
+ *		name lookup mechanisms.  See nametable.c for further information.
+ *		Extension space is used for literals, routines, and data
+ *      symbols.  COMPILETIME names make use of the generic 'value'
+ *		storage already provided by the name table code.
+ *
+ *		The parsing routines in declarations.c call on these routines
+ *		to add symbols to the symbol table, once the names and attributes
+ *		have been parsed.  A mechanism is provided to partially declare
+ *		a symbol, marking it "pending" until all attributes have been
+ *		parsed and the symbol information gets updated.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *
+ *	Modification history:
+ *		20-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include "symbols.h"
@@ -17,14 +45,11 @@
 #include "strings.h"
 #include "utils.h"
 
-#define ALLOC_QTY 128
-typedef enum {
-    SYM_LITERAL,
-    SYM_DATA,
-    SYM_ROUTINE
-} symlist_t;
-#define SYMLIST_COUNT 3
-
+/*
+ * The following structures are the extensions to
+ * the basic name type that hold the information specific
+ * to the types of symbols tracked here.
+ */
 struct sym_literal_s {
     literal_attr_t attr;
 };
@@ -47,6 +72,9 @@ struct sym_routine_s {
 };
 typedef struct sym_routine_s sym_routine_t;
 
+/*
+ * Context structure for this module.
+ */
 struct symctx_s {
     logctx_t        logctx;
     stgctx_t        stg;
@@ -60,6 +88,12 @@ static const lextype_t symtype[3] = {
     LEXTYPE_NAME_LITERAL, LEXTYPE_NAME_DATA, LEXTYPE_NAME_ROUTINE
 };
 
+/*
+ * data_free
+ *
+ * Destructor function for data symbols.
+ * Invoked through name_free().
+ */
 static void
 data_free (void *vctx, name_t *np, void *p)
 {
@@ -72,6 +106,12 @@ data_free (void *vctx, name_t *np, void *p)
 
 } /* data_free */
 
+/*
+ * data_copy
+ *
+ * Copy function for data symbols.  Invoked
+ * through name_copy().
+ */
 static int
 data_copy (void *vctx, name_t *dnp, void *dp, name_t *snp, void *sp)
 {
@@ -134,7 +174,8 @@ bind_compiletime (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
 /*
  * bind_literal
  *
- * Binds a literal to its value.
+ * Binds a literal to its value.  Also called by the
+ * lexical binding function.
  */
 static int
 bind_literal (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
@@ -170,6 +211,9 @@ bind_literal (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
 
 /*
  * bind_data
+ *
+ * Binds a data symbol to an expression node. Called
+ * by the expression-binding routine.
  */
 static expr_node_t *
 bind_data (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
@@ -202,6 +246,8 @@ bind_data (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 
 /*
  * bind_routine
+ *
+ * Binds a routine symbol to an expression node.
  */
 static expr_node_t *
 bind_routine (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
@@ -229,6 +275,10 @@ bind_routine (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 
 /*
  * symbols_init
+ *
+ * Initialization for this module.  Sets up the context
+ * structure, initializes the name table extension vectors,
+ * and registers the lexical and expression binding functions.
  */
 void
 symbols_init (expr_ctx_t ctx)
@@ -254,14 +304,19 @@ symbols_init (expr_ctx_t ctx)
     nametables_symctx_set(namectx, symctx);
     for (i = 0; i < sizeof(symvec)/sizeof(symvec[0]); i++)
         nametype_dataop_register(namectx, symtype[i], &symvec[i], ctx);
-    
+
     lextype_register(lctx, LEXTYPE_NAME_COMPILETIME, bind_compiletime);
     lextype_register(lctx, LEXTYPE_NAME_LITERAL, bind_literal);
     expr_dispatch_register(ctx, LEXTYPE_NAME_DATA, bind_data);
     expr_dispatch_register(ctx, LEXTYPE_NAME_ROUTINE, bind_routine);
-    
+
 } /* symbols_init */
 
+/*
+ * datasym_search
+ *
+ * Convenience routine for looking up a data symbol.
+ */
 name_t *
 datasym_search (scopectx_t scope, strdesc_t *namedsc, data_attr_t *attrp)
 {
@@ -274,8 +329,18 @@ datasym_search (scopectx_t scope, strdesc_t *namedsc, data_attr_t *attrp)
         memcpy(attrp, &sym->attr, sizeof(sym->attr));
     }
     return np;
-}
 
+} /* datasym_search */
+
+/*
+ * compare_data_attrs
+ *
+ * Internal function that compares to sets of data
+ * attributes to see if they are equivalent.  This
+ * is used when checking FORWARD declarations against
+ * later instantiations of the same symbol, as well
+ * as EXTERNAL/GLOBAL declarations.
+ */
 static int
 compare_data_attrs (data_attr_t *a, data_attr_t *b) {
 
@@ -289,7 +354,10 @@ compare_data_attrs (data_attr_t *a, data_attr_t *b) {
         return 0;
     }
 
-    // XXX this is not very efficient
+	// Check that the field names are the same.  Since the names
+	// aren't kept in a particular order, we just do the O(n**2)
+	// walk through the lists.
+    // XXX A more efficient implementation should be considered. XXX
     for (aref = namereflist_head(&a->fields); aref != 0; aref = aref->tq_next) {
         for (bref = namereflist_head(&b->fields);
              bref->np != aref->np && bref != 0; bref = bref->tq_next);
@@ -297,8 +365,15 @@ compare_data_attrs (data_attr_t *a, data_attr_t *b) {
     }
 
     return 1;
-}
 
+} /* compare_data_attrs */
+
+/*
+ * datasym_declare
+ *
+ * Declare a data symbol (OWN, LOCAL, STACKLOCAL, GLOBAL,
+ * EXTERNAL, FORWARD).
+ */
 name_t *
 datasym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
                  data_attr_t *attrp, textpos_t pos)
@@ -355,8 +430,17 @@ datasym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     }
 
     return np;
-}
 
+} /* datasym_declare */
+
+/*
+ * datasym_attr_update
+ *
+ * Updates the attributes of a symbol created by
+ * datasym_declare().  Typically used to commit the
+ * fully-known attribute set to the symbol after an
+ * initial "pending" creation.
+ */
 int
 datasym_attr_update (name_t *np, data_attr_t *attrp)
 {
@@ -379,14 +463,28 @@ datasym_attr_update (name_t *np, data_attr_t *attrp)
         memcpy(&gsym->attr, attrp, sizeof(data_attr_t));
     }
     return 1;
-}
 
+} /* datasym_attr_update */
+
+/*
+ * Getter/setter routines for data symbols
+ *
+ * datasym_attr
+ *
+ * Returns the full set of attributes for a symbol.
+ */
 data_attr_t *
 datasym_attr (name_t *np) {
     sym_data_t *sym = name_extraspace(np);
     return &sym->attr;
-}
+} /* datasym_attr */
 
+/*
+ * datasym_segsize
+ *
+ * Returns the size of any storage allocated
+ * for the symbol.
+ */
 unsigned long
 datasym_segsize (name_t *np)
 {
@@ -396,15 +494,28 @@ datasym_segsize (name_t *np)
     } else {
         return seg_size(sym->seg);
     }
-}
+} /* datasym_segsize */
 
+/*
+ * datasym_seg
+ *
+ * Returns a pointer to the storage-tracking
+ * structure for a data symbol.
+ */
 seg_t *
 datasym_seg (name_t *np)
 {
     sym_data_t *sym = name_extraspace(np);
     return sym->seg;
-}
 
+} /* datasym_seg */
+
+/*
+ * datasym_seg_set
+ *
+ * Sets the storage-tracking structure
+ * for a data symbol.
+ */
 void
 datasym_seg_set (name_t *np, seg_t *seg)
 {
@@ -414,8 +525,17 @@ datasym_seg_set (name_t *np, seg_t *seg)
         sym_data_t *gsym = name_extraspace(sym->globalsym);
         if (gsym->seg == 0) gsym->seg = seg;
     }
-}
 
+} /* datasym_seg_set */
+
+/*
+ * compiletime_declare
+ *
+ * Declares a COMPILETIME name.  No two-phase commit for
+ * these, as they have no attributes, just a value (which
+ * is stored directly in the default 'value' space in
+ * the name cell).
+ */
 name_t *
 compiletime_declare (scopectx_t scope, strdesc_t *dsc, long val, textpos_t pos)
 {
@@ -431,10 +551,19 @@ compiletime_declare (scopectx_t scope, strdesc_t *dsc, long val, textpos_t pos)
     if (np != 0) name_value_signed_set(np, val);
     return np;
 
-}
+} /* compiletime_declare */
+
+/*
+ * Set/get COMPILETIME values
+ */
 void compiletime_assign (name_t *np, long val) { name_value_signed_set(np, val); }
 long compiletime_value (name_t *np) { return name_value_signed(np); }
 
+/*
+ * label_declare
+ *
+ * Add a label to the name table.
+ */
 name_t *
 label_declare (scopectx_t scope, strdesc_t *dsc, textpos_t pos)
 {
@@ -447,7 +576,14 @@ label_declare (scopectx_t scope, strdesc_t *dsc, textpos_t pos)
     ndef.namelen = dsc->len;
     return name_declare(scope, &ndef, pos, 0, 0, 0);
 
-}
+} /* label_declare */
+
+/*
+ * litsym_search
+ *
+ * Courtesy routine for looking up a LITERAL by name.  If
+ * found, the value can also be returned.
+ */
 name_t *
 litsym_search (scopectx_t scope, strdesc_t *dsc, unsigned long *valp)
 {
@@ -459,7 +595,14 @@ litsym_search (scopectx_t scope, strdesc_t *dsc, unsigned long *valp)
                          (sym->attr.flags & SYM_M_SIGNEXT) != 0);
     }
     return np;
-}
+
+} /* litsym_search */
+
+/*
+ * litsym_declare
+ *
+ * Declares a LITERAL.
+ */
 name_t *
 litsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
                 literal_attr_t *attrp, textpos_t pos)
@@ -508,7 +651,17 @@ litsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     np = name_declare(scope, &ndef, pos, 0, 0, &sym);
     if (sym != 0) memcpy(&sym->attr, attrp, sizeof(literal_attr_t));
     return np;
-}
+
+} /* litsym_declare */
+
+/*
+ * litsym_special
+ *
+ * For internal use by the compiler in appropriate circumstances
+ * only, this routine is for defining LITERALs in a local name
+ * scope only, and overrides the normal checks for user-defined
+ * names.
+ */
 name_t *
 litsym_special (scopectx_t scope, strdesc_t *dsc, unsigned long value)
 {
@@ -530,15 +683,28 @@ litsym_special (scopectx_t scope, strdesc_t *dsc, unsigned long value)
     np = name_declare_nocheck(scope, &ndef, 0, 0, 0, &sym);
     if (np != 0) memcpy(&sym->attr, &attr, sizeof(literal_attr_t));
     return np;
-}
 
+} /* litsym_special */
+
+/*
+ * rtnsym_search
+ *
+ * Courtesy routine for looking up a routine name.
+ */
 name_t *
 rtnsym_search (scopectx_t scope, strdesc_t *namedsc)
 {
     return name_search_typed(scope, namedsc->ptr, namedsc->len,
                            LEXTYPE_NAME_ROUTINE, 0);
-}
+} /* rtnsym_search */
 
+/*
+ * compare_routine_attrs
+ *
+ * Internal function for checking compatibility of
+ * routine attributes (for FORWARD/normal, EXTERNAL/GLOBAL
+ * routines, for example).
+ */
 static int
 compare_routine_attrs (routine_attr_t *a, routine_attr_t *b) {
 
@@ -547,8 +713,14 @@ compare_routine_attrs (routine_attr_t *a, routine_attr_t *b) {
     }
 
     return 1;
-}
 
+} /* compare_routine_attrs */
+
+/*
+ * rtnsym_declare
+ *
+ * Declares a routine symbol.
+ */
 name_t *
 rtnsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
                  routine_attr_t *attrp, textpos_t pos)
@@ -605,8 +777,18 @@ rtnsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     }
 
     return np;
-}
 
+} /* rtnsym_declare */
+
+/*
+ * rtnsym_attr_update
+ *
+ * Update a routine symbol's attributes.  Again, this
+ * is intended to be used during two-phase declarations;
+ * a PENDING entry gets created with rtnsym_declare(), with
+ * this routine being called once all attributes are parsed,
+ * to finalize the entry.
+ */
 int
 rtnsym_attr_update (name_t *np, routine_attr_t *attrp)
 {
@@ -629,21 +811,42 @@ rtnsym_attr_update (name_t *np, routine_attr_t *attrp)
         memcpy(&gsym->attr, attrp, sizeof(routine_attr_t));
     }
     return 1;
-}
 
+} /* rtnsym_attr_update */
+
+/* Getter/setter functions for routine symbols
+ *
+ * rtnsym_attr
+ *
+ * Returns the entire attributes structure for a
+ * routine symbol.
+ */
 routine_attr_t *
 rtnsym_attr (name_t *np) {
     sym_routine_t *sym = name_extraspace(np);
     return &sym->attr;
-}
+} /* rtnsym_attr */
 
+/*
+ * rtnsym_seg
+ *
+ * Returns the storage structure pointer for
+ * the routine symbol.
+ */
 seg_t *
 rtnsym_seg (name_t *np)
 {
     sym_routine_t *sym = name_extraspace(np);
     return sym->seg;
-}
 
+} /* rtnsym_seg */
+
+/*
+ * rtnsym_seg_set
+ *
+ * Sets the storage structure pointer for the
+ * routine symbol.
+ */
 void
 rtnsym_seg_set (name_t *np, seg_t *seg)
 {
@@ -653,15 +856,29 @@ rtnsym_seg_set (name_t *np, seg_t *seg)
         sym_routine_t *gsym = name_extraspace(sym->globalsym);
         gsym->seg = seg;
     }
-}
 
+} /* rtnsym_seg_set */
+
+/*
+ * rtnsym_expr
+ *
+ * Returns the expression node pointer that
+ * represents the routine's function.
+ */
 expr_node_t *
 rtnsym_expr (name_t *np)
 {
     sym_routine_t *sym = name_extraspace(np);
     return sym->rtnexp;
-}
 
+} /* rtnsym_expr */
+
+/*
+ * rtnsym_expr_set
+ *
+ * Sets the expression node pointer for the
+ * routine symbol.
+ */
 void
 rtnsym_expr_set (name_t *np, expr_node_t *exp)
 {
@@ -672,6 +889,13 @@ rtnsym_expr_set (name_t *np, expr_node_t *exp)
         gsym->rtnexp = exp;
     }
 }
+
+/*
+ * psect_declare
+ *
+ * Declares a PSECT name, registering it with
+ * the storage manager.
+ */
 name_t *
 psect_declare (scopectx_t scope, strdesc_t *dsc,
                unsigned int psflags, textpos_t pos)
@@ -695,8 +919,13 @@ psect_declare (scopectx_t scope, strdesc_t *dsc,
     if (np != 0) name_value_pointer_set(np, psect);
     return np;
 
-}
+} /* psect_declare */
 
+/*
+ * psect_search
+ *
+ * Looks up a PSECT by name.
+ */
 psect_t *
 psect_search (scopectx_t scope, strdesc_t *dsc)
 {
@@ -704,9 +933,24 @@ psect_search (scopectx_t scope, strdesc_t *dsc)
     np = name_search_typed(scope, dsc->ptr, dsc->len, LEXTYPE_NAME_PSECT, 0);
     if (np == 0) return 0;
     return name_value_pointer(np);
-}
+
+} /* psect_search */
+
+/*
+ * psect_pointer
+ *
+ * Returns the pointer to the psect tracking structure,
+ * given a name pointer (for an already-looked-up PSECT name).
+ */
 psect_t *psect_pointer (name_t *np) { return name_value_pointer(np); }
 
+/*
+ * sym_undeclare
+ *
+ * This function should be called to "undeclare" any user-declarable
+ * symbol.  It does some validation then calls on name_undeclare()
+ * to do the real work.
+ */
 int
 sym_undeclare (scopectx_t scope, strdesc_t *dsc, textpos_t pos)
 {
@@ -721,8 +965,19 @@ sym_undeclare (scopectx_t scope, strdesc_t *dsc, textpos_t pos)
     }
     return name_undeclare(scope, np, pos);
 
-}
+} /* sym_undeclare */
 
+
+/*
+ * get_sym_base
+ *
+ * Internal routine, used to determine whether a symbol
+ * is a link-time constant.  It is if it has static
+ * storage allocated (i.e., storage in a psect), or if
+ * it is an external symbol.  Note that this routine
+ * handles both data and routine symbols; the logic is
+ * the same, but the data structures are different.
+ */
 static int
 get_sym_base (name_t *np, psect_t **psp, name_t **extsymp)
 {
@@ -765,8 +1020,17 @@ get_sym_base (name_t *np, psect_t **psp, name_t **extsymp)
     }
 
     return 0;
-}
 
+} /* get_sym_base */
+
+/*
+ * sym_addrs_comparable
+ *
+ * Returns 1 if the two symbols are link-time
+ * constants *and* are either located in the
+ * same psect, or both reference the same
+ * external symbol.
+ */
 int
 sym_addrs_comparable (name_t *np_a, name_t *np_b)
 {
@@ -784,8 +1048,16 @@ sym_addrs_comparable (name_t *np_a, name_t *np_b)
         return ext_a == ext_b;
     }
     return 0;
-}
 
+} /* sym_addrs_comparable */
+
+/*
+ * sym_check_dangling_forwards
+ *
+ * Utility routine for walking the local name scope
+ * for FORWARD declarations that have not been later
+ * declared as actual data/routine names.
+ */
 void
 sym_check_dangling_forwards (scopectx_t scope, textpos_t pos)
 {
@@ -810,4 +1082,5 @@ sym_check_dangling_forwards (scopectx_t scope, textpos_t pos)
             string_free(str);
         }
     }
-}
+
+} /* sym_check_dangling_forwards */

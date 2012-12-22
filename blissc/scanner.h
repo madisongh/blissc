@@ -1,14 +1,16 @@
-//
-//  scanner.h
-//  blissc
-//
-//  Created by Matthew Madison on 10/22/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_scanner_h
-#define blissc_scanner_h
-
+#ifndef scanner_h__
+#define scanner_h__
+/*
+ *++
+ *	File:			scanner.h
+ *
+ *	Abstract:		Scanner definitions.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 #include "logging.h"
 #include "strings.h"
 
@@ -48,4 +50,4 @@ scantype_t scan_getnext(scanctx_t ctx, unsigned int flags,
                         unsigned int *column);
 void scan_finish(scanctx_t ctx);
 
-#endif
+#endif /* scanner_h__ */

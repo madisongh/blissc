@@ -1,11 +1,30 @@
-//
-//  scanner.c
-//  blissc
-//
-//  Created by Matthew Madison on 10/22/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			scanner.c
+ *
+ *	Abstract:		Lexeme scanner.
+ *
+ *  Module description:
+ *		This module is responsible for scanning an external
+ *		input stream (a file or programmed input source) and
+ *		breaking the input up into tokens that represent BLISS
+ *		lexemes.  It is the lowest layer of the lexical processing
+ *		subsystem.
+ *
+ *		The scanner can be directed to point either files or
+ *		"programmed" input sources, where the caller provides
+ *		a callback function for fetching the next line of input.
+ *		The callback function is expected to return the length of
+ *		the input line, zero for EOF, or a negative return code
+ *		for an error, just like the file I/O routines do.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		21-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -19,6 +38,8 @@
 #define SCAN_MAXFILES 16
 #define SCAN_LINESIZE 1024
 
+// Structure for tracking an input stream and
+// the current line of text being scanned.
 struct bufctx_s {
     filectx_t       fctx;
     scan_input_fn   inpfn;
@@ -29,6 +50,8 @@ struct bufctx_s {
     unsigned int    curline;
 };
 
+// Structure for tracking the current scanner
+// context.
 struct scanctx_s {
     logctx_t        logctx;
     fioctx_t        fioctx;
@@ -37,6 +60,7 @@ struct scanctx_s {
     char            tokbuf[SCAN_LINESIZE];
 };
 
+// States for the scanner's state machine.
 typedef enum {
     STATE_INIT,
     STATE_IN_EMBEDDED_COMMENT,
@@ -47,6 +71,8 @@ typedef enum {
     STATE_EXIT
 } scanstate_t;
 
+// Lookup table for identifying characters that are
+// valid for BLISS names/keywords.
 const static char valid_ident_char[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -66,6 +92,11 @@ const static char valid_ident_char[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
+/*
+ * scan_init
+ *
+ * Initializes the scanner.
+ */
 scanctx_t
 scan_init (logctx_t logctx)
 {
@@ -77,8 +108,14 @@ scan_init (logctx_t logctx)
         ctx->fioctx = fileio_init(logctx);
     }
     return ctx;
-}
 
+} /* scan_init */
+
+/*
+ * scan_finish
+ *
+ * Shuts down the scanner.
+ */
 void
 scan_finish (scanctx_t ctx)
 {
@@ -89,6 +126,14 @@ scan_finish (scanctx_t ctx)
     free(ctx);
 }
 
+/*
+ * scan_fopen
+ *
+ * Opens a file and uses it for the current input
+ * stream.  Any currently-open input stream will be
+ * pushed on the buffer stack, and will be returned to
+ * after the new input stream reaches its end.
+ */
 int
 scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen,
             const char *suffix, char **actnamep)
@@ -110,8 +155,16 @@ scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen,
     ctx->curbuf = i;
     if (actnamep) *actnamep = file_getname(ctx->bufstack[i].fctx);
     return 1;
-}
 
+} /* scan_fopen */
+
+/*
+ * scan_popen
+ *
+ * Opens a programmed input stream - one for which the caller
+ * provides a callback function to obtain the next line of
+ * input.
+ */
 int
 scan_popen (scanctx_t ctx, scan_input_fn infn, void *fnctx)
 {
@@ -129,8 +182,22 @@ scan_popen (scanctx_t ctx, scan_input_fn infn, void *fnctx)
     ctx->bufstack[i].linelen = 0;
     ctx->curbuf = i;
     return 1;
-}
 
+} /* scan_popen */
+
+/*
+ * scan_getnext
+ *
+ * Gets the next token from the current input stream.  The
+ * caller can set the SCAN_M_ERRONEOF flag if reaching the end
+ * of file on the current input source should be treated as
+ * an error - the BLISS LRM identifies a small number of situations
+ * when that should be the case.
+ * The other flag that can be passed in is SCAN_M_SIGNOK, which
+ * the caller sets when it is OK for a +/- sign to be treated as
+ * a lead-in to a numeric literal (which is not universal, per the
+ * LRM).
+ */
 scantype_t
 scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
               unsigned int *lineno, unsigned int *column)
@@ -144,6 +211,9 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
     bufsiz = sizeof(ctx->tokbuf);
     while (ctx->curbuf >= 0) {
         struct bufctx_s *curbuf = &ctx->bufstack[ctx->curbuf];
+
+		// If we're at the end of the current line, get another
+
         while (curbuf->curpos >= curbuf->linelen) {
             int rc;
             curbuf->curpos = 0;
@@ -169,6 +239,9 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                     *column = 0;
                     return SCANTYPE_ERR_FIO;
                 }
+                // Not an error, but EOF...
+				// If curbuf went negative, we reached the end
+				// of the original input stream, so we're done.
                 if (ctx->curbuf < 0) {
                     len = outp - ctx->tokbuf;
                     *tok = string_from_chrs(0, ctx->tokbuf, len);
@@ -196,74 +269,18 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
         remain = curbuf->linelen - curbuf->curpos;
         while (remain > 0) {
             switch (curstate) {
-                case STATE_IN_EMBEDDED_COMMENT:
-                    if (*cp == ')') {
-                        if (remain > 1 && *(cp+1) == '%') {
-                            curstate = STATE_INIT;
-                            cp += 1;
-                            remain -= 1;
-                        }
-                    }
-                    break;
-                case STATE_IN_IDENTIFIER:
-                    ch = valid_ident_char[*cp];
-                    if (ch != 0) {
-                        if (bufsiz > 0) {
-                            *outp++ = ch;
-                            bufsiz -= 1;
-                        }
-                    } else if (*cp == '%' &&
-                               (remain > 1 && valid_ident_char[*(cp+1)])) {
-                        rettype = SCANTYPE_ERR_INVID;
-                        curstate = STATE_ERRSKIP;
-                    } else {
-                        rettype = SCANTYPE_IDENTIFIER;
-                        curstate = STATE_EXIT;
-                        cp -= 1;
-                    }
-                    break;
-                case STATE_IN_DECLIT:
-                    if (isdigit(*cp)) {
-                        if (bufsiz > 0) {
-                            *outp++ = *cp;
-                            bufsiz -= 1;
-                        }
-                    } else if (valid_ident_char[*cp] ||
-                        (remain > 1 && *cp == '%' && valid_ident_char[*(cp+1)])) {
-                        rettype = SCANTYPE_ERR_INVLIT;
-                        curstate = STATE_ERRSKIP;
-                    } else {
-                        rettype = SCANTYPE_DECLITERAL;
-                        curstate = STATE_EXIT;
-                        cp -= 1;
-                    }
-                    break;
-                case STATE_IN_QSTRING:
-                    if (*cp == '\'') {
-                        if (remain > 1 && *(cp+1) == '\'') {
-                            if (bufsiz > 0) {
-                                *outp++ = '\'';
-                                bufsiz -= 1;
-                                cp++; remain--;
-                            }
-                        } else {
-                            rettype = SCANTYPE_QUOTEDSTRING;
-                            curstate = STATE_EXIT;
-                        }
-                    } else if (bufsiz > 0) {
-                        *outp++ = *cp;
-                        bufsiz -= 1;
-                    }
-                    break;
                 case STATE_INIT:
+                	// skip whitespace
                     if (*cp == ' ' || *cp == '\t' || *cp == '\013' || *cp == '\014') {
                         break;
                     }
+                    // comment (through end of line)
                     if (*cp == '!') {
                         cp += remain-1; // advance to end of line
                         remain = 1;
                         break;
                     }
+                    // %(...)% 'embedded' comment
                     if (*cp == '%' && remain > 1 && *(cp+1) == '(') {
                         cp += 1;
                         remain -= 1;
@@ -274,10 +291,13 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                     // real token, so record its starting position
                     *lineno = curbuf->curline;
                     *column = (unsigned int)(cp - &curbuf->linebuf[0]);
+                    // Apostrophe introduces a quoted-string literal
                     if (*cp == '\'') {
                         curstate = STATE_IN_QSTRING;
                         break;
                     }
+                    // Digit or sign (if SINGOK is set) introduces a
+                    // decimal numeric literal
                     if (isdigit(*cp) ||
                         ((flags & SCAN_M_SIGNOK) &&
                          (*cp == '+' || *cp == '-') && isdigit(*(cp+1)))) {
@@ -288,6 +308,10 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                         curstate = STATE_IN_DECLIT;
                         break;
                     }
+                    // See if we have something that looks like a name.
+                    // The '%' character can be used in a name (typically
+                    // as the first character), but only if it is immediately
+                    // followed by a normal identifier-type character.
                     if (valid_ident_char[*cp] ||
                         (*cp == '%' && remain > 1 && valid_ident_char[*(cp+1)])) {
                         if (bufsiz > 0) {
@@ -297,6 +321,10 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                         curstate = STATE_IN_IDENTIFIER;
                         break;
                     }
+                    // These are operator characters.  Note that the
+                    // + and - characters are included here; we already
+                    // checked above for their alternative role as part
+                    // of a decimal numeric literal.
                     if (strchr(".^*/+-=", *cp) != 0) {
                         if (bufsiz > 0) {
                             *outp++ = *cp;
@@ -322,6 +350,70 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                     rettype = SCANTYPE_ERR_INVCHR;
                     curstate = STATE_ERRSKIP;
                     break;
+
+                case STATE_IN_EMBEDDED_COMMENT:
+                    if (*cp == ')') {
+                        if (remain > 1 && *(cp+1) == '%') {
+                            curstate = STATE_INIT;
+                            cp += 1;
+                            remain -= 1;
+                        }
+                    }
+                    break;
+
+                case STATE_IN_IDENTIFIER:
+                    ch = valid_ident_char[*cp];
+                    if (ch != 0) {
+                        if (bufsiz > 0) {
+                            *outp++ = ch;
+                            bufsiz -= 1;
+                        }
+                    } else if (*cp == '%' &&
+                               (remain > 1 && valid_ident_char[*(cp+1)])) {
+                        rettype = SCANTYPE_ERR_INVID;
+                        curstate = STATE_ERRSKIP;
+                    } else {
+                        rettype = SCANTYPE_IDENTIFIER;
+                        curstate = STATE_EXIT;
+                        cp -= 1;
+                    }
+                    break;
+
+                case STATE_IN_DECLIT:
+                    if (isdigit(*cp)) {
+                        if (bufsiz > 0) {
+                            *outp++ = *cp;
+                            bufsiz -= 1;
+                        }
+                    } else if (valid_ident_char[*cp] ||
+                        (remain > 1 && *cp == '%' && valid_ident_char[*(cp+1)])) {
+                        rettype = SCANTYPE_ERR_INVLIT;
+                        curstate = STATE_ERRSKIP;
+                    } else {
+                        rettype = SCANTYPE_DECLITERAL;
+                        curstate = STATE_EXIT;
+                        cp -= 1;
+                    }
+                    break;
+
+                case STATE_IN_QSTRING:
+                    if (*cp == '\'') {
+                        if (remain > 1 && *(cp+1) == '\'') {
+                            if (bufsiz > 0) {
+                                *outp++ = '\'';
+                                bufsiz -= 1;
+                                cp++; remain--;
+                            }
+                        } else {
+                            rettype = SCANTYPE_QUOTEDSTRING;
+                            curstate = STATE_EXIT;
+                        }
+                    } else if (bufsiz > 0) {
+                        *outp++ = *cp;
+                        bufsiz -= 1;
+                    }
+                    break;
+
                 case STATE_ERRSKIP:
                     // hit an error condition; try skipping ahead
                     // to the next available whitespace or end of line
@@ -336,6 +428,7 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                     len = outp - ctx->tokbuf;
                     *tok = string_from_chrs(0, ctx->tokbuf, len);
                     return rettype;
+
                 case STATE_EXIT:
                     // normal exit state, expects rettype to be
                     // set correctly before entry
@@ -343,6 +436,7 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                     len = outp - ctx->tokbuf;
                     *tok = string_from_chrs(0, ctx->tokbuf, len);
                     return rettype;
+
             } /* switch */
 
             cp += 1;
@@ -350,7 +444,9 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
 
         } /* while remain > 0 */
 
-        // OK, hit end of line (linemark).
+        // OK, hit end of line (linemark), possibly before
+        // identifying a complete token.  Complete that work
+        // here.
 
         curbuf->curpos = cp - &curbuf->linebuf[0];
         switch (curstate) {
@@ -378,4 +474,5 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
     len = outp - ctx->tokbuf;
     *tok = string_from_chrs(0, ctx->tokbuf, len);
     return rettype;
-}
+
+} /* scan_getnext */

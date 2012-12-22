@@ -519,7 +519,7 @@ plit_items (expr_ctx_t ctx, int defau) {
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_STRING, &lex, 1)) {
                 ivlist = initval_string_add(stg, ivlist, 1, lexeme_text(lex));
                 lexeme_free(lctx, lex);
-            } else if (expr_expr_next(ctx, &exp)) {
+            } else if (expr_parse_expr(ctx, &exp)) {
                 ivlist = expr_initval_add(ctx, ivlist, exp, itemau);
             } else {
                 expr_signal(ctx, STC__EXPREXP);
@@ -755,7 +755,7 @@ attr_preset (expr_ctx_t ctx, name_t *np, seg_t *seg,
             expr_signal(ctx, STC__OPEREXP, "=");
         }
         exp = 0;
-        if (!expr_expr_next(ctx, &exp)) {
+        if (!expr_parse_expr(ctx, &exp)) {
             expr_signal(ctx, STC__EXPREXP);
         }
         if (exp != 0 && expr_type(exp) == EXPTYPE_PRIM_LIT) {
@@ -818,7 +818,6 @@ handle_data_attrs (expr_ctx_t ctx, scopectx_t scope, decltype_t dt,
 
 
     ivlist = 0;
-    parser_set_indecl(pctx, 1);
 
     do {
         did1 = 0;
@@ -908,8 +907,6 @@ handle_data_attrs (expr_ctx_t ctx, scopectx_t scope, decltype_t dt,
         }
 
     } while (did1);
-
-    parser_set_indecl(pctx, 0);
 
     if (saw_psect > 0) seg_static_psect_set(stg, seg,
                                             psect_pointer(attr->psect));
@@ -1071,7 +1068,7 @@ declare_bind (expr_ctx_t ctx, scopectx_t scope, decltype_t dt)
             expr_signal(ctx, STC__OPEREXP, "=");
             return 0;
         }
-        if (!expr_expr_next(ctx, &exp)) {
+        if (!expr_parse_expr(ctx, &exp)) {
             expr_signal(ctx, STC__EXPREXP);
             return 0;
         }
@@ -1401,7 +1398,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
                     parser_scope_push(pctx, attr.argscope);
                 }
             }
-            if (!expr_expr_next(ctx, &exp)) {
+            if (!expr_parse_expr(ctx, &exp)) {
                 expr_signal(ctx, STC__EXPREXP);
             }
             if ((is_bind || (attr.flags & SYM_M_NOVALUE) == 0)

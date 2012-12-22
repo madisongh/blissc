@@ -662,7 +662,7 @@ void exprseq_free(expr_ctx_t ctx, exprseq_t *seq);
 void exprseq_copy(expr_ctx_t ctx, exprseq_t *dst, exprseq_t *src);
 
 expr_ctx_t expr_init (parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope);
-int expr_expr_next(expr_ctx_t ctx, expr_node_t **expp);
+int expr_parse_expr(expr_ctx_t ctx, expr_node_t **expp);
 int expr_parse_ctce(expr_ctx_t ctx, lexeme_t **lex);
 int expr_parse_block(expr_ctx_t ctx, expr_node_t **blkexp);
 int expr_parse_seq(expr_ctx_t ctx, lexseq_t *seq, expr_node_t **expp);

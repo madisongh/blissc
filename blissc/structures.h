@@ -1,14 +1,16 @@
-//
-//  structures.h
-//  blissc
-//
-//  Created by Matthew Madison on 11/24/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_structures_h
-#define blissc_structures_h
-
+#ifndef structures_h__
+#define structures_h__
+/*
+ *++
+ *	File:			structures.h
+ *
+ *	Abstract:		Definitions for structures
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 #include "expression.h"
 #include "nametable.h"
 #include "lexeme.h"
@@ -30,4 +32,4 @@ lexeme_t *field_extract(name_t *fnp, unsigned int which);
 lexseq_t *field_lexseq(name_t *fnp);
 namereflist_t *fieldset_reflist(name_t *fsnp);
 
-#endif
+#endif /* structures_h__ */

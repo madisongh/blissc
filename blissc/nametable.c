@@ -1,11 +1,39 @@
-//
-//  nametable.c
-//  blissc
-//
-//  Created by Matthew Madison on 10/27/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			nametable.c
+ *
+ *	Abstract:		Name table management.
+ *
+ *  Module description:
+ *		This module manages name tables and lexical scoping.
+ *		For these purposes, a 'name' is any identifier that
+ *		might need to be stored (possibly with information about
+ *		what that identifier represents) and looked up quickly.
+ *		Everything in the compiler that looks like a name, including
+ *		keywords, is declared as a name.
+ *
+ *		Names are always defined in a name table, called a 'scope'.
+ *		Scopes are chained together in a parent-child relationship,
+ *		representing lexical scoping rules for names.  Keywords and
+ *		other pre-declared name are always declared in the primary,
+ *		outermost scope.  Name searches always extend from the current
+ *		scope, through the parent scopes, until the end of the chain
+ *		is reached or the name is found.
+ *
+ *		Extension data can be stored with a name; this module provides
+ *		some space for all names for simple value storage.  For
+ *		names with types in the range LEXTYPE_NAME_MIN through
+ *		LEXTYPE_NAME_MAX, additional extensions can be added by
+ *		the modules handling those name types.
+ *
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		21-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,8 +64,11 @@ struct name_s {
     char                 name[NAME_SIZE];
     void                *nameextra[NAME_K_EXTRAS];
 };
-// NB: max name length is (NAME_SIZE-1)
 
+/*
+ * Internally, names are stored in name lists in each
+ * table.
+ */
 struct namelist_s {
     TQ_HDR_FIELDS(name_t)
 };
@@ -45,15 +76,17 @@ typedef struct namelist_s namelist_t;
 DEFINE_TQ_FUNCS(namelist, namelist_t, name_t)
 
 /*
- * Hash table size.
- */
-#define HT_BUCKETS  32
-
-/*
- * Count of names at which we switch from
- * simple linear list to hash tables
+ * Many scopes are small -- e.g., parameter lists, small
+ * routines that don't use many local variables.  For those,
+ * we simply do a linear search through the list of names.
+ *
+ * For larger scopes, we construct a hash table to speed
+ * up the searches.  When the number of names in a scope
+ * goes over NAMECOUNT_THRESHOLD, the hash table is added
+ * and maintained until the scope is ended.
  */
 #define NAMECOUNT_THRESHOLD 20
+#define HT_BUCKETS  32
 
 /*
  * hash
@@ -72,6 +105,8 @@ hash (const char *str, size_t len)
     return result & (HT_BUCKETS-1);
 }
 
+// Allocation counts for expanding the lookaside lists for
+// these memory pools
 #define NAME_ALLOCOUNT  64
 #define SCOPE_ALLOCOUNT 64
 #define REF_ALLOCOUNT   64
@@ -85,6 +120,7 @@ struct hashtable_s {
 };
 typedef struct hashtable_s hashtable_t;
 struct namectx_s;
+
 struct scopectx_s {
     struct scopectx_s *parent;
     struct namectx_s  *home;
@@ -94,7 +130,12 @@ struct scopectx_s {
 };
 
 /*
- * Master name table context
+ * Master name table context.  Lookaside lists for
+ * dynamically-allocated structures are maintained here.
+ * For names, a separate lookaside list is maintained based
+ * on the size of the cell for the type of name.  Different
+ * name types with the same cell size share the same memory
+ * pool.
  */
 struct namectx_s {
     logctx_t             logctx;
@@ -110,25 +151,25 @@ struct namectx_s {
     void                *symctx;
     unsigned int         tmpcount;
 };
+
+// Align name_t cells to a quadword boundary
 #define roundup(s_) ((((s_)+7)>>3)<<3)
 static const size_t cellsize = roundup(sizeof(name_t));
+
+// Translate a name type into the appropriate array index for
+// the various arrays listed above
 static inline int typeidx(lextype_t type) {
     if (type >= LEXTYPE_NAME_MIN && type <= LEXTYPE_NAME_MAX)
         return type-LEXTYPE_NAME_MIN;
     return 0;
 }
 
+/*
+ * Getter/setter functions for names.
+ */
 scopectx_t name_scope (name_t *np) { return np->namescope; }
 strdesc_t *name_string (name_t *np) {
     return string_from_chrs(0, np->name, np->namelen); }
-lexeme_t *name_to_lexeme (lexctx_t lctx, name_t *np, textpos_t pos) {
-    lexeme_t *lex;
-    strdesc_t dsc;
-    strdesc_init(&dsc, np->name, np->namelen);
-    lex = lexeme_create(lctx, LEXTYPE_NAME, &dsc);
-    if (lex != 0) lexeme_textpos_set(lex, pos);
-    return lex;
-}
 lextype_t name_type (name_t *np) { return np->nametype; }
 void *name_extraspace (name_t *np) { return np->nameextra; }
 void *name_value_pointer (name_t *np) { return np->nameextra[0]; }
@@ -140,6 +181,23 @@ void name_value_unsigned_set (name_t *np, unsigned long v) { np->nameextra[0] = 
 void *nametables_symctx_get (namectx_t ctx) { return ctx->symctx; }
 void nametables_symctx_set (namectx_t ctx, void *ptr) { ctx->symctx = ptr; }
 textpos_t name_defpos (name_t *np) { return np->namedclpos; }
+
+/*
+ * name_to_lexeme
+ *
+ * Creates an unbound lexeme for a name.
+ */
+lexeme_t *
+name_to_lexeme (lexctx_t lctx, name_t *np, textpos_t pos)
+{
+    lexeme_t *lex;
+    strdesc_t dsc;
+    strdesc_init(&dsc, np->name, np->namelen);
+    lex = lexeme_create(lctx, LEXTYPE_NAME, &dsc);
+    if (lex != 0) lexeme_textpos_set(lex, pos);
+    return lex;
+
+} /* name_to_lexeme */
 
 /*
  * name_alloc
@@ -221,14 +279,13 @@ name_copy (name_t *src, scopectx_t dstscope)
         memcpy(dst->nameextra, src->nameextra, sizeof(dst->nameextra));
     }
     return dst;
-    
+
 } /* name_copy */
 
 /*
  * name_free
  *
- * Frees a name_t structure, if it's owned by this module,
- * and if the name is not referenced in any scope.
+ * Frees a name_t structure.
  */
 void
 name_free (name_t *np)
@@ -240,6 +297,9 @@ name_free (name_t *np)
         return;
     }
     ctx = np->namescope->home;
+
+    // Remove the name from its scope, if it has been
+    // inserted in one
     if (np->namescope != 0 && np->namescope != ctx->nullscope) {
         scopectx_t scope = np->namescope;
         namelist_remove(&scope->names, np);
@@ -257,6 +317,8 @@ name_free (name_t *np)
         np->namescope = ctx->nullscope;
     }
 
+	// OK to free it if it has been dynamically allocated
+	// and doesn't belong to any scope.
     if (np->namescope == ctx->nullscope &&
         (np->nameflags & NAME_M_ALLOCATED)) {
         int i = typeidx(np->nametype);
@@ -270,6 +332,11 @@ name_free (name_t *np)
     }
 } /* name_free */
 
+/*
+ * namelist_free
+ *
+ * Frees all of the names in the list.
+ */
 static void
 namelist_free (namectx_t ctx, namelist_t *nl)
 {
@@ -282,8 +349,15 @@ namelist_free (namectx_t ctx, namelist_t *nl)
         np->namescope = ctx->nullscope;
         name_free(np);
     }
+
 } /* namelist_free */
 
+/*
+ * namelist_copy
+ *
+ * Creates a copy of each name in a list, putting the copies
+ * into the destination list.
+ */
 static int
 namelist_copy (scopectx_t dstscope, namelist_t *dst, namelist_t *src)
 {
@@ -305,6 +379,11 @@ namelist_copy (scopectx_t dstscope, namelist_t *dst, namelist_t *src)
 
 } /* namelist_copy */
 
+/*
+ * nameref_alloc
+ *
+ * Allocates a namref structure.
+ */
 nameref_t *
 nameref_alloc (namectx_t ctx, name_t *np)
 {
@@ -324,6 +403,11 @@ nameref_alloc (namectx_t ctx, name_t *np)
     return ref;
 } /* nameref_alloc */
 
+/*
+ * nameref_free
+ *
+ * Frees a nameref.
+ */
 void
 nameref_free (namectx_t ctx, nameref_t *ref)
 {
@@ -333,6 +417,11 @@ nameref_free (namectx_t ctx, nameref_t *ref)
 
 } /* nameref_free */
 
+/*
+ * namereflist_free
+ *
+ * Frees all of the namerefs on the specified list.
+ */
 void
 namereflist_free (namectx_t ctx, namereflist_t *rlist)
 {
@@ -344,6 +433,11 @@ namereflist_free (namectx_t ctx, namereflist_t *rlist)
 
 } /* namereflist_free */
 
+/*
+ * namereflist_copy
+ *
+ * Creates a copy of a namreflist.
+ */
 int
 namereflist_copy (namectx_t ctx, namereflist_t *dst, namereflist_t *src)
 {
@@ -352,8 +446,15 @@ namereflist_copy (namectx_t ctx, namereflist_t *dst, namereflist_t *src)
         namereflist_instail(dst, nameref_alloc(ctx, s->np));
     }
     return 1;
-}
 
+} /* namereflist_copy */
+
+/*
+ * destroy_hashtable
+ *
+ * Frees up a hash table.  Called when ending a scope, if
+ * the scope has been hashified.
+ */
 static void
 destroy_hashtable (scopectx_t scope)
 {
@@ -372,6 +473,12 @@ destroy_hashtable (scopectx_t scope)
 
 } /* destroy_hashtable */
 
+/*
+ * create_hashtable
+ *
+ * Allocate a hashtable and create entries for any names
+ * already existing in the scope.
+ */
 static void
 create_hashtable (scopectx_t scope)
 {
@@ -402,6 +509,11 @@ create_hashtable (scopectx_t scope)
 
 } /* create_hashtable */
 
+/*
+ * nametables_init
+ *
+ * Module initialization, setting up the master context.
+ */
 namectx_t
 nametables_init (logctx_t logctx)
 {
@@ -424,12 +536,17 @@ nametables_init (logctx_t logctx)
 
 } /* nametables_init */
 
+/*
+ * Setters/getters for the namectx structure
+ */
 scopectx_t nametables_globalscope (namectx_t ctx) { return ctx->globalscope; }
 
 /*
  * scope_begin
  *
- * Establishes a new name scope, underneath 'parent'.
+ * Establishes a new name scope, underneath 'parent'.  If 'parent' is
+ * zero, the parent is set to a special 'null' scope, to assist in
+ * locating the module master context when needed.
  */
 scopectx_t
 scope_begin (namectx_t ctx, scopectx_t parent)
@@ -462,7 +579,8 @@ scope_begin (namectx_t ctx, scopectx_t parent)
 /*
  * scope_end
  *
- * Deletes a name scope and all of the names in it.
+ * Deletes a name scope and all of the names in it.  Returns
+ * the parent scope, if any.
  */
 scopectx_t
 scope_end (scopectx_t scope)
@@ -480,14 +598,14 @@ scope_end (scopectx_t scope)
     memset(scope, 0x33, sizeof(struct scopectx_s));
     scope->parent = ctx->freescopes;
     ctx->freescopes = scope;
-    return parent;
+    return (parent == ctx->nullscope ? 0 : parent);
 
 } /* scope_end */
 
 /*
  * scope_copy
  *
- * Duplicates a name table.  Sets the NODCLCHK flag
+ * Duplicates a scope.  Sets the NODCLCHK flag
  * on each of the copied names, which will allow them
  * to be redeclared, exactly once, in the new table.
  * This is for handling the instantation of macro
@@ -523,37 +641,22 @@ scope_copy (scopectx_t src, scopectx_t newparent)
 } /* scope_copy */
 
 /*
- * scope_getparent
- *
- * Return the parent scope of a name table.
+ * Getters/setters for scopes
  */
-scopectx_t
-scope_getparent (scopectx_t scope) { return (scope == 0 ? 0 : scope->parent); }
+scopectx_t scope_getparent (scopectx_t scope) {
+	return (scope == 0 ? 0 : scope->parent); }
+void scope_setparent (scopectx_t scope, scopectx_t newparent) {
+    if (scope != 0) scope->parent = newparent; }
+void scope_sclass_psectname_set (scopectx_t scope, storageclass_t cl, name_t *np) {
+    scope->sclassnames[cl] = np; }
+namectx_t scope_namectx (scopectx_t scope) { return scope->home; }
 
-/*
- * scope_setparent
- *
- * Sets the parent scope for a name table.
- */
-void
-scope_setparent (scopectx_t scope, scopectx_t newparent)
-{
-    int i;
-    if (scope == 0) {
-        return;
-    }
-
-    scope->parent = newparent;
-    for (i = 0; i < SCLASS_COUNT; i++) {
-        if (scope->sclassnames[i] == 0) {
-            scope->sclassnames[i] = newparent->sclassnames[i];
-        }
-    }
-
-} /* scope_setparent */
 
 /*
  * scope_sclass_psectname
+ *
+ * Scan the current scope and up, looking for a psect name for
+ * the given class.
  */
 name_t *
 scope_sclass_psectname (scopectx_t scope, storageclass_t cl)
@@ -570,21 +673,15 @@ scope_sclass_psectname (scopectx_t scope, storageclass_t cl)
 } /* scope_sclass_psectname */
 
 /*
- * scope_sclass_psectname_set
+ * scope_nextname
+ *
+ * A rather primitive walker through a scope.  Callers
+ * must pass a pointer to a void pointer that has been
+ * initialized to zero on the first call; that void pointer
+ * is used as the walk context and should not be modified
+ * by the caller until this routine returns NULL to indicate
+ * the end of the list.
  */
-void
-scope_sclass_psectname_set (scopectx_t scope, storageclass_t cl, name_t *np)
-{
-    scope->sclassnames[cl] = np;
-    
-} /* scope_sclass_psectname_set */
-
-namectx_t
-scope_namectx (scopectx_t scope)
-{
-    return scope->home;
-}
-
 name_t *
 scope_nextname (scopectx_t scope, void **ctxp)
 {
@@ -649,7 +746,7 @@ nametype_dataop_register (namectx_t ctx, lextype_t lt,
 } /* nametype_dataop_register */
 
 /*
- * name_search
+ * name_search_internal
  *
  * Looks up a name, starting from the specified scope and working
  * backwards through the ancestor scopes.  Returns the found name_t
@@ -700,11 +797,13 @@ name_search_internal (scopectx_t curscope, const char *id, size_t len,
     }
 
     return 0;
-    
+
 } /* name_search_internal */
 
 /*
- * External API for name search
+ * name_search
+ *
+ * The public API for general name lookups.
  */
 name_t *
 name_search (scopectx_t curscope, const char *id, size_t len,
@@ -714,6 +813,13 @@ name_search (scopectx_t curscope, const char *id, size_t len,
 
 } /* name_search */
 
+/*
+ * name_search_typed
+ *
+ * Performs a search for a name, checks that its type matches
+ * the desired type, and optionally returns the pointer to
+ * the extension area for the name.
+ */
 name_t *
 name_search_typed (scopectx_t curscope, const char *id,
                            size_t len, lextype_t ntype, void *datapp)
@@ -727,13 +833,20 @@ name_search_typed (scopectx_t curscope, const char *id,
 
 } /* name_search_typed */
 
+/*
+ * name_is_declared
+ *
+ * Checks to see if the specified name has been explicitly declared.
+ */
 int
 name_is_declared (scopectx_t curscope, const char *id, size_t len)
 {
     lextype_t acttype;
     name_t *np = name_search_internal(curscope, id, len, &acttype, 0, 0);
     return (np != 0) && ((np->nameflags & NAME_M_DECLARED) != 0);
-}
+
+} /* name_is_declared */
+
 /*
  * name_insert
  *
@@ -769,9 +882,10 @@ name_insert (scopectx_t scope, name_t *np)
 } /* name_insert */
 
 /*
- * name_declare
+ * name_declare_internal
  *
  * Adds a name to a name table, with the specified type and data.
+ * This is the internal version, with the full range of options.
  */
 static name_t *
 name_declare_internal (scopectx_t scope, const char *id, size_t len,
@@ -851,6 +965,12 @@ name_declare_internal (scopectx_t scope, const char *id, size_t len,
 
 } /* name_declare_internal */
 
+/*
+ * name_declare
+ *
+ * Public API for declaring names, with checks for reserved words
+ * and redeclaration of names already defined in ancestor scopes.
+ */
 name_t *
 name_declare (scopectx_t scope, namedef_t *def,
               textpos_t pos, void *datap, size_t datasize, void *datapp) {
@@ -860,6 +980,12 @@ name_declare (scopectx_t scope, namedef_t *def,
                                  datap, datasize, datapp, 1);
 } /* name_declare */
 
+/*
+ * name_declare_nocheck
+ *
+ * Public API for declaring names, bypassing the normal checks.  Should
+ * only be used in special cases.
+ */
 name_t *
 name_declare_nocheck (scopectx_t scope, namedef_t *def,
                       textpos_t pos, void *datap, size_t datasize, void *datapp) {
@@ -868,6 +994,7 @@ name_declare_nocheck (scopectx_t scope, namedef_t *def,
                                  def->lt, def->flags, pos,
                                  datap, datasize, datapp, 0);
 } /* name_declare_nocheck */
+
 /*
  * name_undeclare
  *
@@ -901,6 +1028,15 @@ name_undeclare (scopectx_t scope, name_t *np, textpos_t pos)
 
 } /* name_undeclare */
 
+/*
+ * tempname_get
+ *
+ * Creates a "temp" name that can be used to declare a name
+ * that should not conflict with any user-declared name (or
+ * previously used temp name).
+ * Used for PLITs and other typically unnamed data that gets allocated,
+ * since every data segment must be referenced through some name.
+ */
 strdesc_t *
 tempname_get (namectx_t ctx)
 {
@@ -909,8 +1045,16 @@ tempname_get (namectx_t ctx)
         log_signal(ctx->logctx, 0, STC__EXCTNCNT);
     }
     return string_printf(0, "%%TMP$%06u", ctx->tmpcount);
-}
 
+} /* tempname_get */
+
+/*
+ * name_declare_builtin
+ *
+ * Called from BUILTIN declaration processing, this routine activates
+ * a name that has been registered as a builtin, so it can be used
+ * in the current scope.
+ */
 int
 name_declare_builtin (scopectx_t scope, strdesc_t *namestr, textpos_t pos)
 {
@@ -918,7 +1062,7 @@ name_declare_builtin (scopectx_t scope, strdesc_t *namestr, textpos_t pos)
 
     if (np == 0 || (np->nameflags & NAME_M_BUILTIN) == 0) {
         logctx_t logctx = scope->home->logctx;
-        log_signal(logctx, pos, STC__NOTBUILTN, namestr); 
+        log_signal(logctx, pos, STC__NOTBUILTN, namestr);
         return 0;
     }
     np = name_copy(np, scope);
@@ -932,4 +1076,4 @@ name_declare_builtin (scopectx_t scope, strdesc_t *namestr, textpos_t pos)
     name_insert(scope, np);
     return 1;
 
-}
+} /* name_declare_builtin */

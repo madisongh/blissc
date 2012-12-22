@@ -1,13 +1,16 @@
-//
-//  parser.h
-//  blissc
-//
-//  Created by Matthew Madison on 10/28/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_parser_h
-#define blissc_parser_h
+#ifndef parser_h__
+#define parser_h__
+/*
+ *++
+ *	File:			parser.h
+ *
+ *	Abstract:		Parser definitions.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 
 #include "nametable.h"
 #include "lexeme.h"
@@ -58,13 +61,9 @@ int parser_expect_oneof(parse_ctx_t pctx, quotelevel_t ql,
                               lexeme_t **lex, int pboe);
 machinedef_t *parser_get_machinedef(parse_ctx_t pctx);
 textpos_t parser_curpos(parse_ctx_t pctx);
-int parser_in_declaration(parse_ctx_t pctx);
-void parser_set_indecl(parse_ctx_t pctx, int yes);
-unsigned int parser_loopdepth(parse_ctx_t pctx);
-void parser_loopdepth_incr(parse_ctx_t pctx);
-void parser_loopdepth_decr(parse_ctx_t pctx);
 void parser_punctclass_set(parse_ctx_t pctx, punctclass_t cl, lextype_t lt);
 void parser_punctclass_get(parse_ctx_t pctx, punctclass_t *clp, lextype_t *ltp);
 lexeme_t *parser_punct_grouper(parse_ctx_t pctx, int docloser);
 lexeme_t *parser_punct_separator(parse_ctx_t pctx);
-#endif
+
+#endif /* parser_h__ */

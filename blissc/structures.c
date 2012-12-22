@@ -1,13 +1,24 @@
-//
-//  structures.c
-//  blissc
-//
-//  STRUCTURE and FIELD definitions.
-//
-//  Created by Matthew Madison on 11/28/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			structures.c
+ *
+ *	Abstract:		Structure and field handling.
+ *
+ *  Module description:
+ *		This module handles structure declarations and references.
+ *		Structures are implemented as a pair of macros, one for
+ *		allocation and one for access, although without the specialized
+ *		processing that macro expansion entails.
+ *		Fields are also implemented as macros, and field sets are
+ *		simply lists of references to field definitions.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		21-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdio.h>
 #include "declarations.h"
 #include "structures.h"
@@ -18,6 +29,12 @@
 #include "nametable.h"
 #include "lexeme.h"
 
+/*
+ * Structure definition.  Contains
+ * information about the access and
+ * allocation parameters and the macro
+ * bodies for each.
+ */
 struct strudef_s {
     scopectx_t acctbl, allotbl;
     namereflist_t accformals;
@@ -25,16 +42,27 @@ struct strudef_s {
     lexseq_t accbody, allobody;
 };
 
-struct pdclinfo_s {
-    char *lines[4];
-    int current;
-};
-
+/*
+ * Some commonly-used data used throughout this module.
+ */
 static lextype_t delims[] = { LEXTYPE_DELIM_RBRACK, LEXTYPE_DELIM_SEMI };
 static lextype_t bodyends[] = { LEXTYPE_DELIM_COMMA, LEXTYPE_DELIM_SEMI };
 static strdesc_t leftparen = STRDEF("(");
 static strdesc_t rightparen = STRDEF(")");
 static strdesc_t dot = STRDEF(".");
+
+/*
+ * The following definitions are used in the initialization
+ * routine to set up the predeclared structures.  It was simpler
+ * to provide these in text form and run them through the parser
+ * than to set up the structures manually. There are different
+ * flavors of these definitions, based on whether or not the
+ * target machine allows for UNIT and EXT parameters.
+ */
+struct pdclinfo_s {
+    char *lines[4];
+    int current;
+};
 
 static char *predeclared_bitvector =
     "STRUCTURE BITVECTOR[I;N] = "
@@ -61,6 +89,11 @@ static char *predeclared_blockvector_nu =
 
 /*
  * structure_bind
+ *
+ * Expression-binding routine for structures.  If the structure
+ * name is followed by a left bracket, we have a structure reference
+ * that must be expanded.  Otherwise, we leave the structure name
+ * alone.
  */
 expr_node_t *
 structure_bind (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
@@ -76,6 +109,12 @@ structure_bind (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 
 } /* structure_bind */
 
+/*
+ * structure_init
+ *
+ * Constructor for a structure cell extension
+ * in a name-tracking structure.
+ */
 static int
 structure_init (void *vctx, name_t *np, void *p)
 {
@@ -90,8 +129,14 @@ structure_init (void *vctx, name_t *np, void *p)
     lexseq_init(&stru->accbody);
     lexseq_init(&stru->allobody);
     return 1;
-}
 
+} /* structure_init */
+
+/*
+ * structure_free
+ *
+ * Destructor for a structure cell.
+ */
 static void
 structure_free (void *vctx, name_t *np, void *p)
 {
@@ -109,6 +154,14 @@ structure_free (void *vctx, name_t *np, void *p)
 
 } /* structure_free */
 
+/*
+ * structure_copy
+ *
+ * Copy-constructor for a structure cell.  Handles
+ * the fact that name references must point to the
+ * newly-constructed scope tables, rather than the
+ * originals.
+ */
 static int
 structure_copy (void *vctx, name_t *dst, void *dp,
                 name_t *src, void *sp)
@@ -147,9 +200,14 @@ structure_copy (void *vctx, name_t *dst, void *dp,
     lexseq_copy(lctx, &dstru->allobody, &sstru->allobody);
 
     return 1;
-    
+
 } /* structure_copy */
 
+/*
+ * field_init
+ *
+ * Field constructor.
+ */
 static int
 field_init (void *vctx, name_t *np, void *p)
 {
@@ -161,6 +219,11 @@ field_init (void *vctx, name_t *np, void *p)
 
 } /* field_init */
 
+/*
+ * field_free
+ *
+ * Field destructor.
+ */
 static void
 field_free (void *vctx, name_t *np, void *p)
 {
@@ -170,6 +233,11 @@ field_free (void *vctx, name_t *np, void *p)
 
 } /* field_free */
 
+/*
+ * field_copy
+ *
+ * Copy-constructor for a field.
+ */
 static int
 field_copy (void *vctx, name_t *dst, void *dp,
                 name_t *src, void *sp)
@@ -181,8 +249,20 @@ field_copy (void *vctx, name_t *dst, void *dp,
 
 } /* field_copy */
 
+/*
+ * field_lexseq
+ *
+ * Getter for the lexeme-sequence that constitutes a field.
+ */
 lexseq_t *field_lexseq (name_t *fnp) { return name_extraspace(fnp); }
 
+
+/*
+ * field_extract
+ *
+ * Extracts the 'n'th parameter from a field.
+ * Used for the implementation of %FIELDEXPAND.
+ */
 lexeme_t *
 field_extract (name_t *fnp, unsigned int which)
 {
@@ -197,8 +277,14 @@ field_extract (name_t *fnp, unsigned int which)
     }
     if (lex == 0) return 0;
     return lex;
-}
 
+} /* field_extract */
+
+/*
+ * fieldset_init
+ *
+ * Field-set constructor.
+ */
 static int
 fieldset_init (void *vctx, name_t *np, void *p)
 {
@@ -210,6 +296,11 @@ fieldset_init (void *vctx, name_t *np, void *p)
 
 } /* fieldset_init */
 
+/*
+ * fieldset_free
+ *
+ * Field-set destructor.
+ */
 static void
 fieldset_free (void *vctx, name_t *np, void *p)
 {
@@ -221,6 +312,13 @@ fieldset_free (void *vctx, name_t *np, void *p)
 
 } /* fieldset_free */
 
+/*
+ * fieldset_copy
+ *
+ * Copy-constructor for field sets.  In the copy,
+ * the nameref's must point to the entries in the
+ * newly-constructed scope.
+ */
 static int
 fieldset_copy (void *vctx, name_t *dst, void *dp,
             name_t *src, void *sp)
@@ -247,8 +345,19 @@ fieldset_copy (void *vctx, name_t *dst, void *dp,
 
 } /* fieldset_copy */
 
+/*
+ * fieldset_reflist
+ *
+ * Getter for the namereflist that constitutes a field set.
+ */
 namereflist_t *fieldset_reflist (name_t *fsnp) { return name_extraspace(fsnp); }
 
+/*
+ * predeclare_structures
+ *
+ * Callback routine that fetches the text of the structure
+ * declarations set up at initialization time.
+ */
 static int
 predeclare_structures (void *myctx, char *buf, size_t bufsiz, size_t *lenp)
 {
@@ -267,10 +376,15 @@ predeclare_structures (void *myctx, char *buf, size_t bufsiz, size_t *lenp)
     *lenp = len;
     ctx->current += 1;
     return 1;
-}
+
+} /* predeclare_structures */
 
 /*
  * structures_init
+ *
+ * Module initialization.  Sets up the expression-binding
+ * routine, the name table management hooks, and the
+ * predeclared structures.
  */
 void
 structures_init (expr_ctx_t ctx)
@@ -323,6 +437,8 @@ structures_init (expr_ctx_t ctx)
 
 /*
  * declare_structure
+ *
+ * Parses a STRUCTURE declaration.
  */
 int
 declare_structure (expr_ctx_t ctx, scopectx_t scope)
@@ -382,14 +498,17 @@ declare_structure (expr_ctx_t ctx, scopectx_t scope)
     } /* while */
 
     return 1;
-    
+
 } /* declare_structure */
 
 /*
  * parse_fields
  *
  * Recursive routine for defining individual fields
- * and field-sets.
+ * and field-sets.  If the 'fldset' parameter is null,
+ * we check for the SET keyword and call ourselves again
+ * to parse the fields in the set, if that keyword is
+ * encountered.
  */
 static int
 parse_fields (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
@@ -481,6 +600,8 @@ parse_fields (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
 
 /*
  * declare_field
+ *
+ * Entry point for parsing FIELD declarations.
  */
 int
 declare_field (expr_ctx_t ctx, scopectx_t scope)
@@ -496,6 +617,8 @@ declare_field (expr_ctx_t ctx, scopectx_t scope)
 
 /*
  * structure_allocate
+ *
+ * Expands a structure allocation.
  */
 int
 structure_allocate (expr_ctx_t ctx, name_t *struname,
@@ -510,7 +633,6 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
     lexseq_t tmpseq;
     scopectx_t myscope, retscope;
     nameref_t *ref;
-    name_t *np;
     int nomoreactuals;
     int nobrackets = 0;
     int allowed_aus = 0;
@@ -535,7 +657,7 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
     }
 
     // Now fill in the default values for the allocation formals, if they
-    // have any
+    // have defaults set.
     for (ref = namereflist_head(&stru->alloformals); ref != 0; ref = ref->tq_next) {
         if (ref->np != 0) {
             strdesc_t *alloname = name_string(ref->np);
@@ -551,14 +673,21 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
             }
         }
     }
-    // Now parse the allocation actuals
+    // Now parse the allocation actuals, if any have been specified.
+    // For an omitted actuals, fill in the default values, or zeros
+    // where there are no explicit defaults.
     nomoreactuals = nobrackets;
     for (ref = namereflist_head(&stru->alloformals); ref != 0; ref = ref->tq_next) {
         if (ref->np != 0) {
-            name_t *rnp;
+            name_t *np, *rnp;
             strdesc_t *alloname = name_string(ref->np);
             unsigned long val;
             int i = -1;
+            np = 0;
+            // An actual could be one of the allocation-unit keywords
+            // or SIGNED/UNSIGNED, on certain machines, so check for
+            // those as well as for a normal compile-time constant
+            // expresion.
             if (!nomoreactuals) {
                 if (allowed_aus > 0) {
                     i = parser_expect_oneof(pctx, QL_NORMAL, aus,
@@ -607,10 +736,15 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
             nomoreactuals = 1;
         }
     } /* loop through all of the allocation parameters */
+
     if (!nobrackets &&
         !parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RBRACK, 0, 1)) {
         expr_signal(ctx, STC__DELIMEXP, "]");
     }
+
+    // A structure definition may not actually have an
+    // allocation part, but may only be used for accessing
+    // storage allocated in some other way.
     if (lexseq_length(&stru->allobody) == 0) {
         *nunits = (is_ref ? machine_addr_units(mach) : 0);
     } else {
@@ -633,7 +767,10 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
 } /* structure_allocate */
 
 /*
- * Common structure reference routine
+ * structure_reference
+ *
+ * Expands a structure reference, for both the general case
+ * and the ordinary case.
  *
  * General structure reference
  * structure-name [ expression {,access-actual...} {; alloc-actual...} ]
@@ -665,27 +802,32 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
     // address expression
     if (symname == 0) {
 
-        //
-        //   XXX This needs fixing XXX
-        //
+		// It might be more correct to use expr_parse_expr() here to get
+		// the address expression, rather than deferring that to the
+		// expansion step later, but just handling it lexically was
+		// simpler to implement. XXX
         ndelims = 3;
         if (!parse_lexeme_seq(pctx, 0, QL_NORMAL, delims, 3, &seq, &delim)) {
             return 0;
         }
         myscope = scope_copy(stru->acctbl, 0);
     } else {
+    	// Here we have an ordinary structure reference, and can use
+    	// the symbol name for the base address.
         data_attr_t *attr = datasym_attr(symname);
         if (attr == 0) {
             expr_signal(ctx, STC__INTCMPERR, "structure_reference[1]");
             return 0;
         }
+		// For REF symbols, we construct the fetch expression to get
+		// the address stored at the symbol's location.
         if (attr->flags & SYM_M_REF) {
-            lexseq_instail(&seq,lexeme_create(lctx, LEXTYPE_DELIM_LPAR, &leftparen));
-            lexseq_instail(&seq,lexeme_create(lctx, LEXTYPE_OP_FETCH, &dot));
+            lexseq_instail(&seq, lexeme_create(lctx, LEXTYPE_DELIM_LPAR, &leftparen));
+            lexseq_instail(&seq, lexeme_create(lctx, LEXTYPE_OP_FETCH, &dot));
         }
         lexseq_instail(&seq,lexeme_copy(lctx, curlex));
         if (attr->flags & SYM_M_REF) {
-            lexseq_instail(&seq,lexeme_create(lctx, LEXTYPE_DELIM_RPAR, &rightparen));
+            lexseq_instail(&seq, lexeme_create(lctx, LEXTYPE_DELIM_RPAR, &rightparen));
         }
         // Semicolons (and allocation-formals) not allowed in this case
         ndelims = 2;
@@ -706,12 +848,16 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
             }
         }
     }
+	// In the expansion, the name of the structure represents the
+	// base address, so define that as a macro parameter.
     macparam_special(myscope, name_string(struname), &seq);
     lexseq_free(lctx, &seq);
+
+	// Now parse the access-actuals, bringing the field names into scope.
     if (fldscope != 0) {
         parser_scope_push(pctx, fldscope);
     }
-    for (ref = namereflist_head(&stru->accformals); ref != 0; ref = ref->tq_next) {
+        for (ref = namereflist_head(&stru->accformals); ref != 0; ref = ref->tq_next) {
         if (ref->np != 0) {
             strdesc_t *pname = name_string(ref->np);
             lexseq_init(&seq);
@@ -746,7 +892,8 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
     if (fldscope != 0) {
         parser_scope_end(pctx);
     }
-    // Allocation-formals are only used in the general-reference case
+
+    // Allocation-actuals are only used in the general-reference case
     if (symname == 0) {
         for (ref = namereflist_head(&stru->alloformals); ref != 0;
              ref = ref->tq_next) {
@@ -770,6 +917,10 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
         expr_signal(ctx, STC__DELIMEXP, "]");
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RBRACK);
     }
+
+	// At this point, we have built the complete sequence
+	// of lexemes to convert into the structure reference
+	// expression.
     lexseq_init(&seq);
     lexseq_copy(lctx, &seq, &stru->accbody);
     parser_scope_push(pctx, myscope);

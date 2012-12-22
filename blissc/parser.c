@@ -1,11 +1,22 @@
-//
-//  parser.c
-//  blissc
-//
-//  Created by Matthew Madison on 10/28/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			parser.c
+ *
+ *	Abstract:		Parsing and lexical functions
+ *
+ *  Module description:
+ *		This module is the center of all lexical processing, containing
+ * 		the main parsing functions and the implementations of all lexical
+ *		functions. This module sits above the lexer module, which manages
+ *		the lexeme stream.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		21-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,6 +34,7 @@
 #include "machinedef.h"
 #include "utils.h"
 
+// Parser context structure
 struct parse_ctx_s {
     namectx_t       namectx;
     scopectx_t      kwdscope, curscope;
@@ -34,18 +46,23 @@ struct parse_ctx_s {
     condstate_t     condstate[64];
     int             condlevel;
     int             no_eof;
-    int             indecl;
     textpos_t       curpos;
     unsigned long   valmask;
-    unsigned int    loopdepth;
     punctclass_t    punctclass;
     lextype_t       separator;
     lexctx_t        lmemctx;
     logctx_t        logctx;
 };
 
+
+// Lexical functions are implemented through a dispatch table keyed
+// off the lexeme type code.  The type code is passed to the dispatched
+// routine, so one routine can implement multiple variants of the same
+// basic function.
+
 typedef int (*lexfunc_t)(parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt);
 
+// Factory macros
 #undef DODEF
 #define DODEFS \
     DODEF(ASCII, parse_string_literal) \
@@ -74,24 +91,28 @@ typedef int (*lexfunc_t)(parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt);
     DODEF(INFORM, parse_msgfunc) DODEF(ERROR, parse_msgfunc) \
     DODEF(WARN, parse_msgfunc) DODEF(MESSAGE, parse_msgfunc)
 
+// Forward declarations for the routines; fortunately, multiple forward
+// declarations aren't a problem.
 #define DODEF(name_, rtn_) static int rtn_ (parse_ctx_t, quotelevel_t, lextype_t);
 DODEFS
 #undef DODEF
-#define DODEF(name_, rtn_) [LEXTYPE_LXF_##name_-LEXTYPE_LXF_MIN] = rtn_,
 
+// The dispatch table.
+#define DODEF(name_, rtn_) [LEXTYPE_LXF_##name_-LEXTYPE_LXF_MIN] = rtn_,
 static lexfunc_t lexfuncs[LEXTYPE_LXF_MAX-LEXTYPE_LXF_MIN+1] = {
     DODEFS
 };
 #undef DODEF
 
+// The name table definitions for the lexical functions.
 #define DODEF(name_, rtn_) NAMEDEF("%" #name_, LEXTYPE_LXF_##name_, NAME_M_RESERVED),
-
 static namedef_t parser_names[] = {
     DODEFS
     NAMEDEF("%THEN", LEXTYPE_LXF_THEN, NAME_M_RESERVED),
 };
 #undef DODEF
 
+// Some frequently-used static definitions
 static lexeme_t errlex = { 0, LEXTYPE_NONE };
 
 static lextype_t opener[3] = {
@@ -101,6 +122,7 @@ static lextype_t closer[3] = {
 
 static strdesc_t nullstr = STRDEF(""), one = STRDEF("1"), zero = STRDEF("0");
 
+// Utility functions for identifying lexeme classes
 static int is_lexfunc (lextype_t lt, int exclude_qfuncs) {
     if (lt < LEXTYPE_LXF_MIN || lt > LEXTYPE_LXF_MAX) return 0;
     if (!exclude_qfuncs) return 1;
@@ -116,25 +138,20 @@ static int is_attr(lextype_t lt) {
     return (lt >= LEXTYPE_ATTR_MIN && lt <= LEXTYPE_ATTR_MAX);
 }
 
-lexeme_t *
-parser_lexeme_create (parse_ctx_t pctx, lextype_t lt, strdesc_t *text) {
-    lexeme_t *lex = lexeme_create(pctx->lmemctx, lt, text);
-    lexeme_textpos_set(lex, pctx->curpos);
-    return lex;
-}
-
+/*
+ * parser_lexeme_add
+ *
+ * Internal utility function that creates a lexeme from some text and adds
+ * it to the front of the lexeme stream.
+ */
 static void
 parser_lexeme_add (parse_ctx_t pctx, lextype_t lt, strdesc_t *text)
 {
     lexeme_t *lex = parser_lexeme_create(pctx, lt, text);
     lexer_insert(pctx->lexctx, lex);
-}
 
-textpos_t
-parser_curpos (parse_ctx_t pctx)
-{
-    return pctx->curpos;
-}
+} /* parser_lexeme_add */
+
 /*
  * name_bind
  *
@@ -244,6 +261,63 @@ name_XXX_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
 } /* name_XXX_bind */
 
 /*
+ * select_punctclass
+ *
+ * This function sets the current punctuation class
+ * for iterative macro expansion, based on the lexeme
+ * that was just processed.  This information is used
+ * by the macros module when expanding iterative macros.
+ */
+static void
+select_punctclass (parse_ctx_t pctx, lextype_t lt)
+{
+    punctclass_t which;
+    lextype_t separator;
+
+    separator = LEXTYPE_NONE;
+
+    if (is_operator(lt)) {
+        which = PUNCT_OPERSEP_NOGROUP;
+        separator = lt;
+    } else if (is_name(lt) || is_attr(lt)) {
+        which = PUNCT_COMMASEP_PARENS;
+        separator = LEXTYPE_DELIM_COMMA;
+    } else switch (lt) {
+        case LEXTYPE_DELIM_LPAR:
+        case LEXTYPE_DELIM_LBRACK:
+        case LEXTYPE_DELIM_LANGLE:
+        case LEXTYPE_DELIM_COMMA:
+            which = PUNCT_COMMASEP_NOGROUP;
+            separator = LEXTYPE_DELIM_COMMA;
+            break;
+        case LEXTYPE_EXP_DELIM_BEGIN:
+        case LEXTYPE_DELIM_SEMI:
+        case LEXTYPE_KWD_SET:
+            which = PUNCT_SEMISEP_NOGROUP;
+            separator = LEXTYPE_DELIM_SEMI;
+            break;
+        case LEXTYPE_DELIM_RPAR:
+        case LEXTYPE_DELIM_RBRACK:
+        case LEXTYPE_DELIM_RANGLE:
+        case LEXTYPE_EXP_DELIM_END:
+        case LEXTYPE_NUMERIC:
+        case LEXTYPE_STRING:
+        case LEXTYPE_CSTRING:
+        case LEXTYPE_KWD_TES:
+            which = PUNCT_COMMASEP_PARENS;
+            separator = LEXTYPE_DELIM_COMMA;
+            break;
+        default:
+            which = PUNCT_COMMASEP_NOGROUP; // whatever
+            break;
+    }
+
+    pctx->punctclass = which;
+    pctx->separator = separator;
+
+} /* select_punctclass */
+
+/*
  *  --- Public API for this module ---
  */
 
@@ -320,8 +394,25 @@ parser_finish (parse_ctx_t pctx)
     }
     scope_end(pctx->curscope);
     free(pctx);
-    
+
 } /* parser_finish */
+
+/*
+ * Parser context setter/getters
+ */
+textpos_t parser_curpos(parse_ctx_t pctx) { return pctx->curpos; }
+void *parser_get_expctx (parse_ctx_t pctx) { return pctx->expctx; }
+void parser_set_expctx (parse_ctx_t pctx, void *expctx) { pctx->expctx = expctx;}
+lexctx_t parser_lexmemctx (parse_ctx_t pctx) { return pctx->lmemctx; }
+logctx_t parser_logctx (parse_ctx_t pctx) { return pctx->logctx; }
+machinedef_t *parser_get_machinedef (parse_ctx_t pctx) { return pctx->mach; }
+void parser_punctclass_set (parse_ctx_t pctx, punctclass_t cl, lextype_t sep) {
+    pctx->punctclass = cl; pctx->separator = sep; }
+void parser_punctclass_get (parse_ctx_t pctx, punctclass_t *clp, lextype_t *sepp) {
+    *clp = pctx->punctclass; *sepp = pctx->separator; }
+void parser_incr_erroneof (parse_ctx_t pctx) { pctx->no_eof += 1; }
+void parser_decr_erroneof (parse_ctx_t pctx) { pctx->no_eof -= 1; }
+
 
 /*
  * parser_fopen
@@ -348,45 +439,6 @@ parser_popen (parse_ctx_t pctx, scan_input_fn inpfn, void *fnctx)
 }
 
 /*
- * parser_get_expctx
- *
- * Retrieves the 'expctx' pointer from the parsing
- * context block.
- */
-void *
-parser_get_expctx (parse_ctx_t pctx) {
-    return pctx->expctx;
-} /* parser_get_expctx */
-
-void
-parser_set_expctx (parse_ctx_t pctx, void *expctx)
-{
-    pctx->expctx = expctx;
-} /* parser_set_expctx */
-
-void
-parser_set_indecl (parse_ctx_t pctx, int yes)
-{
-    pctx->indecl = yes;
-}
-
-int
-parser_in_declaration (parse_ctx_t pctx)
-{
-    return pctx->indecl;
-}
-
-lexctx_t
-parser_lexmemctx (parse_ctx_t pctx) {
-    return pctx->lmemctx;
-}
-
-logctx_t
-parser_logctx (parse_ctx_t pctx) {
-    return pctx->logctx;
-}
-
-/*
  * parser_insert
  *
  * Insert a lexeme to the front of the parsing stream.
@@ -395,9 +447,16 @@ void
 parser_insert (parse_ctx_t pctx, lexeme_t *lex)
 {
     lexer_insert(pctx->lexctx, lex);
-    
+
 } /* parser_insert */
 
+/*
+ * parser_insert_seq
+ *
+ * Inserts a sequence of lexemes at the front of the
+ * parsing stream.  The sequence is consumed by this
+ * call.
+ */
 void
 parser_insert_seq (parse_ctx_t pctx, lexseq_t *seq) {
 
@@ -407,74 +466,26 @@ parser_insert_seq (parse_ctx_t pctx, lexseq_t *seq) {
 } /* parser_insert_seq */
 
 /*
- * parser_get_machinedef
+ * parser_lexeme_create
+ *
+ * Utility function that wraps lexeme_create and inserts the current
+ * text position in the created lexeme.
  */
-machinedef_t *
-parser_get_machinedef (parse_ctx_t pctx) { return pctx->mach; }
+lexeme_t *
+parser_lexeme_create (parse_ctx_t pctx, lextype_t lt, strdesc_t *text) {
+    lexeme_t *lex = lexeme_create(pctx->lmemctx, lt, text);
+    lexeme_textpos_set(lex, pctx->curpos);
+    return lex;
 
-static void
-select_punctclass (parse_ctx_t pctx, lextype_t lt)
-{
-    punctclass_t which;
-    lextype_t separator;
+} /* parser_lexeme_create */
 
-    separator = LEXTYPE_NONE;
-
-    if (is_operator(lt)) {
-        which = PUNCT_OPERSEP_NOGROUP;
-        separator = lt;
-    } else if (is_name(lt) || is_attr(lt)) {
-        which = PUNCT_COMMASEP_PARENS;
-        separator = LEXTYPE_DELIM_COMMA;
-    } else switch (lt) {
-        case LEXTYPE_DELIM_LPAR:
-        case LEXTYPE_DELIM_LBRACK:
-        case LEXTYPE_DELIM_LANGLE:
-        case LEXTYPE_DELIM_COMMA:
-            which = PUNCT_COMMASEP_NOGROUP;
-            separator = LEXTYPE_DELIM_COMMA;
-            break;
-        case LEXTYPE_EXP_DELIM_BEGIN:
-        case LEXTYPE_DELIM_SEMI:
-        case LEXTYPE_KWD_SET:
-            which = PUNCT_SEMISEP_NOGROUP;
-            separator = LEXTYPE_DELIM_SEMI;
-            break;
-        case LEXTYPE_DELIM_RPAR:
-        case LEXTYPE_DELIM_RBRACK:
-        case LEXTYPE_DELIM_RANGLE:
-        case LEXTYPE_EXP_DELIM_END:
-        case LEXTYPE_NUMERIC:
-        case LEXTYPE_STRING:
-        case LEXTYPE_CSTRING:
-        case LEXTYPE_KWD_TES:
-            which = PUNCT_COMMASEP_PARENS;
-            separator = LEXTYPE_DELIM_COMMA;
-            break;
-        default:
-            which = PUNCT_COMMASEP_NOGROUP; // whatever
-            break;
-    }
-
-    pctx->punctclass = which;
-    pctx->separator = separator;
-
-} /* select_punctclass */
-
-void
-parser_punctclass_set (parse_ctx_t pctx, punctclass_t cl, lextype_t sep)
-{
-    pctx->punctclass = cl;
-    pctx->separator = sep;
-}
-
-void
-parser_punctclass_get (parse_ctx_t pctx, punctclass_t *clp, lextype_t *sepp)
-{
-    *clp = pctx->punctclass;
-    *sepp = pctx->separator;
-}
-
+/*
+ * parser_punct_grouper
+ *
+ * Returns the appropriate "grouper" lexeme based on the
+ * current punctuation class.  If 'docloser' is 1, the
+ * closing grouper is returned instead of the opening grouper.
+ */
 lexeme_t *
 parser_punct_grouper (parse_ctx_t pctx, int docloser)
 {
@@ -489,16 +500,16 @@ parser_punct_grouper (parse_ctx_t pctx, int docloser)
             break;
         case PUNCT_COMMASEP_PARENS:
             if (docloser) {
-                lex = lexeme_create(pctx->lmemctx, LEXTYPE_DELIM_RPAR, &rparen);
+                lex = parser_lexeme_create(pctx, LEXTYPE_DELIM_RPAR, &rparen);
             } else {
-                lex = lexeme_create(pctx->lmemctx, LEXTYPE_DELIM_LPAR, &lparen);
+                lex = parser_lexeme_create(pctx, LEXTYPE_DELIM_LPAR, &lparen);
             }
             break;
         case PUNCT_SEMISEP_SETTES:
             if (docloser) {
-                lex = lexeme_create(pctx->lmemctx, LEXTYPE_KWD_TES, &kwdtes);
+                lex = parser_lexeme_create(pctx, LEXTYPE_KWD_TES, &kwdtes);
             } else {
-                lex = lexeme_create(pctx->lmemctx, LEXTYPE_KWD_SET, &kwdset);
+                lex = parser_lexeme_create(pctx, LEXTYPE_KWD_SET, &kwdset);
             }
             break;
     }
@@ -507,6 +518,12 @@ parser_punct_grouper (parse_ctx_t pctx, int docloser)
 
 } /* parser_punct_grouper */
 
+/*
+ * parser_punct_separator
+ *
+ * Returns a lexeme for the separator based on the current
+ * punctuation class.
+ */
 lexeme_t *
 parser_punct_separator (parse_ctx_t pctx)
 {
@@ -520,7 +537,7 @@ parser_punct_separator (parse_ctx_t pctx)
         STRDEF("GTRU"), STRDEF("GEQU"), STRDEF("EQLA"), STRDEF("NEQA"),
         STRDEF("LSSA"), STRDEF("LEQA"), STRDEF("GTRA"), STRDEF("GEQA")
     };
-    static strdesc_t comma = STRDEF("comma"), semi = STRDEF(";");
+    static strdesc_t comma = STRDEF(","), semi = STRDEF(";");
 
     switch (pctx->punctclass) {
         case PUNCT_COMMASEP_NOGROUP:
@@ -537,7 +554,8 @@ parser_punct_separator (parse_ctx_t pctx)
                            STC__INTCMPERR, "parser_punct_separator");
                 return 0;
             }
-            lex = lexeme_create(pctx->lmemctx, pctx->separator, &operstrs[pctx->separator-LEXTYPE_OP_MIN]);
+            lex = parser_lexeme_create(pctx, pctx->separator,
+            						   &operstrs[pctx->separator-LEXTYPE_OP_MIN]);
     }
     return lex;
 
@@ -547,12 +565,16 @@ parser_punct_separator (parse_ctx_t pctx)
 /*
  * parser_next
  *
- * Retrieve the next lexeme from the parse stream.  This is
- * the main workhorse routine for the parser.  It handles
- * quoting levels and binding of compile-time names (literals,
- * COMPILETIME variables) to their values, the current lexical
- * conditional state, expanding macros, and dispatching to
- * process keywords and lexical functions.
+ * Retrieve the next lexeme from the lexeme stream, applying whatever
+ * lexical binding and processing that may be required based on the requested
+ * quotelevel.
+ *
+ * The 'lexp' argument can be null, if the caller isn't interested in the
+ * lexeme.  In that case this routine frees the lexeme, but still returns
+ * the type code.
+ *
+ * If an error occurs, LEXTYPE_NONE is returned.  If we have hit the end
+ * of the lexeme stream, LEXEME_END is returned.
  */
 lextype_t
 parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
@@ -565,12 +587,18 @@ parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
     lexseq_init(&result);
 
     while (1) {
+    	// Get the next raw lexeme from the lexer
         lex = lexer_next(pctx->lexctx, pctx->no_eof);
         lt = lexeme_type(lex);
         if (lt == LEXTYPE_NONE || lt == LEXTYPE_END) {
             break;
         }
         pctx->curpos = lexeme_textpos_get(lex);
+        // Bind the lexeme based on the current lexical context (quoting,
+        // conditional state).  Returned status will be negative on error,
+        // zero if processing should continue with the current lexeme
+        // (it may have been modified), or positive if the 'result' sequence
+        // should be used instead.
         status = lexeme_bind(pctx->lmemctx, pctx, ql, pctx->quotemodifier,
                              pctx->condstate[pctx->condlevel], lex, &result);
         if (status < 0) {
@@ -584,6 +612,8 @@ parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
         }
         lt = lexeme_type(lex);
         select_punctclass(pctx, lt);
+        // Re-bind numeric lexemes, taking into account the target machine's
+        // word size.  XXX look at moving this to a binding hook XXX
         if (lt == LEXTYPE_NUMERIC) {
             long sval;
             sval = lexeme_signedval(lex);
@@ -599,6 +629,7 @@ parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
                 string_printf(&lex->text, "%ld", (sval & pctx->valmask));
             }
         }
+        // Dispatch for lexical function processing
         if (is_lexfunc(lt, 0)) {
             if (pctx->quotemodifier == QM_EXPAND || ql < QL_MACRO ||
                 (lt == LEXTYPE_LXF_QUOTE || lt == LEXTYPE_LXF_UNQUOTE ||
@@ -651,74 +682,32 @@ parser_skip_to_delim (parse_ctx_t pctx, lextype_t delimtype)
 } /* parser_skip_to_delim */
 
 /*
- * parser_scope_get
+ * Name scope manipulation
  *
- * Get the current name scope.
+ * get: returns the current scope.
+ * push: pushes a new scope onto the scope stack.
+ * pop: pops the current scope off the scope stack, without freeing it.
+ * begin: creates a new empty scope and pushes it on the stack.
+ * end: pops the current scope off the stack and frees it.
  */
-scopectx_t
-parser_scope_get (parse_ctx_t pctx)
-{
-    return pctx->curscope;
-    
-} /* parser_scope_get */
-
-scopectx_t
-parser_scope_push (parse_ctx_t pctx, scopectx_t newscope)
-{
+scopectx_t parser_scope_get (parse_ctx_t pctx) { return pctx->curscope; }
+scopectx_t parser_scope_push (parse_ctx_t pctx, scopectx_t newscope) {
     scope_setparent(newscope, pctx->curscope);
-    pctx->curscope = newscope;
-    return newscope;
-}
-
-scopectx_t
-parser_scope_pop (parse_ctx_t pctx)
-{
-    pctx->curscope = scope_getparent(pctx->curscope);
-    return pctx->curscope;
-}
-/*
- * parser_scope_begin
- *
- * Push a new name scope that the
- * parser tracks.
- */
-scopectx_t
-parser_scope_begin (parse_ctx_t pctx)
-{
+    pctx->curscope = newscope; return newscope; }
+scopectx_t parser_scope_pop (parse_ctx_t pctx) {
+    pctx->curscope = scope_getparent(pctx->curscope); return pctx->curscope; }
+scopectx_t parser_scope_begin (parse_ctx_t pctx) {
     pctx->curscope = scope_begin(pctx->namectx, pctx->curscope);
-    return pctx->curscope;
+    return pctx->curscope; }
+scopectx_t parser_scope_end (parse_ctx_t pctx) {
+    pctx->curscope = scope_end(pctx->curscope); return pctx->curscope; }
 
-} /* parser_scope_begin */
-
-/*
- * parser_scope_end
- *
- * Pop a name scope from the parser.
- */
-scopectx_t
-parser_scope_end (parse_ctx_t pctx)
-{
-    pctx->curscope = scope_end(pctx->curscope);
-    return pctx->curscope;
-
-} /* parser_scope_end */
-
-/*
- * parser_incr/decr_erroneof
- *
- * Bump up/down the erroneof setting.
- */
-void parser_incr_erroneof (parse_ctx_t pctx) { pctx->no_eof += 1; }
-void parser_decr_erroneof (parse_ctx_t pctx) { pctx->no_eof -= 1; }
-
-void parser_loopdepth_incr (parse_ctx_t pctx) { pctx->loopdepth += 1; }
-void parser_loopdepth_decr (parse_ctx_t pctx) { pctx->loopdepth -= 1; }
-unsigned int parser_loopdepth (parse_ctx_t pctx) { return pctx->loopdepth; }
 /*
  * parser_expect
  *
- * Common routine for parsing an expected lexeme type.
- * Lexeme can be returned, if desired.
+ * Convenience routine for parsing an expected lexeme type.
+ * Lexeme can be returned, if desired.  If 'putbackonerror' is
+ * set, the lexeme is put back if it didn't match the expected type.
  *
  * Returns: 1=ok, 0=err
  */
@@ -730,16 +719,18 @@ parser_expect (parse_ctx_t pctx, quotelevel_t ql, lextype_t expected_lt,
         return 0;
     }
     return 1;
-    
+
 } /* parser_expect */
 
 /*
  * parser_expect_oneof
  *
- * Common routine for parsing an expected lexeme type.
- * Lexeme can be returned, if desired.  Callers can
- * use LEXTYPE_NONE to put "holes" in the array that
- * won't match.
+ * Common routine for parsing one of a set of lexeme types.
+ * The matching lexeme can be returned, if desired.  Callers can
+ * use LEXTYPE_NONE to put "holes" in the array that won't match.
+ *
+ * If 'putbackonerror' is set, the lexeme is put back into the
+ * stream if there was no match.
  *
  * Returns: array index on success, -1 on failure
  */
@@ -775,11 +766,24 @@ parser_expect_oneof (parse_ctx_t pctx, quotelevel_t ql, lextype_t expected_lts[]
  * parse_lexeme_seq
  *
  * Parses an arbitrary sequence of lexemes until hitting
- * a specified delimiter, returning the sequence as a chain.
- * Handles parentheses, brackets, etc.
+ * one of a set of specified terminators, returning the
+ * sequence that was parsed.
  *
- * Can take the input lexemes from a chain (seq), or from the
- * parser.
+ * Handles parentheses, brackets, etc., noting the depth
+ * of bracketing and returning an error status if the sequence
+ * terminates with an unclosed pair of brackets, or if a
+ * closing bracket occurs with no corresponding opener.
+ *
+ * Can take the input lexemes from a sequence provided by the
+ * caller, or from the parser's normal input stream.
+ *
+ * The special MARKER lextype is used to track the end of
+ * the caller's provided lexeme sequence.  In the event that
+ * parsing terminates before the end of the sequence, any
+ * remaining lexemes (and the marker) are removed from the
+ * parser's input stream.
+ *
+ * Returns 1 if successful, 0 otherwise.
  */
 int
 parse_lexeme_seq (parse_ctx_t pctx, lexseq_t *seq, quotelevel_t ql,
@@ -832,7 +836,7 @@ parse_lexeme_seq (parse_ctx_t pctx, lexseq_t *seq, quotelevel_t ql,
         }
         for (i = 0; i < 3; i++) {
             if (lt == opener[i]) {
-                depth[i]+= 1;
+                depth[i] += 1;
                 break;
             } else if (lt == closer[i]) {
                 if (depth[i] > 0) {
@@ -852,7 +856,7 @@ parse_lexeme_seq (parse_ctx_t pctx, lexseq_t *seq, quotelevel_t ql,
         while (parser_next(pctx, ql, &lex) != LEXTYPE_MARKER) {
             lexseq_instail(seq, lex);
         }
-        lexeme_free(pctx->lmemctx, lex);
+        lexeme_free(pctx->lmemctx, lex); // frees the marker
     }
 
     return status;
@@ -870,9 +874,8 @@ parse_lexeme_seq (parse_ctx_t pctx, lexseq_t *seq, quotelevel_t ql,
 /*
  * %QUOTE
  *
- * Prevents the next lexeme from being bound (i.e., replaced
- * with its value, if it's a compile-time name, like a macro
- * or literal).  Only permitted at name-quote or macro-quote level.
+ * Prevents the next lexeme from being bound.
+ * Only permitted at name-quote or macro-quote level.
  */
 static int
 parse_QUOTE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
@@ -988,7 +991,7 @@ parse_string_literal (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         lexeme_free(pctx->lmemctx, lex);
     }
     return 1;
-    
+
 } /* parse_string_literal */
 
 /*
@@ -998,6 +1001,10 @@ parse_string_literal (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
  *
  * Can begin with +/- sign, followed by one or more digits
  * in the specified 'base'.
+ *
+ * NB: Assumes that the lextype codes for %B, %O, %DECIMAL,
+ *     and %X are together in the lextype_t enumeration, in
+ *     that order.
  */
 static int
 parse_numeric_literal (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
@@ -1025,7 +1032,7 @@ parse_numeric_literal (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     lexeme_free(pctx->lmemctx, lex);
 
     return 1;
-    
+
 } /* parse_numeric_literal */
 
 /*
@@ -1290,7 +1297,7 @@ parse_CHAR (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     }
 
     result = string_alloc(0, 0);
-    INITSTR(chdsc, &ch, 1);
+    strdesc_init(&chdsc, &ch, 1);
     while (1) {
         if (!expr_parse_ctce(pctx->expctx, &lex)) {
             log_signal(pctx->logctx, pctx->curpos, STC__EXPCTCE);
@@ -1339,7 +1346,7 @@ parse_CHAR (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 
 /*
  * %EXPLODE(#p,...)
- * 
+ *
  * Return a sequence of quoted-string lexemes, one for each
  * character in the string(s) specified as parameters.
  * An empty parameter sequence results in a null string.
@@ -1367,7 +1374,7 @@ parse_EXPLODE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         lexeme_free(pctx->lmemctx, lex);
         return 1;
     }
-    INITSTR(dsc, str->ptr, 1);
+    strdesc_init(&dsc, str->ptr, 1);
     for (remain = str->len; remain > 0; dsc.ptr += 1, remain -= 1) {
         lexseq_instail(&result, parser_lexeme_create(pctx, LEXTYPE_STRING, &dsc));
         if (remain > 1) {
@@ -1385,7 +1392,7 @@ parse_EXPLODE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
 
 /*
  * %REMOVE(#p)
- * 
+ *
  * Removes a matching pair of parentheses, square brackets, or
  * angle brackets from the parameter, if there is such a pair.
  * Otherwise, the parameter remains unchanged.
@@ -1414,9 +1421,9 @@ parse_REMOVE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         return 1;
     }
 
-    // If the chain begins with an opener and ends with
+    // If the sequence begins with an opener and ends with
     // its corresponding closer, trim them off before
-    // inserting the chain back into the stream.  However,
+    // inserting the sequence back into the stream.  However,
     // we can't just blindly trim without checking to make
     // sure that they're really enclosing the entire sequence.
     // Otherwise, we'd trim '(A)+(B)', for instance.
@@ -1501,7 +1508,7 @@ parse_name_qname (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     lexeme_free(pctx->lmemctx, lex);
 
     return 1;
-    
+
 } /* parse_name_qname */
 
 /*
@@ -1578,7 +1585,11 @@ parse_IDENTICAL (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
  * %ISSTRING(exp,...)
  *
  * Returns 1 if every expression results in a quoted-string
- * lexeme, otherwise 0.
+ * lexeme, otherwise 0.  Note that this up-calls to the expression
+ * module, since the parameters are expressions.
+ * XXX Architecturally cleaner to expose the lexical function
+ * dispatch interface and have the expression module hook this
+ * function itself? XXX
  */
 static int
 parse_ISSTRING (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
@@ -1930,14 +1941,17 @@ parse_nbits_func (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     return 1;
 
 } /* parse_nbits_func */
+
 /*
  * parse_msgfunc
  *
  * Common code for %PRINT and friends
  *
- * %PRINT(#p,...)
- *
- * Print a message on the console.
+ * %PRINT(#p,...)   - print a message in the listing
+ * %MESSAGE(#p,...) - print a message on the console
+ * %ERROR(#p,...)   - print an error message, and treat as an error
+ * %WARN(#p,...)    - print a warning message, and treat as a warning
+ * %INFORM(#p,...)  - print an informational message
  */
 static int
 parse_msgfunc (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
@@ -1997,7 +2011,7 @@ parse_xTCE (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
     }
 
     return status;
-    
+
 } /* parse_xTCE */
 
 /*
