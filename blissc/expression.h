@@ -1,14 +1,16 @@
-//
-//  expression.h
-//  blissc
-//
-//  Created by Matthew Madison on 11/1/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_expression_h
-#define blissc_expression_h
-
+#ifndef expression_h__
+#define expression_h__
+/*
+ *++
+ *	File:			expression.h
+ *
+ *	Abstract:		Expression definitions.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 #include "parser.h"
 #include "storage.h"
 #include "nametable.h"
@@ -16,6 +18,7 @@
 #include "logging.h"
 #include "utils.h"
 
+// Factory macros for expression types
 #undef DOEXPTYPE
 #define DOEXPTYPES \
     DOEXPTYPE(NOOP) \
@@ -35,6 +38,7 @@ typedef enum {
 #undef DOEXPTYPE
 #define EXPTYPE_COUNT (EXPTYPE_CTRL_LOOPID+1)
 
+// Factory macros for operator types
 #undef DOOPTYPE
 #define DOOPTYPES \
     DOOPTYPE(FETCH) DOOPTYPE(UNARY_PLUS) DOOPTYPE(UNARY_MINUS) \
@@ -60,14 +64,16 @@ typedef enum {
 #define OPER_COUNT (OPER_ASSIGN+1)
 #define OPER_NONE OPER_COUNT
 
+// Expression context is private
 struct expr_ctx_s;
 typedef struct expr_ctx_s *expr_ctx_t;
+
+// Expression node structure is exposed here
+// XXX - should this go private?
 struct expr_node_s;
 
 struct exprseq_s {
-    struct expr_node_s  *head;
-    struct expr_node_s  *tail;
-    int                  count;
+	TQ_HDR_FIELDS		(struct expr_node_s)
 };
 typedef struct exprseq_s exprseq_t;
 
@@ -165,8 +171,7 @@ struct expr_exit_s { // also used for RETURN
 #define EXPR_M_CTCE   (1<<1)
 #define EXPR_M_LTCE   (1<<2)
 struct expr_node_s {
-    // for freelist tracking and sequences in blocks
-    struct expr_node_s *next;
+	TQ_ENT_FIELDS(struct expr_node_s)
     exprtype_t          type;
     textpos_t           textpos;
     unsigned int        flags;
@@ -198,466 +203,254 @@ void expr_node_free(expr_ctx_t ctx, expr_node_t *node);
 expr_node_t *expr_node_copy(expr_ctx_t ctx, expr_node_t *src);
 const char *oper_name(optype_t op);
 
-static inline __unused int expr_is_noop(expr_node_t *node) {
-    return (node == 0 ? 1 : node->type == EXPTYPE_NOOP);
-}
-static inline __unused int expr_is_primary(expr_node_t *node) {
+/*
+ * Getters/setters for the various expression objects
+ * NB: Use these instead of directly referencing the fields!
+ */
+#undef siu
+#define siu static inline __unused
+siu int expr_is_noop(expr_node_t *node) {
+	return (node == 0 ? 1 : node->type == EXPTYPE_NOOP); }
+siu int expr_is_primary(expr_node_t *node) {
     return (node == 0 ? 0 :
-            (node->type >= EXPTYPE_PRIM_LIT && node->type <= EXPTYPE_PRIM_BLK));
-}
-static inline __unused int expr_is_opexp(expr_node_t *node) {
-    return (node == 0 ? 0 : node->type == EXPTYPE_OPERATOR);
-}
-static inline __unused int expr_is_execfun(expr_node_t *node) {
-    return (node == 0 ? 0 : node->type == EXPTYPE_EXECFUN);
-}
-static inline __unused int expr_is_ctrl(expr_node_t *node) {
+            (node->type >= EXPTYPE_PRIM_LIT && node->type <= EXPTYPE_PRIM_BLK)); }
+siu int expr_is_opexp(expr_node_t *node) {
+    return (node == 0 ? 0 : node->type == EXPTYPE_OPERATOR); }
+siu int expr_is_execfun(expr_node_t *node) {
+    return (node == 0 ? 0 : node->type == EXPTYPE_EXECFUN); }
+siu int expr_is_ctrl(expr_node_t *node) {
     return (node == 0 ? 0 :
-            (node->type >= EXPTYPE_CTRL_COND && node->type <= EXPTYPE_CTRL_LOOPID));
-}
+            (node->type >= EXPTYPE_CTRL_COND && node->type <= EXPTYPE_CTRL_LOOPID)); }
 
 // Common fields
-static inline __unused expr_node_t *expr_next(expr_node_t *node) {
-    return node->next;
-}
-static inline __unused void expr_next_set(expr_node_t *node, expr_node_t *next) {
-    node->next = next;
-}
-static inline __unused exprtype_t expr_type(expr_node_t *node) {
-    return node->type;
-}
-static inline __unused void expr_type_set(expr_node_t *node, exprtype_t type) {
-    node->type = type;
-}
-static inline __unused void *expr_data(expr_node_t *node) {
-    return &node->data;
-}
-static inline __unused textpos_t expr_textpos(expr_node_t *node) {
-    return node->textpos;
-}
-static inline __unused void expr_textpos_set(expr_node_t *node, textpos_t pos) {
-    node->textpos = pos;
-}
-static inline __unused int expr_has_value(expr_node_t *node) {
-    return (node->flags & EXPR_M_HASVAL) != 0;
-}
-static inline __unused void expr_has_value_set(expr_node_t *node, int v) {
-    node->flags = (v ? (node->flags|EXPR_M_HASVAL) : (node->flags & ~EXPR_M_HASVAL));
-}
-static inline __unused int expr_is_ctce(expr_node_t *node) {
-    return node == 0 || (node->flags & EXPR_M_CTCE) != 0;
-}
-static inline __unused void expr_is_ctce_set(expr_node_t *node, int v) {
-    node->flags = (v ? (node->flags|EXPR_M_CTCE) : (node->flags & ~EXPR_M_CTCE));
-}
-static inline __unused int expr_is_ltce(expr_node_t *node) {
-    return (node->flags & (EXPR_M_CTCE|EXPR_M_LTCE)) != 0;
-}
-static inline __unused int expr_is_ltce_only(expr_node_t *node) {
-    return (node->flags & EXPR_M_LTCE) != 0;
-}
-static inline __unused void expr_is_ltce_set(expr_node_t *node, int v) {
-    if (node == 0) return;
-    node->flags = (v ? (node->flags|EXPR_M_LTCE) : (node->flags & ~EXPR_M_LTCE));
-}
+siu expr_node_t *expr_next(expr_node_t *node) { return node->tq_next; }
+siu void expr_next_set(expr_node_t *node, expr_node_t *next) { node->tq_next = next; }
+siu exprtype_t expr_type(expr_node_t *node) { return node->type; }
+siu void expr_type_set(expr_node_t *node, exprtype_t type) { node->type = type; }
+siu void *expr_data(expr_node_t *node) { return &node->data; }
+siu textpos_t expr_textpos(expr_node_t *node) { return node->textpos; }
+siu void expr_textpos_set(expr_node_t *node, textpos_t pos) { node->textpos = pos; }
+siu int expr_has_value(expr_node_t *node) { return (node->flags & EXPR_M_HASVAL) != 0; }
+siu void expr_has_value_set(expr_node_t *node, int v) {
+    node->flags = (v ? (node->flags|EXPR_M_HASVAL) : (node->flags & ~EXPR_M_HASVAL)); }
+siu int expr_is_ctce(expr_node_t *node) {
+    return node == 0 || (node->flags & EXPR_M_CTCE) != 0; }
+siu void expr_is_ctce_set(expr_node_t *node, int v) {
+    node->flags = (v ? (node->flags|EXPR_M_CTCE) : (node->flags & ~EXPR_M_CTCE)); }
+siu int expr_is_ltce(expr_node_t *node) {
+    return (node->flags & (EXPR_M_CTCE|EXPR_M_LTCE)) != 0; }
+siu int expr_is_ltce_only(expr_node_t *node) {
+    return (node->flags & EXPR_M_LTCE) != 0; }
+siu void expr_is_ltce_set(expr_node_t *node, int v) { if (node == 0) return;
+    node->flags = (v ? (node->flags|EXPR_M_LTCE) : (node->flags & ~EXPR_M_LTCE)); }
 
 // PRIM_LIT
-static inline __unused long expr_litval(expr_node_t *node) {
-    return node->data.litdata.litval;
-}
-static inline __unused void expr_litval_set(expr_node_t *node, long value) {
-    node->data.litdata.litval = value;
-}
-static inline __unused strdesc_t *expr_litstring(expr_node_t *node) {
-    return node->data.litdata.litstring;
-}
-static inline __unused void expr_litstring_set(expr_node_t *node, strdesc_t *str) {
-    node->data.litdata.litstring = str;
-}
+siu long expr_litval(expr_node_t *node) { return node->data.litdata.litval; }
+siu void expr_litval_set(expr_node_t *node, long value) {
+	node->data.litdata.litval = value; }
+siu strdesc_t *expr_litstring(expr_node_t *node) { return node->data.litdata.litstring; }
+siu void expr_litstring_set(expr_node_t *node, strdesc_t *str) {
+	node->data.litdata.litstring = str; }
 
 // PRIM_STRUREF
-static inline __unused expr_node_t *expr_struref_accexpr(expr_node_t *node) {
-    return node->data.srdata.accexpr;
-}
-static inline __unused void expr_struref_accexpr_set(expr_node_t *node, expr_node_t *e) {
-    node->data.srdata.accexpr = e;
-}
+siu expr_node_t *expr_struref_accexpr(expr_node_t *node) {
+    return node->data.srdata.accexpr; }
+siu void expr_struref_accexpr_set(expr_node_t *node, expr_node_t *e) {
+    node->data.srdata.accexpr = e; }
+
 // PRIM_SEG
-static inline __unused unsigned int expr_seg_units(expr_node_t *node) {
-    return node->data.segdata.units;
-}
-static inline __unused void expr_seg_units_set(expr_node_t *node, unsigned int u) {
-    node->data.segdata.units = u;
-}
-static inline __unused int expr_seg_signext(expr_node_t *node) {
-    return node->data.segdata.signext;
-}
-static inline __unused void expr_seg_signext_set(expr_node_t *node, int s) {
-    node->data.segdata.signext = s;
-}
-static inline __unused long expr_seg_offset(expr_node_t *node) {
-    return node->data.segdata.offset;
-}
-static inline __unused void expr_seg_offset_set(expr_node_t *node, long offset) {
-    node->data.segdata.offset = offset;
-}
-static inline __unused name_t *expr_seg_name(expr_node_t *node) {
-    return node->data.segdata.name;
-}
-static inline __unused void expr_seg_name_set(expr_node_t *node, name_t *np) {
-    node->data.segdata.name = np;
-}
+siu unsigned int expr_seg_units(expr_node_t *node) { return node->data.segdata.units; }
+siu void expr_seg_units_set(expr_node_t *node, unsigned int u) {
+    node->data.segdata.units = u; }
+siu int expr_seg_signext(expr_node_t *node) { return node->data.segdata.signext; }
+siu void expr_seg_signext_set(expr_node_t *node, int s) {
+	node->data.segdata.signext = s; }
+siu long expr_seg_offset(expr_node_t *node) { return node->data.segdata.offset; }
+siu void expr_seg_offset_set(expr_node_t *node, long offset) {
+    node->data.segdata.offset = offset; }
+siu name_t *expr_seg_name(expr_node_t *node) { return node->data.segdata.name; }
+siu void expr_seg_name_set(expr_node_t *node, name_t *np) {
+	node->data.segdata.name = np; }
+
 // PRIM_FLDREF
-static inline __unused expr_node_t *expr_fldref_addr(expr_node_t *node) {
-    return node->data.flddata.addr;
-}
-static inline __unused void expr_fldref_addr_set(expr_node_t *node, expr_node_t *a) {
-    node->data.flddata.addr = a;
-}
-static inline __unused expr_node_t *expr_fldref_pos(expr_node_t *node) {
-    return node->data.flddata.pos;
-}
-static inline __unused void expr_fldref_pos_set(expr_node_t *node, expr_node_t *p) {
-    node->data.flddata.pos = p;
-}
-static inline __unused expr_node_t *expr_fldref_size(expr_node_t *node) {
-    return node->data.flddata.size;
-}
-static inline __unused void expr_fldref_size_set(expr_node_t *node, expr_node_t *s) {
-    node->data.flddata.size = s;
-}
-static inline __unused int expr_fldref_signext(expr_node_t *node) {
-    return node->data.flddata.signext;
-}
-static inline __unused void expr_fldref_signext_set(expr_node_t *node, int val) {
-    node->data.flddata.signext = val;
-}
+siu expr_node_t *expr_fldref_addr(expr_node_t *node) { return node->data.flddata.addr; }
+siu void expr_fldref_addr_set(expr_node_t *node, expr_node_t *a) {
+    node->data.flddata.addr = a; }
+siu expr_node_t *expr_fldref_pos(expr_node_t *node) { return node->data.flddata.pos; }
+siu void expr_fldref_pos_set(expr_node_t *node, expr_node_t *p) {
+    node->data.flddata.pos = p; }
+siu expr_node_t *expr_fldref_size(expr_node_t *node) { return node->data.flddata.size; }
+siu void expr_fldref_size_set(expr_node_t *node, expr_node_t *s) {
+    node->data.flddata.size = s; }
+siu int expr_fldref_signext(expr_node_t *node) { return node->data.flddata.signext; }
+siu void expr_fldref_signext_set(expr_node_t *node, int val) {
+    node->data.flddata.signext = val; }
 
 // PRIM_BLK
-static inline __unused exprseq_t *expr_blk_seq(expr_node_t *node) {
-    return &node->data.blkdata.blkseq;
-}
-static inline __unused expr_node_t *expr_blk_valexp(expr_node_t *node) {
-    return node->data.blkdata.blkval;
-}
-static inline __unused void expr_blk_valexp_set(expr_node_t *node, expr_node_t *val) {
-    node->data.blkdata.blkval = val;
-}
-static inline __unused scopectx_t expr_blk_scope(expr_node_t *node) {
-    return node->data.blkdata.blkscope;
-}
-static inline __unused void expr_blk_scope_set(expr_node_t *node, scopectx_t scope) {
-    node->data.blkdata.blkscope = scope;
-}
-static inline __unused strdesc_t *expr_blk_codecomment(expr_node_t *node) {
-    return node->data.blkdata.codecomment;
-}
-static inline __unused void expr_blk_codecomment_set(expr_node_t *node, strdesc_t *str) {
-    node->data.blkdata.codecomment = str;
-}
+siu exprseq_t *expr_blk_seq(expr_node_t *node) { return &node->data.blkdata.blkseq; }
+siu expr_node_t *expr_blk_valexp(expr_node_t *node) { return node->data.blkdata.blkval; }
+siu void expr_blk_valexp_set(expr_node_t *node, expr_node_t *val) {
+    node->data.blkdata.blkval = val; }
+siu scopectx_t expr_blk_scope(expr_node_t *node) {
+    return node->data.blkdata.blkscope; }
+siu void expr_blk_scope_set(expr_node_t *node, scopectx_t scope) {
+    node->data.blkdata.blkscope = scope; }
+siu strdesc_t *expr_blk_codecomment(expr_node_t *node) {
+    return node->data.blkdata.codecomment; }
+siu void expr_blk_codecomment_set(expr_node_t *node, strdesc_t *str) {
+    node->data.blkdata.codecomment = str; }
 
 // PRIM_RTNCALL
-static inline __unused expr_node_t *expr_rtnaddr(expr_node_t *node) {
-    return node->data.rcdata.rtn;
-}
-static inline __unused void expr_rtnaddr_set(expr_node_t *node, expr_node_t *adr) {
-    node->data.rcdata.rtn = adr;
-}
-static inline __unused exprseq_t *expr_rtn_inargs(expr_node_t *node) {
-    return &node->data.rcdata.inargs;
-}
-static inline __unused exprseq_t *expr_rtn_outargs(expr_node_t *node) {
-    return &node->data.rcdata.outargs;
-}
+siu expr_node_t *expr_rtnaddr(expr_node_t *node) { return node->data.rcdata.rtn; }
+siu void expr_rtnaddr_set(expr_node_t *node, expr_node_t *adr) {
+    node->data.rcdata.rtn = adr; }
+siu exprseq_t *expr_rtn_inargs(expr_node_t *node) {
+    return &node->data.rcdata.inargs; }
+siu exprseq_t *expr_rtn_outargs(expr_node_t *node) {
+    return &node->data.rcdata.outargs; }
 
 // EXECFUN
-static inline __unused name_t *expr_func_name(expr_node_t *node) {
-    return node->data.fdata.funcname;
-}
-static inline __unused void expr_func_name_set(expr_node_t *node, name_t *name) {
-    node->data.fdata.funcname = name;
-}
-static inline __unused exprseq_t *expr_func_arglist(expr_node_t *node) {
-    return &node->data.fdata.arglist;
-}
+siu name_t *expr_func_name(expr_node_t *node) { return node->data.fdata.funcname; }
+siu void expr_func_name_set(expr_node_t *node, name_t *name) {
+    node->data.fdata.funcname = name; }
+siu exprseq_t *expr_func_arglist(expr_node_t *node) {
+    return &node->data.fdata.arglist; }
+
 // OPERATOR
-static inline __unused expr_node_t *expr_op_lhs(expr_node_t *node) {
-    return node->data.opdata.op_lhs;
-}
-static inline __unused void expr_op_lhs_set(expr_node_t *node, expr_node_t *child) {
-    node->data.opdata.op_lhs = child;
-}
-static inline __unused expr_node_t *expr_op_rhs(expr_node_t *node) {
-    return node->data.opdata.op_rhs;
-}
-static inline __unused void expr_op_rhs_set(expr_node_t *node, expr_node_t *child) {
-    node->data.opdata.op_rhs = child;
-}
-static inline __unused optype_t expr_op_type(expr_node_t *node) {
-    return (node->type == EXPTYPE_OPERATOR ? node->data.opdata.op_type : OPER_NONE);
-}
-static inline __unused void expr_op_type_set(expr_node_t *node, optype_t op) {
-    node->data.opdata.op_type = op;
-}
+siu expr_node_t *expr_op_lhs(expr_node_t *node) { return node->data.opdata.op_lhs; }
+siu void expr_op_lhs_set(expr_node_t *node, expr_node_t *child) {
+    node->data.opdata.op_lhs = child; }
+siu expr_node_t *expr_op_rhs(expr_node_t *node) { return node->data.opdata.op_rhs; }
+siu void expr_op_rhs_set(expr_node_t *node, expr_node_t *child) {
+    node->data.opdata.op_rhs = child; }
+siu optype_t expr_op_type(expr_node_t *node) {
+    return (node->type == EXPTYPE_OPERATOR ? node->data.opdata.op_type : OPER_NONE); }
+siu void expr_op_type_set(expr_node_t *node, optype_t op) {
+    node->data.opdata.op_type = op; }
+
 // CTRL_COND
-static inline __unused expr_node_t *expr_cond_test(expr_node_t *node) {
-    return node->data.cdata.test;
-}
-static inline __unused void expr_cond_test_set(expr_node_t *node, expr_node_t *test) {
-    node->data.cdata.test = test;
-}
-static inline __unused expr_node_t *expr_cond_consequent(expr_node_t *node) {
-    return node->data.cdata.cons;
-}
-static inline __unused void expr_cond_consequent_set(expr_node_t *node, expr_node_t *cons) {
-    node->data.cdata.cons = cons;
-}
-static inline __unused expr_node_t *expr_cond_alternative(expr_node_t *node) {
-    return node->data.cdata.alt;
-}
-static inline __unused void expr_cond_alternative_set(expr_node_t *node, expr_node_t *alt) {
-    node->data.cdata.alt = alt;
-}
+siu expr_node_t *expr_cond_test(expr_node_t *node) { return node->data.cdata.test; }
+siu void expr_cond_test_set(expr_node_t *node, expr_node_t *test) {
+    node->data.cdata.test = test; }
+siu expr_node_t *expr_cond_consequent(expr_node_t *node) {
+    return node->data.cdata.cons; }
+siu void expr_cond_consequent_set(expr_node_t *node, expr_node_t *cons) {
+    node->data.cdata.cons = cons; }
+siu expr_node_t *expr_cond_alternative(expr_node_t *node) {
+    return node->data.cdata.alt; }
+siu void expr_cond_alternative_set(expr_node_t *node, expr_node_t *alt) {
+    node->data.cdata.alt = alt; }
+
 // CTRL_WULOOP
-static inline __unused expr_node_t *expr_wuloop_test(expr_node_t *node) {
-    return node->data.wudata.test;
-}
-static inline __unused void expr_wuloop_test_set(expr_node_t *node, expr_node_t *test) {
-    node->data.wudata.test = test;
-}
-static inline __unused expr_node_t *expr_wuloop_body(expr_node_t *node) {
-   return node->data.wudata.body;
-}
-static inline __unused void expr_wuloop_body_set(expr_node_t *node, expr_node_t *body) {
-    node->data.wudata.body = body;
-}
-static inline __unused looptesttype_t expr_wuloop_type(expr_node_t *node) {
-    return node->data.wudata.type;
-}
-static inline __unused void expr_wuloop_type_set(expr_node_t *node,
-                                                 looptesttype_t type) {
-    node->data.wudata.type = type;
-}
+siu expr_node_t *expr_wuloop_test(expr_node_t *node) { return node->data.wudata.test; }
+siu void expr_wuloop_test_set(expr_node_t *node, expr_node_t *test) {
+    node->data.wudata.test = test; }
+siu expr_node_t *expr_wuloop_body(expr_node_t *node) { return node->data.wudata.body; }
+siu void expr_wuloop_body_set(expr_node_t *node, expr_node_t *body) {
+    node->data.wudata.body = body; }
+siu looptesttype_t expr_wuloop_type(expr_node_t *node) { return node->data.wudata.type; }
+siu void expr_wuloop_type_set(expr_node_t *node, looptesttype_t type) {
+    node->data.wudata.type = type; }
+
 // CTRL_IDLOOP
-static inline __unused scopectx_t expr_idloop_scope(expr_node_t *node) {
-    return node->data.iddata.scope;
-}
-static inline __unused void expr_idloop_scope_set(expr_node_t *node, scopectx_t scope) {
-    node->data.iddata.scope = scope;
-}
-static inline __unused expr_node_t *expr_idloop_init(expr_node_t *node) {
-    return node->data.iddata.init;
-}
-static inline __unused void expr_idloop_init_set(expr_node_t *node, expr_node_t *init) {
-    node->data.iddata.init = init;
-}
-static inline __unused expr_node_t *expr_idloop_term(expr_node_t *node) {
-    return node->data.iddata.term;
-}
-static inline __unused void expr_idloop_term_set(expr_node_t *node, expr_node_t *term) {
-    node->data.iddata.term = term;
-}
-static inline __unused expr_node_t *expr_idloop_step(expr_node_t *node) {
-    return node->data.iddata.step;
-}
-static inline __unused void expr_idloop_step_set(expr_node_t *node, expr_node_t *step) {
-    node->data.iddata.step = step;
-}
-static inline __unused expr_node_t *expr_idloop_body(expr_node_t *node) {
-    return node->data.iddata.body;
-}
-static inline __unused void expr_idloop_body_set(expr_node_t *node, expr_node_t *body) {
-    node->data.iddata.body = body;
-}
-static inline __unused optype_t expr_idloop_cmptype(expr_node_t *node) {
-    return node->data.iddata.cmptype;
-}
-static inline __unused void expr_idloop_cmptype_set(expr_node_t *node, optype_t cmp) {
-    node->data.iddata.cmptype = cmp;
-}
-static inline __unused int expr_idloop_decr(expr_node_t *node) {
-    return node->data.iddata.is_decr;
-}
-static inline __unused void expr_idloop_decr_set(expr_node_t *node, int val) {
-    node->data.iddata.is_decr = val;
-}
+siu scopectx_t expr_idloop_scope(expr_node_t *node) { return node->data.iddata.scope; }
+siu void expr_idloop_scope_set(expr_node_t *node, scopectx_t scope) {
+    node->data.iddata.scope = scope; }
+siu expr_node_t *expr_idloop_init(expr_node_t *node) { return node->data.iddata.init; }
+siu void expr_idloop_init_set(expr_node_t *node, expr_node_t *init) {
+    node->data.iddata.init = init; }
+siu expr_node_t *expr_idloop_term(expr_node_t *node) { return node->data.iddata.term; }
+siu void expr_idloop_term_set(expr_node_t *node, expr_node_t *term) {
+    node->data.iddata.term = term; }
+siu expr_node_t *expr_idloop_step(expr_node_t *node) { return node->data.iddata.step; }
+siu void expr_idloop_step_set(expr_node_t *node, expr_node_t *step) {
+    node->data.iddata.step = step; }
+siu expr_node_t *expr_idloop_body(expr_node_t *node) { return node->data.iddata.body; }
+siu void expr_idloop_body_set(expr_node_t *node, expr_node_t *body) {
+    node->data.iddata.body = body; }
+siu optype_t expr_idloop_cmptype(expr_node_t *node) {
+    return node->data.iddata.cmptype; }
+siu void expr_idloop_cmptype_set(expr_node_t *node, optype_t cmp) {
+    node->data.iddata.cmptype = cmp; }
+siu int expr_idloop_decr(expr_node_t *node) {
+    return node->data.iddata.is_decr; }
+siu void expr_idloop_decr_set(expr_node_t *node, int val) {
+    node->data.iddata.is_decr = val; }
+
 // CTRL_CASE
-static inline __unused expr_node_t *expr_case_index(expr_node_t *node) {
-    return node->data.casedata.caseindex;
-}
-static inline __unused void expr_case_index_set(expr_node_t *node, expr_node_t *exp) {
-    node->data.casedata.caseindex = exp;
-}
-static inline __unused long expr_case_lowbound(expr_node_t *node) {
-    return node->data.casedata.lowbound;
-}
-static inline __unused long expr_case_highbound(expr_node_t *node) {
-    return node->data.casedata.highbound;
-}
-static inline __unused void expr_case_bounds_set(expr_node_t *node, long lo, long hi) {
+siu expr_node_t *expr_case_index(expr_node_t *node) {
+	return node->data.casedata.caseindex; }
+siu void expr_case_index_set(expr_node_t *node, expr_node_t *exp) {
+    node->data.casedata.caseindex = exp; }
+siu long expr_case_lowbound(expr_node_t *node) {
+    return node->data.casedata.lowbound; }
+siu long expr_case_highbound(expr_node_t *node) {
+    return node->data.casedata.highbound; }
+siu void expr_case_bounds_set(expr_node_t *node, long lo, long hi) {
     node->data.casedata.highbound = hi;
-    node->data.casedata.lowbound = lo;
-}
-static inline __unused expr_node_t *expr_case_outrange(expr_node_t *node) {
-    return node->data.casedata.outrange;
-}
-static inline __unused void expr_case_outrange_set(expr_node_t *node, expr_node_t *exp) {
-    node->data.casedata.outrange = exp;
-}
-static inline __unused expr_node_t *expr_case_action(expr_node_t *node, long which) {
+    node->data.casedata.lowbound = lo; }
+siu expr_node_t *expr_case_outrange(expr_node_t *node) {
+    return node->data.casedata.outrange; }
+siu void expr_case_outrange_set(expr_node_t *node, expr_node_t *exp) {
+    node->data.casedata.outrange = exp; }
+siu expr_node_t *expr_case_action(expr_node_t *node, long which) {
     if (which < node->data.casedata.lowbound || which > node->data.casedata.highbound) {
-        return node->data.casedata.outrange;
-    }
-    return node->data.casedata.cases[which-node->data.casedata.lowbound];
-}
-static inline __unused expr_node_t **expr_case_cases(expr_node_t *node) {
-    return node->data.casedata.cases;
-}
-static inline __unused void expr_case_actions_set(expr_node_t *node, expr_node_t **arr) {
-    node->data.casedata.cases = arr;
-}
+        return node->data.casedata.outrange; }
+    return node->data.casedata.cases[which-node->data.casedata.lowbound]; }
+siu expr_node_t **expr_case_cases(expr_node_t *node) {
+    return node->data.casedata.cases; }
+siu void expr_case_actions_set(expr_node_t *node, expr_node_t **arr) {
+    node->data.casedata.cases = arr; }
+
 // CTRL_SELECT
-static inline __unused expr_node_t *expr_sel_index(expr_node_t *node) {
-    return node->data.seldata.selindex;
-}
-static inline __unused void expr_sel_index_set(expr_node_t *node, expr_node_t *si) {
-    node->data.seldata.selindex = si;
-}
-static inline __unused optype_t expr_sel_cmptype(expr_node_t *node) {
-    return node->data.seldata.cmptype;
-}
-static inline __unused void expr_sel_cmptype_set(expr_node_t *node, optype_t op) {
-    node->data.seldata.cmptype = op;
-}
-static inline __unused int expr_sel_oneonly(expr_node_t *node) {
-    return node->data.seldata.selectone;
-}
-static inline __unused void expr_sel_oneonly_set(expr_node_t *node, int val) {
-    node->data.seldata.selectone = val;
-}
-static inline __unused exprseq_t *expr_sel_selectors(expr_node_t *node) {
-    return &node->data.seldata.sequence;
-}
+siu expr_node_t *expr_sel_index(expr_node_t *node) { return node->data.seldata.selindex; }
+siu void expr_sel_index_set(expr_node_t *node, expr_node_t *si) {
+    node->data.seldata.selindex = si; }
+siu optype_t expr_sel_cmptype(expr_node_t *node) { return node->data.seldata.cmptype; }
+siu void expr_sel_cmptype_set(expr_node_t *node, optype_t op) {
+    node->data.seldata.cmptype = op; }
+siu int expr_sel_oneonly(expr_node_t *node) { return node->data.seldata.selectone; }
+siu void expr_sel_oneonly_set(expr_node_t *node, int val) {
+    node->data.seldata.selectone = val; }
+siu exprseq_t *expr_sel_selectors(expr_node_t *node) {
+	return &node->data.seldata.sequence; }
 // selectors
-static inline __unused expr_node_t *expr_selector_low(expr_node_t *node) {
-    return node->data.slctrdata.low;
-}
-static inline __unused expr_node_t *expr_selector_high(expr_node_t *node) {
-    return node->data.slctrdata.high;
-}
-static inline __unused void expr_selector_lohi_set(expr_node_t *node,
-                                                   expr_node_t *lo, expr_node_t *hi) {
+siu expr_node_t *expr_selector_low(expr_node_t *node) { return node->data.slctrdata.low; }
+siu expr_node_t *expr_selector_high(expr_node_t *node) {
+	return node->data.slctrdata.high; }
+siu void expr_selector_lohi_set(expr_node_t *node, expr_node_t *lo, expr_node_t *hi) {
     node->data.slctrdata.low = lo;
-    node->data.slctrdata.high = hi;
-}
-static inline __unused expr_node_t *expr_selector_action(expr_node_t *node) {
-    return node->data.slctrdata.action;
-}
-static inline __unused void expr_selector_action_set(expr_node_t *node, expr_node_t *act) {
-    node->data.slctrdata.action = act;
-}
-static inline __unused int expr_selector_otherwise(expr_node_t *node) {
-    return node->data.slctrdata.is_otherwise;
-}
-static inline __unused void expr_selector_otherwise_set(expr_node_t *node, int val) {
-    node->data.slctrdata.is_otherwise = val;
-}
-static inline __unused int expr_selector_always(expr_node_t *node) {
-    return node->data.slctrdata.is_always;
-}
-static inline __unused void expr_selector_always_set(expr_node_t *node, int val) {
-    node->data.slctrdata.is_always = val;
-}
-static inline __unused expr_node_t *expr_selector_next(expr_node_t *node) {
-    return node->data.slctrdata.nextsel;
-}
-static inline __unused void expr_selector_next_set(expr_node_t *node, expr_node_t *sel) {
-    node->data.slctrdata.nextsel = sel;
-}
+    node->data.slctrdata.high = hi; }
+siu expr_node_t *expr_selector_action(expr_node_t *node) {
+    return node->data.slctrdata.action; }
+siu void expr_selector_action_set(expr_node_t *node, expr_node_t *act) {
+    node->data.slctrdata.action = act; }
+siu int expr_selector_otherwise(expr_node_t *node) {
+    return node->data.slctrdata.is_otherwise; }
+siu void expr_selector_otherwise_set(expr_node_t *node, int val) {
+    node->data.slctrdata.is_otherwise = val; }
+siu int expr_selector_always(expr_node_t *node) {
+    return node->data.slctrdata.is_always; }
+siu void expr_selector_always_set(expr_node_t *node, int val) {
+    node->data.slctrdata.is_always = val; }
+siu expr_node_t *expr_selector_next(expr_node_t *node) {
+    return node->data.slctrdata.nextsel; }
+siu void expr_selector_next_set(expr_node_t *node, expr_node_t *sel) {
+    node->data.slctrdata.nextsel = sel; }
+
 // Exit expressions (EXITLOOP, LEAVE, RETURN)
-static inline __unused expr_node_t *expr_exit_value(expr_node_t *node) {
-    return node->data.exitdata.exitval;
-}
-static inline __unused void expr_exit_value_set(expr_node_t *node, expr_node_t *val) {
-    node->data.exitdata.exitval = val;
-}
-static inline __unused name_t *expr_exit_label(expr_node_t *node) {
-    return node->data.exitdata.exitlabel;
-}
-static inline __unused void expr_exit_label_set(expr_node_t *node, name_t *np) {
-    node->data.exitdata.exitlabel = np;
-}
+siu expr_node_t *expr_exit_value(expr_node_t *node) {
+	return node->data.exitdata.exitval; }
+siu void expr_exit_value_set(expr_node_t *node, expr_node_t *val) {
+    node->data.exitdata.exitval = val; }
+siu name_t *expr_exit_label(expr_node_t *node) {
+    return node->data.exitdata.exitlabel; }
+siu void expr_exit_label_set(expr_node_t *node, name_t *np) {
+    node->data.exitdata.exitlabel = np; }
+#undef siu
 
-static inline __unused void exprseq_init (exprseq_t *seq) {
-    seq->head = seq->tail = 0; seq->count = 0;
-}
-static inline __unused int exprseq_empty (exprseq_t *seq) {
-    return (seq->count == 0);
-}
-static inline __unused void exprseq_inshead (exprseq_t *seq, expr_node_t *l) {
-    if (seq->count == 0) seq->tail = l;
-    l->next = seq->head; seq->head = l; seq->count += 1;
-}
-static inline __unused void exprseq_instail (exprseq_t *seq, expr_node_t *l) {
-    if (seq->count == 0) exprseq_inshead(seq, l);
-    else { seq->tail->next = l; l->next = 0; seq->tail = l; seq->count += 1;}
-}
-static inline __unused void exprseq_append (exprseq_t *dst, exprseq_t *addon) {
-    if (addon->count == 0) return;
-    if (dst->count == 0) {
-        dst->head = addon->head; dst->tail = addon->tail; dst->count = addon->count;
-    } else {
-        dst->tail->next = addon->head; dst->tail = addon->tail;
-        dst->count += addon->count;
-    }
-    addon->head = addon->tail = 0; addon->count = 0;
-}
-static inline __unused void exprseq_prepend (exprseq_t *dst, exprseq_t *addon) {
-    if (addon->count == 0) return;
-    if (dst->count == 0) {
-        dst->head = addon->head; dst->tail = addon->tail; dst->count = addon->count;
-    } else {
-        addon->tail->next = dst->head; dst->head = addon->head;
-        dst->count += addon->count;
-    }
-    addon->head = addon->tail = 0; addon->count = 0;
-}
-static inline __unused expr_node_t *exprseq_remhead (exprseq_t *seq) {
-    expr_node_t *l = seq->head;
-    if (l == 0) return l;
-    seq->head = l->next;
-    l->next = 0;
-    seq->count -= 1;
-    return l;
-}
-static inline __unused expr_node_t *exprseq_remtail (exprseq_t *seq) {
-    expr_node_t *l = seq->tail, *p = seq->head;
-    if (p == 0) return 0;
-    if (seq->count == 1) {
-        l = seq->head;
-        seq->head = seq->tail = 0;
-        seq->count = 0;
-        return l;
-    }
-    while (p->next != l) { p = p->next; }
-    p->next = 0;
-    seq->tail = p;
-    seq->count -= 1;
-    return l;
-}
-static inline __unused expr_node_t *exprseq_head (exprseq_t *seq) {
-    return seq->head;
-}
-static inline __unused expr_node_t *exprseq_tail (exprseq_t *seq) {
-    return seq->tail;
-}
-static inline __unused int exprseq_length (exprseq_t *seq) {
-    return seq->count;
-}
-static inline __unused void exprseq_set (exprseq_t *dst, exprseq_t *src) {
-    dst->head = src->head; dst->tail = src->tail; dst->count = src->count;
-}
-
+// Expression sequence functions
+DEFINE_TQ_FUNCS(exprseq, exprseq_t, expr_node_t)
 void exprseq_free(expr_ctx_t ctx, exprseq_t *seq);
 void exprseq_copy(expr_ctx_t ctx, exprseq_t *dst, exprseq_t *src);
 
@@ -686,4 +479,5 @@ void expr_push_routine(expr_ctx_t ctx, name_t *np);
 void expr_pop_routine(expr_ctx_t ctx);
 name_t *expr_current_routine (expr_ctx_t ctx);
 void expr_signal(expr_ctx_t ctx, statcode_t code, ...);
-#endif
+
+#endif /* expression_h__ */

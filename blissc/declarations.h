@@ -1,14 +1,16 @@
-//
-//  declarations.h
-//  blissc
-//
-//  Created by Matthew Madison on 11/18/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_declarations__h
-#define blissc_declarations__h
-
+#ifndef declarations_h__
+#define declarations_h__
+/*
+ *++
+ *	File:			declarations.h
+ *
+ *	Abstract:		Definitions for declarations.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 #include "structures.h"
 #include "expression.h"
 #include "nametable.h"
@@ -26,4 +28,4 @@ int parse_decl_name(parse_ctx_t pctx, scopectx_t scope,
 int parse_declaration(expr_ctx_t ectx);
 int declare_module(expr_ctx_t ectx);
 
-#endif
+#endif /* declarations_h__ */

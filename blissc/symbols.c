@@ -181,6 +181,7 @@ static int
 bind_literal (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
               lextype_t lt, condstate_t cs, lexeme_t *lex,
               lexseq_t *result) {
+    parse_ctx_t pctx = ctx;
     name_t *np = lexeme_ctx_get(lex);
     sym_literal_t *lit = name_extraspace(np);
     long val;
@@ -194,7 +195,7 @@ bind_literal (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
         return 0;
     }
     if ((lit->attr.flags & SYM_M_NOVALUE)) {
-        log_signal(lexeme_logctx(lctx), lexeme_textpos_get(lex),
+        log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
                    STC__LITNOVAL, lexeme_text(lex));
         val = 0;
     } else {
@@ -297,7 +298,7 @@ symbols_init (expr_ctx_t ctx)
     };
 
     memset(symctx, 0, sizeof(struct symctx_s));
-    symctx->logctx = lexeme_logctx(lctx);
+    symctx->logctx = expr_logctx(ctx);
     symctx->data_defaults.units = machine_scalar_units(mach);
     symctx->literal_defaults.width = machine_scalar_bits(mach);
     symctx->stg = expr_stg_ctx(ctx);

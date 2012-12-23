@@ -1,13 +1,16 @@
-//
-//  machinedef.h
-//  blissc
-//
-//  Created by Matthew Madison on 11/18/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_machinedef_h
-#define blissc_machinedef_h
+#ifndef machinedef_h__
+#define machinedef_h__
+/*
+ *++
+ *	File:			machinedef.h
+ *
+ *	Abstract:		Machine-specific definitions.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 
 // Maximum number of registers on any supported platform
 #define MACH_K_MAXREGS  32
@@ -38,4 +41,4 @@ siu unsigned int machine_register_count(machinedef_t *mach) { return mach->reg_c
 siu unsigned int machine_align_max(machinedef_t *mach) { return mach->max_align; }
 #undef siu
 
-#endif
+#endif /* machinedef_h__ */

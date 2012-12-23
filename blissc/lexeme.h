@@ -1,18 +1,26 @@
-//
-//  lexeme.h
-//  blissc
-//
-//  Created by Matthew Madison on 10/23/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_lexeme_h
-#define blissc_lexeme_h
+#ifndef lexeme_h__
+#define lexeme_h__
+/*
+ *++
+ *	File:			lexeme.h
+ *
+ *	Abstract:		Lexeme definitions.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 
 #include "logging.h"
 #include "strings.h"
 #include "utils.h"
 
+/*
+ * The following enums represent lexical processing
+ * state, and are included here because the lexeme_bind()
+ * routine lives in lexeme.c and needs this information.
+ */
 typedef enum {
     QL_NORMAL, QL_NAME, QL_MACRO
 } quotelevel_t;
@@ -27,7 +35,29 @@ typedef enum {
     COND_AWC, COND_AWA
 } condstate_t;
 
+// Factory macros for lexeme types.
+//
+// NB: if adding a new type, make sure you update the
+// MIN and MAX definitions below when applicable.
+//
+// NB: Modules may depend on the specific placement and
+// ordering of these type codes (e.g., for array indexing),
+// so DO NOT change the order or placement of any existing
+// type code unless you know what you are doing!
 
+// Naming convention for identifying classes of lexeme types:
+//
+// xxx			= basic lexeme type or special marker
+// OP_xxx 		= operator (single char or keyword)
+// DELIM_xxx	= delimiter (single char only)
+// LXF_xxx 		= lexical function
+// NAME_xxx		= Declarable names, builtins, and executable functions
+// DCL_xxx		= declaration keyword
+// ATTR_xxx		= attribute for a data or routine symbol
+// AU_xxx		= allocation-unit
+// EXP_DELIM_xx = expression-level delimiter (BEGIN and END)
+// CTRL_xxx		= control-expression introducer
+// KWD_xxx		= other keyword, semantics may depend on context
 #undef DOLEXTYPE
 #define DOLEXTYPES \
     DOLEXTYPE(NONE) \
@@ -137,25 +167,44 @@ typedef enum {
 
 #define LEXTYPE_MIN LEXTYPE_END
 #define LEXTYPE_MAX (LEXTYPE_COUNT-1)
+
 #define LEXTYPE_OP_MIN LEXTYPE_OP_ADD
 #define LEXTYPE_OP_MAX LEXTYPE_OP_GEQA
+
 #define LEXTYPE_DELIM_MIN LEXTYPE_DELIM_COMMA
 #define LEXTYPE_DELIM_MAX LEXTYPE_DELIM_RANGLE
+
+// NB: This range is used by the parser module for
+// indexing into the lexical function dispatch array
 #define LEXTYPE_LXF_MIN LEXTYPE_LXF_ASCII
 #define LEXTYPE_LXF_MAX LEXTYPE_LXF_LENGTH
+
+// NB: This range is used by the nametable module
+// for indexing into the name type handling array
 #define LEXTYPE_NAME_MIN LEXTYPE_NAME
 #define LEXTYPE_NAME_MAX LEXTYPE_NAME_PSECT
+
+// NB: This range is used by the expression module
+// for indexing into the expression-level dispatch array
 #define LEXTYPE_EXPKWD_MIN LEXTYPE_DCL_MACRO
 #define LEXTYPE_EXPKWD_MAX LEXTYPE_MAX
+
 #define LEXTYPE_DCL_MIN LEXTYPE_DCL_MACRO
 #define LEXTYPE_DCL_MAX LEXTYPE_DCL_COMPILETIME
+
 #define LEXTYPE_ATTR_MIN LEXTYPE_ATTR_SIGNED
 #define LEXTYPE_ATTR_MAX LEXTYPE_ATTR_NOVALUE
+
 #define LEXTYPE_AU_MIN LEXTYPE_AU_BYTE
 #define LEXTYPE_AU_MAX LEXTYPE_AU_QUAD
 
 #define LEX_M_ALLOCATED (1<<0)
 
+// The internals of the lexeme structure are exposed here,
+// since it is used so frequently throughout the various
+// modules.  DO NOT directly reference the fields, however;
+// use the getter/setter functions provided below, so the
+// internals can be changed more easily.
 struct lexeme_s {
     TQ_ENT_FIELDS(struct lexeme_s)
     lextype_t        type;
@@ -182,7 +231,6 @@ typedef int (*lextype_bind_fn)(lexctx_t lctx, void *pctx, quotelevel_t ql,
 
 lexctx_t lexeme_init(logctx_t logctx);
 void lexeme_finish(lexctx_t lctx);
-logctx_t lexeme_logctx(lexctx_t lctx);
 lexeme_t *lexeme_copy(lexctx_t lctx, lexeme_t *orig);
 void lexeme_free(lexctx_t lctx, lexeme_t *lex);
 lexeme_t *lexeme_create(lexctx_t lctx, lextype_t type, strdesc_t *dsc);
@@ -198,70 +246,37 @@ int lexseq_copy_and_setpos(lexctx_t lctx, lexseq_t *dst,
                            lexseq_t *src, textpos_t pos);
 int lexemes_match(lexseq_t *a, lexseq_t *b);
 
-static inline __unused lexeme_t *lexeme_next (lexeme_t *lex) {
-    return lex->tq_next;
-}
-static inline __unused lextype_t lexeme_boundtype (lexeme_t *lex) {
-    return lex->boundtype;
-}
-static inline __unused lextype_t lexeme_type (lexeme_t *lex) {
-    return lex->type;
-}
-static inline __unused void lexeme_type_set(lexeme_t *lex, lextype_t type) {
-    lex->type = type; if (type != LEXTYPE_UNBOUND) lex->boundtype = type;
-}
-static inline __unused void lexeme_boundtype_set(lexeme_t *lex, lextype_t type) {
-    lex->boundtype = type;
-}
-static inline __unused long lexeme_signedval (lexeme_t *lex) {
-    return (long) lex->numval;
-}
-static inline __unused unsigned long lexeme_unsignedval (lexeme_t *lex) {
-    return lex->numval;
-}
-static inline __unused void lexeme_val_setsigned (lexeme_t *lex, long v) {
-    lex->numval = (unsigned long) v;
-}
-static inline __unused void lexeme_val_setunsigned (lexeme_t *lex, unsigned long v) {
-    lex->numval = v;
-}
-static inline __unused strdesc_t *lexeme_text (lexeme_t *lex) {
-    return &lex->text;
-}
-static inline __unused void lexeme_text_set (lexeme_t *lex, strdesc_t *newtext)
-{
-    string_copy(&lex->text, newtext);
-}
-static inline __unused unsigned short lexeme_textlen(lexeme_t *lex) {
-    return lex->text.len;
-}
-static inline __unused void *lexeme_ctx_get (lexeme_t *lex) {
-    return lex->extra;
-}
-static inline __unused void lexeme_ctx_set (lexeme_t *lex, void *p) {
-    lex->extra = p;
-}
-static inline __unused textpos_t lexeme_textpos_get(lexeme_t *lex) {
-    return lex->textpos;
-}
-static inline __unused void lexeme_textpos_set (lexeme_t *lex, textpos_t pos) {
-    lex->textpos = pos;
-}
-static inline __unused void lexeme_setpos (lexeme_t *lex, int f,
-                                           unsigned int l, unsigned int c) {
-    lex->textpos = textpos_create(f, l, c);
-}
-static inline __unused void lexeme_getpos (lexeme_t *lex, int *f,
-                                           unsigned int *l, unsigned int *c) {
-    *f = textpos_fileno(lex->textpos);
-    *l = textpos_lineno(lex->textpos);
-    *c = textpos_colnum(lex->textpos);
-}
+// Getters/settters for lexemes
 
-static inline __unused void lexeme_copypos (lexeme_t *dst, lexeme_t *src) {
-    dst->textpos = src->textpos;
-}
+#undef siu
+#define siu static inline __unused
+siu lexeme_t *lexeme_next (lexeme_t *lex) { return lex->tq_next; }
+siu lextype_t lexeme_boundtype (lexeme_t *lex) { return lex->boundtype; }
+siu lextype_t lexeme_type (lexeme_t *lex) { return lex->type; }
+siu void lexeme_type_set(lexeme_t *lex, lextype_t type) {
+    lex->type = type; if (type != LEXTYPE_UNBOUND) lex->boundtype = type; }
+siu void lexeme_boundtype_set(lexeme_t *lex, lextype_t type) { lex->boundtype = type; }
+siu long lexeme_signedval (lexeme_t *lex) { return (long) lex->numval; }
+siu unsigned long lexeme_unsignedval (lexeme_t *lex) { return lex->numval; }
+siu void lexeme_val_setsigned (lexeme_t *lex, long v) { lex->numval = (unsigned long) v; }
+siu void lexeme_val_setunsigned (lexeme_t *lex, unsigned long v) { lex->numval = v; }
+siu strdesc_t *lexeme_text (lexeme_t *lex) { return &lex->text; }
+siu void lexeme_text_set (lexeme_t *lex, strdesc_t *newtext) {
+    string_copy(&lex->text, newtext); }
+siu unsigned short lexeme_textlen(lexeme_t *lex) { return lex->text.len; }
+siu void *lexeme_ctx_get (lexeme_t *lex) { return lex->extra; }
+siu void lexeme_ctx_set (lexeme_t *lex, void *p) { lex->extra = p; }
+siu textpos_t lexeme_textpos_get(lexeme_t *lex) { return lex->textpos; }
+siu void lexeme_textpos_set (lexeme_t *lex, textpos_t pos) { lex->textpos = pos; }
+siu void lexeme_setpos (lexeme_t *lex, int f, unsigned int l, unsigned int c) {
+    lex->textpos = textpos_create(f, l, c); }
+siu void lexeme_getpos (lexeme_t *lex, int *f, unsigned int *l, unsigned int *c) {
+    *f = textpos_fileno(lex->textpos); *l = textpos_lineno(lex->textpos);
+    *c = textpos_colnum(lex->textpos); }
+siu void lexeme_copypos (lexeme_t *dst, lexeme_t *src) {
+	dst->textpos = src->textpos; }
+#undef siu
 
 DEFINE_TQ_FUNCS(lexseq, lexseq_t, lexeme_t)
 
-#endif
+#endif /* lexeme_h__ */

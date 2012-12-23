@@ -1,20 +1,26 @@
-//
-//  lexer.c
-//  blissc
-//
-//  Low-level lexeme handling.  Maintains the stream of lexemes
-//  used by the parser; lexemes can be inserted into the stream,
-//  files can be passed to the scanner routines for reading and
-//  tokenizing.
-//
-//  At this level, only the most basic token-to-lexeme conversion
-//  happens -- specifically, conversion of operators and delimiters,
-//  and the primitive numeric and string literals.
-//
-//  Created by Matthew Madison on 10/23/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			lexer.c
+ *
+ *	Abstract:		Low-level lexical processing.
+ *
+ *  Module description:
+ *		Low-level lexeme handling.  Maintains the stream of lexemes
+ *		used by the parser; lexemes can be inserted into the stream,
+ *		files can be passed to the scanner routines for reading and
+ *		tokenizing.
+ *
+ *		At this level, only the most basic token-to-lexeme conversion
+ *		happens -- specifically, conversion of operators and delimiters,
+ *		and the primitive numeric and string literals.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		22-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -198,9 +204,11 @@ filename_lookup (lexer_ctx_t lctx, const char *name, size_t len,
 /*
  * lexer_init
  *
- * One-time lexer initialization, to register the operator names.
+ * One-time lexer initialization, to register the operator names and
+ * the filename fetcher for the logger.  The lexeme module initialization
+ * is performed here as well.
  */
-lexer_ctx_t 
+lexer_ctx_t
 lexer_init (scopectx_t kwdscope, logctx_t logctx)
 {
     lexer_ctx_t ctx;
@@ -223,13 +231,17 @@ lexer_init (scopectx_t kwdscope, logctx_t logctx)
 
 } /* lexer_init */
 
+/*
+ * Getter/setters for lexer context
+ */
 lexctx_t lexer_lexctx(lexer_ctx_t lctx) { return lctx->lexctx; }
 
 /*
  * lexer_filename
  *
  * Given a filename index (from a lexeme's position),
- * return the relevant filename.
+ * return the relevant filename.  This is invoked through
+ * the 'filename_fetch' function pointer by the logger.
  */
 strdesc_t *
 lexer_filename (lexer_ctx_t lctx, int filename_index)
@@ -248,7 +260,7 @@ lexer_filename (lexer_ctx_t lctx, int filename_index)
     }
     return 0;
 
-} /* filename_by_index */
+} /* lexer_filename */
 
 /*
  * lexer_fopen
@@ -333,7 +345,7 @@ lexer_finish (lexer_ctx_t ctx)
 } /* lexer_finish */
 
 /*
- * lexer_next
+ * lexer___next
  *
  * Returns the next lexeme in the stream.
  * If 'erroneof' is set, reaching the end of a file (not the
@@ -341,6 +353,9 @@ lexer_finish (lexer_ctx_t ctx)
  * this happens when we're in the middle of parsing a lexical
  * conditional or a macro definition; they must be wholly contained
  * within a single file.
+ *
+ * This is the internal version that handles both lexer_next
+ * and lexer_peek processing.
  */
 static lexeme_t *
 lexer___next (lexer_ctx_t ctx, int erroneof, int peek)
@@ -445,13 +460,29 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek)
 
 } /* lexer___next */
 
-lexeme_t *lexer_next (lexer_ctx_t ctx, int erroneof) {
+/*
+ * lexer_next
+ *
+ * Public API for fetching the next lexeme from the
+ * input stream.
+ */
+lexeme_t *lexer_next (lexer_ctx_t ctx, int erroneof)
+{
     return lexer___next(ctx, erroneof, 0);
-}
 
-lexeme_t *lexer_peek (lexer_ctx_t ctx, int erroneof) {
+} /* lexer_next */
+
+/*
+ * lexer_peek
+ *
+ * Public API for peeking at the next lexeme in the
+ * input stream, without actually removing it.
+ */
+lexeme_t *lexer_peek (lexer_ctx_t ctx, int erroneof)
+{
     return lexer___next(ctx, erroneof, 1);
-}
+
+} /* lexer_peek */
 
 /*
  * lexer_insert
@@ -468,7 +499,7 @@ lexer_insert (lexer_ctx_t ctx, lexeme_t *lex)
     if (lex == &errlex || lex == &endlex || lex == 0) {
         return;
     }
-    
+
     if (chain == 0) {
         chain = lexchain_alloc();
         if (chain == 0) {
@@ -482,6 +513,13 @@ lexer_insert (lexer_ctx_t ctx, lexeme_t *lex)
 
 } /* lexer_insert */
 
+/*
+ * lexer_insert_seq_internal
+ *
+ * Internal routine for inserting a sequence of lexemes
+ * at the front of the stream, possibly with resetting their
+ * text positions.
+ */
 static void
 lexer_insert_seq_internal (lexer_ctx_t ctx, lexseq_t *seq,
                            int resetpos, textpos_t pos)
@@ -510,11 +548,28 @@ lexer_insert_seq_internal (lexer_ctx_t ctx, lexseq_t *seq,
 
 } /* lexer_insert_seq_internal */
 
+/*
+ * lexer_insert_seq
+ *
+ * Public API for normal insertion of a lexeme sequence,
+ * with no text position update.
+ */
 void
-lexer_insert_seq (lexer_ctx_t ctx, lexseq_t *seq) {
+lexer_insert_seq (lexer_ctx_t ctx, lexseq_t *seq)
+{
     lexer_insert_seq_internal(ctx, seq, 0, 0);
-}
+
+} /* lexer_insert_seq */
+
+/*
+ * lexer_insert_seq_with_pos
+ *
+ * Public API for insertion of a lexeme sequence and
+ * updating the text position.
+ */
 void
-lexer_insert_seq_with_pos (lexer_ctx_t ctx, lexseq_t *seq, textpos_t pos) {
+lexer_insert_seq_with_pos (lexer_ctx_t ctx, lexseq_t *seq, textpos_t pos)
+{
     lexer_insert_seq_internal(ctx, seq, 1, pos);
-}
+
+} /* lexer_insert_seq_with_pos */

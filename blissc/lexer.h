@@ -1,14 +1,16 @@
-//
-//  lexer.h
-//  blissc
-//
-//  Created by Matthew Madison on 10/23/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_lexer_h
-#define blissc_lexer_h
-
+#ifndef lexer_h__
+#define lexer_h__
+/*
+ *++
+ *	File:			lexer.h
+ *
+ *	Abstract:		Lexer interface definitions.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 #include "lexeme.h"
 #include "nametable.h"
 #include "scanner.h"
@@ -31,4 +33,5 @@ void lexer_insert(lexer_ctx_t ctx, lexeme_t *lex);
 void lexer_insert_seq(lexer_ctx_t ctx, lexseq_t *seq);
 void lexer_insert_seq_with_pos(lexer_ctx_t ctx, lexseq_t *seq,
                                textpos_t pos);
-#endif
+
+#endif /* lexer_h__ */

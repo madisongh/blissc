@@ -1,14 +1,16 @@
-//
-//  logging.h
-//  blissc
-//
-//  Created by Matthew Madison on 12/16/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_logging_h
-#define blissc_logging_h
-
+#ifndef logging_h__
+#define logging_h__
+/*
+ *++
+ *	File:			logging.h
+ *
+ *	Abstract:		Logging definitions.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 #include <setjmp.h>
 #include <stdarg.h>
 #include "strings.h"
@@ -30,10 +32,7 @@ unsigned int log_warncount(logctx_t ctx);
 unsigned int log_errcount(logctx_t ctx);
 void log_signal(logctx_t ctx, textpos_t pos, statcode_t code, ...);
 void log_vsignal(logctx_t ctx, textpos_t pos, statcode_t code, va_list ap);
-void log_message(logctx_t ctx, textpos_t pos, strdesc_t *str);
-void log_warn(logctx_t ctx, textpos_t pos, strdesc_t *str);
-void log_error(logctx_t ctx, textpos_t pos, strdesc_t *str);
-void log_inform(logctx_t ctx, textpos_t pos, strdesc_t *str);
 void log_print(logctx_t ctx, textpos_t pos, strdesc_t *str);
 void logging_finish(logctx_t ctx);
-#endif
+
+#endif /* logging_h__ */

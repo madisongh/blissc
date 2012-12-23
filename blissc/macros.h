@@ -1,14 +1,16 @@
-//
-//  macros.h
-//  blissc
-//
-//  Created by Matthew Madison on 11/6/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_macros_h
-#define blissc_macros_h
-
+#ifndef macros_h__
+#define macros_h__
+/*
+ *++
+ *	File:			macros.h
+ *
+ *	Abstract:		Definitions for macros.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 #include "nametable.h"
 #include "parser.h"
 #include "lexeme.h"
@@ -22,4 +24,5 @@ lexseq_t *macparam_lexseq(name_t *np);
 name_t *macparam_special(scopectx_t scope, strdesc_t *pname, lexseq_t *seqval);
 name_t *macparam_lookup(lexctx_t lctx, scopectx_t scope,
                         strdesc_t *pname, lexseq_t *value);
-#endif
+
+#endif /* macros_h__ */

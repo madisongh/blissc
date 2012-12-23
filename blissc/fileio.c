@@ -1,11 +1,30 @@
-//
-//  fileio.c
-//  blissc
-//
-//  Created by Matthew Madison on 10/22/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			fileio.c
+ *
+ *	Abstract:		File input and output handling.
+ *
+ *  Module description:
+ *		This module implements all file I/O handling.
+ *		XXX At the moment, it's only "I".
+ *
+ *		The implementation here uses standard C I/O
+ *		calls, but abstracts the I/O handling such that
+ *		some OS-specific implementation could be used
+ *		if needed (e.g., for performance reasons).
+ *
+ *		Input files are assumed to be text divided up
+ *		into lines ending with linemarks (for standard
+ *		C I/O, '\n').  Input is fetched one line at a
+ *		time.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		22-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdio.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -15,6 +34,7 @@
 #include "logging.h"
 #include <errno.h>
 
+// Per-file context
 struct filectx_s {
     struct filectx_s *next;
     fioctx_t          fio;
@@ -26,18 +46,18 @@ struct filectx_s {
     char              filebuf[4096];
 };
 
+// Module context
 struct fioctx_s {
     logctx_t         logctx;
     filectx_t        input_files;
 };
 
-/*
- * Note that file names are NOT freed with the
- * file context structures; this is on purpose,
- * as we may need to display the file name in
- * an error message after it is closed.
- */
 
+/*
+ * fileio_init
+ *
+ * Module initialization.
+ */
 fioctx_t
 fileio_init (logctx_t logctx)
 {
@@ -47,8 +67,14 @@ fileio_init (logctx_t logctx)
         fio->logctx = logctx;
     }
     return fio;
-}
 
+} /* fileio_init */
+
+/*
+ * fileio_finish
+ *
+ * Shutdown routine.
+ */
 void
 fileio_finish (fioctx_t fio)
 {
@@ -59,8 +85,17 @@ fileio_finish (fioctx_t fio)
         close(ctx->fd);
         free(ctx);
     }
-}
 
+} /* fileio_finish */
+
+/*
+ * file_open_input
+ *
+ * Opens an input file with the specified name, replacing the
+ * suffix of the original name with the specified suffix.  If
+ * the original name does not have a suffix, the specified
+ * suffix is simply appended.
+ */
 filectx_t
 file_open_input (fioctx_t fio, const char *fname, size_t fnlen,
                  const char *suffix)
@@ -68,19 +103,26 @@ file_open_input (fioctx_t fio, const char *fname, size_t fnlen,
     filectx_t ctx = malloc(sizeof(struct filectx_s));
     int add_suffix = 0;
 
-    if (ctx == 0)
+    if (ctx == 0) {
         return ctx;
+	}
     memset(ctx, 0, sizeof(struct filectx_s));
 
-    if (fnlen == 0) {
-        ctx->fname = malloc(strlen(suffix)+1);
-        add_suffix = 1;
-    } else {
-        const char *cp = fname + fnlen;
-        while (--cp >= fname && *cp != '.');
-        add_suffix = !(cp >= fname);
-        ctx->fname = malloc(fnlen + (add_suffix ? strlen(suffix) : 0) + 1);
-    }
+    if (suffix != 0) {
+		if (fnlen == 0) {
+			ctx->fname = malloc(strlen(suffix)+1);
+			add_suffix = 1;
+		} else {
+			const char *cp = fname + fnlen;
+			while (--cp >= fname && *cp != '.');
+			add_suffix = !(cp >= fname);
+			ctx->fname = malloc(fnlen + (add_suffix ? strlen(suffix) : 0) + 1);
+		}
+	} else if (fnlen == 0) {
+		ctx->fname = 0;
+	} else {
+		ctx->fname = malloc(fnlen+1);
+	}
     if (ctx->fname == 0) {
         free(ctx);
         return 0;
@@ -107,8 +149,14 @@ file_open_input (fioctx_t fio, const char *fname, size_t fnlen,
     ctx->buflen = 0;
     ctx->fio = fio;
     return ctx;
-}
 
+} /* file_open_input */
+
+/*
+ * file_close
+ *
+ * Close a file.
+ */
 void
 file_close (filectx_t ctx)
 {
@@ -135,15 +183,34 @@ file_close (filectx_t ctx)
         prev->next = cur->next;
     }
     close(cur->fd);
+    if (cur->fname != 0) {
+    	free(cur->fname);
+    }
     free(cur);
 }
 
+/*
+ * file_getname
+ *
+ * Returns the name of an open file.
+ */
 char *
 file_getname (filectx_t ctx)
 {
     return ctx->fname;
-}
 
+} /* file_getname */
+
+/*
+ * file_readline
+ *
+ * Reads a line from a file.
+ *
+ * Returns:
+ *		-1: error occurred (errors are also signalled)
+ *		 0: end of file reached, no input
+ *		>0: length of line
+ */
 int
 file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
 {
@@ -206,4 +273,4 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
 
     return status;
 
-}
+} /* file_readline */

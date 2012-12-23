@@ -1,11 +1,24 @@
-//
-//  lexeme.c
-//  blissc
-//
-//  Created by Matthew Madison on 10/27/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			lexeme.c
+ *
+ *	Abstract:		Lexeme handling
+ *
+ *  Module description:
+ *		This module implements the basic handling of lexemes.
+ *		It provides memory management of the lexeme pool, routines
+ *		for manipulating lexemes and lexeme sequences (along with the
+ *		inlined functions in the counterpart header file), and
+ *		the plug-in framework for lexical binding that the parser and other
+ *		modules use.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		22-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -26,6 +39,12 @@ struct lexctx_s {
 
 static lexeme_t errlex = { 0, LEXTYPE_NONE };
 
+/*
+ * lextype_name
+ *
+ * Returns a string with the name of a lexeme type.
+ * For debugging purposes only.
+ */
 const char *
 lextype_name (lextype_t lt)
 {
@@ -33,8 +52,14 @@ lextype_name (lextype_t lt)
         return "*LEXTYPE_OUTOFRANGE*";
     }
     return ltnames[lt];
-}
 
+} /* lextype_name */
+
+/*
+ * lextype_register
+ *
+ * Registers a lexical binding function.
+ */
 int
 lextype_register (lexctx_t lctx, lextype_t lt, lextype_bind_fn binder)
 {
@@ -43,8 +68,15 @@ lextype_register (lexctx_t lctx, lextype_t lt, lextype_bind_fn binder)
     }
     lctx->binders[lt] = binder;
     return 1;
-}
 
+} /* lextype_register */
+
+/*
+ * lexeme_alloc
+ *
+ * Internal allocation function.  Expands the lookaside list
+ * when needed.
+ */
 static lexeme_t *
 lexeme_alloc (lexctx_t lctx, lextype_t type, const char *text, size_t len)
 {
@@ -78,6 +110,17 @@ lexeme_alloc (lexctx_t lctx, lextype_t type, const char *text, size_t len)
 /*
  * lexeme_bind
  *
+ * The core lexical binding function.  If a module has registered
+ * its own binder for a given lexeme type, it is responsible for
+ * all handling of current lexical state -- conditional, quoting,
+ * etc.  For lexeme types that do not have a binder registered,
+ * this routine performs the normal interpretation of lexical
+ * state.  This means that if you implement anything for which
+ * those normal rules may not apply (e.g., a lexical function or
+ * macro-related lexeme type), you MUST register a binding function
+ * to handle the exceptional cases.  DO NOT code any special-case
+ * handling here.
+ *
  * Returns:
  *  -1: error
  *   0: binding/unbinding occurred normally, original
@@ -101,6 +144,7 @@ lexeme_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
         lexeme_free(lctx, lex);
         return 1;
     }
+
     if (qm == QM_QUOTE) {
         lex->type = LEXTYPE_UNBOUND;
         return 0;
@@ -140,10 +184,17 @@ lexeme_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
         lexeme_free(lctx, lex);
         return 1;
     }
+
     lex->type = lt;
     return 0;
-}
 
+} /* lexeme_bind */
+
+/*
+ * lexeme_init
+ *
+ * Module initialization.  Called from the lexer module.
+ */
 lexctx_t
 lexeme_init (logctx_t logctx)
 {
@@ -154,25 +205,25 @@ lexeme_init (logctx_t logctx)
         lctx->logctx = logctx;
     }
     return lctx;
-}
 
+} /* lexeme_init */
+
+/*
+ * lexeme_finish
+ *
+ * Shutdown routine.
+ */
 void
 lexeme_finish (lexctx_t lctx)
 {
     free(lctx);
-}
 
-logctx_t
-lexeme_logctx (lexctx_t lctx)
-{
-    return lctx->logctx;
-}
+} /* lexeme_finish */
+
 /*
  * lexeme_create
  *
- * Public API for creating a lexeme from some value, used
- * by the lexical analyzer when expanding lexical functions
- * and macros.
+ * Public API for creating a lexeme from some value.
  */
 lexeme_t *
 lexeme_create (lexctx_t lctx, lextype_t type, strdesc_t *tok)
@@ -193,8 +244,15 @@ lexeme_create (lexctx_t lctx, lextype_t type, strdesc_t *tok)
 
 } /* lexeme_create */
 
-
-
+/*
+ * lexeme_free
+ *
+ * Frees a lexeme, returning it to the lookaside list
+ * if it was dynamically allocated.  It is OK to pass
+ * a null pointer or a pointer to a static lexeme; those
+ * will simply be ignored, and it simplifies logic elsewhere
+ * to allow this.
+ */
 void
 lexeme_free (lexctx_t lctx, lexeme_t *lex)
 {
@@ -207,8 +265,15 @@ lexeme_free (lexctx_t lctx, lexeme_t *lex)
         lex->tq_next = lctx->freepool;
         lctx->freepool = lex;
     }
-}
 
+} /* lexeme_free */
+
+/*
+ * lexeme_copy
+ *
+ * Allocates a new lexeme and copies the important
+ * fields over from the original.
+ */
 lexeme_t *
 lexeme_copy (lexctx_t lctx, lexeme_t *orig)
 {
@@ -229,13 +294,13 @@ lexeme_copy (lexctx_t lctx, lexeme_t *orig)
     lexeme_copypos(lex, orig);
     lex->tq_next = 0;
     return lex;
-}
+
+} /* lexeme_copy */
 
 /*
  * lexseq_free
  *
- * Frees the linked list of lexemes (the 'sequence')
- * ponted to by 'seq'.
+ * Frees a entire tail queue of lexemes.
  */
 void
 lexseq_free (lexctx_t lctx, lexseq_t *seq)
@@ -266,10 +331,11 @@ lexseq_copy (lexctx_t lctx, lexseq_t *dst, lexseq_t *src)
 } /* lexseq_copy */
 
 /*
- * lexseq_copy
+ * lexseq_copy_and_setpos
  *
  * Returns a duplicate of a lexeme sequence,
- * appended to the destination.
+ * appended to the destination, but resetting the
+ * text position for the duplicate to the specified value.
  */
 int
 lexseq_copy_and_setpos (lexctx_t lctx, lexseq_t *dst, lexseq_t *src,
@@ -286,13 +352,13 @@ lexseq_copy_and_setpos (lexctx_t lctx, lexseq_t *dst, lexseq_t *src,
     return 1;
 
 } /* lexseq_copy_and_setpos */
+
 /*
  * lexemes_match
  *
  * Compares two sequences of lexemes to see if they are
  * equivalent (e.g., for %IDENTICAL).  That is, the
- * lextypes match, and for lextypes for which there
- * is data, that data matches.
+ * lextypes match and their strings match.
  */
 int
 lexemes_match (lexseq_t *a, lexseq_t *b)

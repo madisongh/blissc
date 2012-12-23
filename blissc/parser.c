@@ -1964,19 +1964,20 @@ parse_msgfunc (parse_ctx_t pctx, quotelevel_t ql, lextype_t curlt)
         strdesc_t *text = lexeme_text(lex);
         switch (curlt) {
             case LEXTYPE_LXF_PRINT:
+                // XXX this should be a listing function XXX
                 log_print(pctx->logctx, pos, text);
                 break;
             case LEXTYPE_LXF_MESSAGE:
-                log_message(pctx->logctx, pos, text);
+                log_signal(pctx->logctx, pos, STC__MESSAGE, text);
                 break;
             case LEXTYPE_LXF_ERROR:
-                log_message(pctx->logctx, pos, text);
+                log_signal(pctx->logctx, pos, STC__USRERR, text);
                 break;
             case LEXTYPE_LXF_INFORM:
-                log_inform(pctx->logctx, pos, text);
+                log_signal(pctx->logctx, pos, STC__INFORM, text);
                 break;
             case LEXTYPE_LXF_WARN:
-                log_warn(pctx->logctx, pos, text);
+                log_signal(pctx->logctx, pos, STC__USRWARN, text);
                 break;
             default:
                 log_signal(pctx->logctx, pos, STC__INTCMPERR, "parse_msgfunc[1]");

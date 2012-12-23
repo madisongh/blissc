@@ -1,11 +1,32 @@
-//
-//  declarations.c
-//  blissc
-//
-//  Created by Matthew Madison on 11/11/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			declarations.c
+ *
+ *	Abstract:		Data, routine, module declarations
+ *
+ *  Module description:
+ *		This module implements the parsing and binding of data
+ *		and routine names, as well as declarations for
+ *		labels, psects, and modules.
+ *
+ *		COMPILETIME names are simple signed integers; the value
+ *		is stored directly in the name_t cell.
+ *
+ *		The MODULE name has attributes, but is relatively easy
+ *		to track, since there is only one of these per module.
+ *
+ *		All other names have attributes and run-time scope
+ *		that needs to be tracked; this module handles parsing of
+ *		the various attributes and calls on the symbols module
+ *		to manage the names.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		23-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include "symbols.h"
@@ -131,14 +152,15 @@ declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
     } /* while 1 */
 
     return 1;
-    
+
 } /* declare_compiletime */
 
 
 /*
  * parse_decl_name
  *
- * Common parsing logic for names to be declared.
+ * Common parsing logic for names to be declared
+ * (quote-level QL_NAME).
  */
 int
 parse_decl_name (parse_ctx_t pctx, scopectx_t scope,
@@ -261,7 +283,7 @@ declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
             expr_signal(ctx, STC__DELIMEXP, ",");
             return 0;
         }
-        
+
     } /* while 1 */
 
     return 1;
@@ -306,11 +328,9 @@ declare_label (parse_ctx_t pctx, scopectx_t scope)
 } /* declare_label */
 
 /*
- * declare_psect
+ * psect_attr
  *
- * Declare a PSECT.
- *
- * PSECT OWN|GLOBAL|PLIT|CODE|NODEFAULT = name { (attribute,...) }
+ * Handle the common attributes for a psect.
  */
 static int
 psect_attr (parse_ctx_t pctx, unsigned int *attrp)
@@ -347,6 +367,13 @@ psect_attr (parse_ctx_t pctx, unsigned int *attrp)
     return 1;
 }
 
+/*
+ * declare_psect
+ *
+ * Declare a PSECT.
+ *
+ * PSECT OWN|GLOBAL|PLIT|CODE|NODEFAULT = name { (attribute,...) }
+ */
 static int
 declare_psect (expr_ctx_t ctx, scopectx_t scope)
 {
@@ -411,6 +438,11 @@ declare_psect (expr_ctx_t ctx, scopectx_t scope)
 
 } /* declare_psect */
 
+/*
+ * attr_psect
+ *
+ * Parse the PSECT attribute.
+ */
 static int
 attr_psect (expr_ctx_t ctx, name_t **psnp)
 {
@@ -441,6 +473,12 @@ attr_psect (expr_ctx_t ctx, name_t **psnp)
 
 } /* attr_psect */
 
+/*
+ * attr_allocunit
+ *
+ * Parse an allocation-unit attribute.  Only those allocation-unit
+ * keywords that are supported for the target machine will be recognized.
+ */
 static int
 attr_allocunit (expr_ctx_t ctx, int *valp)
 {
@@ -464,7 +502,8 @@ attr_allocunit (expr_ctx_t ctx, int *valp)
         *valp = 1 << which;
     }
     return 1;
-}
+
+} /* attr_allocunit */
 
 
 /*
@@ -535,7 +574,7 @@ plit_items (expr_ctx_t ctx, int defau) {
         }
     }
     return ivlist;
-    
+
 } /* plit_items */
 
 /*
@@ -565,6 +604,7 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
     if (ivlist == 0) {
         return 0;
     }
+    // For PLITs, insert the fullword count at the beginning
     if (curlt == LEXTYPE_KWD_PLIT) {
         unsigned long size;
         unsigned int padding;
@@ -602,9 +642,15 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
     }
 
     return np;
-    
+
 } /* define_plit */
 
+/*
+ * attr_extension
+ *
+ * Parse the sign-extension attribute, for those machines that
+ * support it.
+ */
 static int
 attr_extension (expr_ctx_t ctx, int *signext)
 {
@@ -624,8 +670,14 @@ attr_extension (expr_ctx_t ctx, int *signext)
     }
     *signext = which;
     return 1;
-}
 
+} /* attr_extension */
+
+/*
+ * attr_align
+ *
+ * Parse the ALIGN(n) attribute.
+ */
 static int
 attr_align (expr_ctx_t ctx, int *valp)
 {
@@ -661,8 +713,14 @@ attr_align (expr_ctx_t ctx, int *valp)
         expr_signal(ctx, STC__DELIMEXP, ")");
     }
     return 1;
-}
 
+} /* attr_align */
+
+/*
+ * attr_initial
+ *
+ * Handle the INITIAL attribute.
+ */
 static int
 attr_initial (expr_ctx_t ctx, int defau, initval_t **ivlistp)
 {
@@ -673,8 +731,14 @@ attr_initial (expr_ctx_t ctx, int defau, initval_t **ivlistp)
     }
     *ivlistp = plit_items(ctx, defau);
     return 1;
-}
 
+} /* attr_initial */
+
+/*
+ * attr_field
+ *
+ * Parse the FIELD attribute, accepting one or more field or field-set names.
+ */
 static int
 attr_field (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
 {
@@ -719,6 +783,11 @@ attr_field (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
 
 } /* attr_field */
 
+/*
+ * attr_preset
+ *
+ * Parse the PRESET attribute.
+ */
 static int
 attr_preset (expr_ctx_t ctx, name_t *np, seg_t *seg,
              data_attr_t *attr, initval_t **ivlistp)
@@ -780,9 +849,21 @@ attr_preset (expr_ctx_t ctx, name_t *np, seg_t *seg,
 
     *ivlistp = ivlist;
     return 1;
-    
+
 } /* attr_preset */
 
+/*
+ * handle_data_attrs
+ *
+ * Common routine for parsing all attributes on a data declaration.
+ * The 'saw_X' variables are used to track which attributes are allowed
+ * or seen: if negative, they are not allowed for the type of symbol being
+ * declared; if zero, the attribute hasn't been seen yet; if positive, the
+ * attribute has been seen.  Some of them get modified as attributes appear,
+ * since some attributes preclude others.
+ *
+ * XXX This is pretty ugly, consider redesigning.
+ */
 static int
 handle_data_attrs (expr_ctx_t ctx, scopectx_t scope, decltype_t dt,
                    seg_t *seg, data_attr_t *attr, name_t *np, int is_bind) {
@@ -935,6 +1016,11 @@ handle_data_attrs (expr_ctx_t ctx, scopectx_t scope, decltype_t dt,
 
 } /* handle_data_attrs */
 
+/*
+ * delcare_data
+ *
+ * Common parsing routine for all non-LITERAL data declarations.
+ */
 static int
 declare_data (expr_ctx_t ctx, scopectx_t scope, lextype_t lt, decltype_t dt)
 {
@@ -1038,10 +1124,13 @@ declare_data (expr_ctx_t ctx, scopectx_t scope, lextype_t lt, decltype_t dt)
     }
 
     return 1;
-}
+
+} /* declare_data */
 
 /*
  * declare_bind
+ *
+ * Common parsing for BIND data declarations.
  */
 static int
 declare_bind (expr_ctx_t ctx, scopectx_t scope, decltype_t dt)
@@ -1124,11 +1213,14 @@ declare_bind (expr_ctx_t ctx, scopectx_t scope, decltype_t dt)
     }
 
     return 1;
-    
+
 } /* declare_bind */
 
 /*
  * declare_map
+ *
+ * MAP declarations.  MAP simply applies a different set of attributes
+ * to an already-declared name.
  */
 static int
 declare_map (expr_ctx_t ctx, scopectx_t scope)
@@ -1177,13 +1269,15 @@ declare_map (expr_ctx_t ctx, scopectx_t scope)
     }
 
     return 1;
-    
+
 } /* declare_map */
 
 /*
  * parse_formals
  *
- * Parse a routine's formal parameter list.
+ * Parse a routine's formal parameter list.  Builds a scope
+ * for the parameter names and namereflists to track the positions
+ * of the input and output parameters.
  *
  * Returns: 1 on success
  *          0 on failure
@@ -1247,9 +1341,14 @@ parse_formals (expr_ctx_t ctx, scopectx_t curscope,
     parser_scope_end(pctx);
 
     return (which == 0);
-    
+
 } /* parse_formals */
 
+/*
+ * handle_routine_attrs
+ *
+ * Parse all attributes for routines.
+ */
 static int
 handle_routine_attrs (expr_ctx_t ctx, scopectx_t scope,
                       decltype_t dt, seg_t *seg, routine_attr_t *attr,
@@ -1299,11 +1398,13 @@ handle_routine_attrs (expr_ctx_t ctx, scopectx_t scope,
     if (saw_psect > 0) seg_static_psect_set(expr_stg_ctx(ctx), seg, psect);
 
     return which;
-    
+
 } /* handle_routine_attrs */
 
 /*
  * declare_routine
+ *
+ * Handles all ROUTINE declarations, including BIND ROUTINEs.
  */
 static int
 declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
@@ -1446,6 +1547,8 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
 
 /*
  * declare_require
+ *
+ * Handles REQUIRE "declarations".
  */
 static int
 declare_require (parse_ctx_t pctx)
@@ -1468,6 +1571,8 @@ declare_require (parse_ctx_t pctx)
 
 /*
  * undeclare
+ *
+ * Handles UNDECLAREs.
  */
 static int
 undeclare (parse_ctx_t pctx, scopectx_t scope)
@@ -1489,11 +1594,14 @@ undeclare (parse_ctx_t pctx, scopectx_t scope)
         log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__DELIMEXP, ";");
     }
     return 1;
-    
+
 } /* undeclare */
 
 /*
  * BUILTIN
+ *
+ * Parses BUILTIN declarations, making the builtin name visible in
+ * the current scope.
  */
 static int
 declare_builtin (parse_ctx_t pctx, scopectx_t scope)
@@ -1583,11 +1691,14 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
     attr.value = machine_scalar_units(mach);
     litsym_declare(kwdscope, &bpdsc[3], SYMSCOPE_LOCAL, &attr, 0);
     structures_init(ctx);
- 
+
 } /* declarations_init */
 
 /*
  * parse_declaration
+ *
+ * Common routine for parsing declarations that are allowed inside a
+ * block (i.e., not MODULEs).
  */
 int
 parse_declaration (expr_ctx_t ctx)
@@ -1601,14 +1712,15 @@ parse_declaration (expr_ctx_t ctx)
                                LEXTYPE_DCL_FORWARD };
     static decltype_t  dtypes[] = { DCL_NORMAL, DCL_GLOBAL, DCL_EXTERNAL, DCL_FORWARD };
     static lextype_t allowed[3][4] = {
-        { LEXTYPE_DCL_LITERAL, LEXTYPE_DCL_ROUTINE, LEXTYPE_DCL_REGISTER, LEXTYPE_DCL_BIND },
+        { LEXTYPE_DCL_LITERAL, LEXTYPE_DCL_ROUTINE, LEXTYPE_DCL_REGISTER,
+          LEXTYPE_DCL_BIND },
         { LEXTYPE_DCL_LITERAL, LEXTYPE_DCL_ROUTINE, LEXTYPE_DCL_REGISTER },
         { LEXTYPE_DCL_ROUTINE }
     };
     static int count[3] = { 4, 3, 1 };
 
     parser_punctclass_set(pctx, PUNCT_COMMASEP_NOGROUP, LEXTYPE_DELIM_COMMA);
-    
+
     which = parser_expect_oneof(pctx, QL_NORMAL, pfx, 3, 0, 1);
     if (which >= 0) {
         int i;
@@ -1694,6 +1806,8 @@ parse_declaration (expr_ctx_t ctx)
 
 /*
  * declare_module
+ *
+ * Parses a MODULE declaration.
  */
 int
 declare_module (expr_ctx_t ctx)
@@ -1731,7 +1845,7 @@ declare_module (expr_ctx_t ctx)
     }
 
     // XXX need to handle module-switches here
-    
+
     if (!expr_parse_block(ctx, &blkexp)) {
         expr_signal(ctx, STC__SYNTAXERR);
         return 0;

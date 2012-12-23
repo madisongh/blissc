@@ -1,11 +1,21 @@
-//
-//  execfuncs.c
-//  blissc
-//
-//  Created by Matthew Madison on 12/11/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			execfuncs.c
+ *
+ *	Abstract:		Executable functions.
+ *
+ *  Module description:
+ *		This module implements the dispatch mechanism for
+ *		handling executable function calls, as well as
+ *		implementing the standard functions.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		23-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdio.h>
 #include "execfuncs.h"
 #include "expression.h"
@@ -15,9 +25,11 @@
 
 typedef int (*compare_fn)(long, long);
 static int cmplss (long val1, long val2) { return (val1 < val2); }
-static int cmplssu (long val1, long val2) { return ((unsigned long) val1 < (unsigned long)val2); }
+static int cmplssu (long val1, long val2) {
+	return ((unsigned long) val1 < (unsigned long)val2); }
 static int cmpgtr (long val1, long val2) { return (val1 > val2); }
-static int cmpgtru (long val1, long val2) { return ((unsigned long) val1 > (unsigned long) val2); }
+static int cmpgtru (long val1, long val2) {
+	return ((unsigned long) val1 > (unsigned long) val2); }
 
 static expr_node_t *execfunc_MINMAX(expr_ctx_t ctx, void *fctx,
                                     name_t *fnp, exprseq_t *arglist, textpos_t curpos);
@@ -99,7 +111,7 @@ function_bind (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         expr_signal(ctx, STC__INTCMPERR, "function_bind");
         return 0;
     }
-    
+
     exprseq_init(&args);
     if (!parse_func_args(ctx, &args)) {
         expr_signal(ctx, STC__SYNTAXERR);
@@ -149,7 +161,7 @@ execfunc_define (scopectx_t scope, funcdef_t *funcdef, textpos_t pos)
     ndef.name = funcdef->name;
     ndef.namelen = funcdef->namelen;
     return name_declare(scope, &ndef, pos, funcdef, sizeof(funcdef_t), 0);
-    
+
 } /* execfunc_define */
 
 /*
@@ -238,7 +250,7 @@ execfunc_MINMAX (expr_ctx_t ctx, void *fctx, name_t *fnp, exprseq_t *arglist,
     }
 
     return result;
-    
+
 } /* func_MINMAX */
 
 /*
@@ -247,7 +259,8 @@ execfunc_MINMAX (expr_ctx_t ctx, void *fctx, name_t *fnp, exprseq_t *arglist,
  * SIGN() function.
  */
 static expr_node_t *
-execfunc_SIGN (expr_ctx_t ctx, void *fctx, name_t *fnp, exprseq_t *arglist, textpos_t curpos)
+execfunc_SIGN (expr_ctx_t ctx, void *fctx, name_t *fnp,
+			   exprseq_t *arglist, textpos_t curpos)
 {
     expr_node_t *result = exprseq_head(arglist);
 
@@ -272,7 +285,8 @@ execfunc_SIGN (expr_ctx_t ctx, void *fctx, name_t *fnp, exprseq_t *arglist, text
  * ABS() function.
  */
 static expr_node_t *
-execfunc_ABS (expr_ctx_t ctx, void *fctx, name_t *fnp, exprseq_t *arglist, textpos_t curpos)
+execfunc_ABS (expr_ctx_t ctx, void *fctx, name_t *fnp,
+			  exprseq_t *arglist, textpos_t curpos)
 {
     expr_node_t *result = exprseq_head(arglist);
     machinedef_t *mach = expr_machinedef(ctx);

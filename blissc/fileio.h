@@ -1,14 +1,16 @@
-//
-//  fileio.h
-//  blissc
-//
-//  Created by Matthew Madison on 10/22/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_fileio_h
-#define blissc_fileio_h
-
+#ifndef fileio_h__
+#define fileio_h__
+/*
+ *++
+ *	File:			fileio.h
+ *
+ *	Abstract:		File I/O definitions.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 #include <stdio.h>
 #include "logging.H"
 
@@ -26,4 +28,4 @@ void file_close(filectx_t ctx);
 char *file_getname(filectx_t ctx);
 int file_readline(filectx_t ctx, char *buf, size_t bufsiz, size_t *len);
 
-#endif
+#endif /* fileio_h__ */

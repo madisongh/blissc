@@ -1,11 +1,30 @@
-//
-//  expression.c
-//  blissc
-//
-//  Created by Matthew Madison on 11/1/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			expression.c
+ *
+ *	Abstract:		Expression parsing
+ *
+ *  Module description:
+ *		This module is the center of expression handling.  It
+ *		sits above the lexical-processing layer (the parser module
+ *		and friends), and cooperates with the symbol, storage, and
+ *		declaration modules to build the equivalent of an Abstract
+ *		Syntax Tree (AST) for a module.
+ *
+ *		Expressions are represented by the expr_node_t type, which
+ *		holds exactly one expression of any valid expression type.
+ *		Depending on the type, a given expression node may reference
+ *		one or more other expressions; for example, a block expression
+ *		contains an exprseq_t listing the expressions contained in
+ *		the block.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		22-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include "expression.h"
@@ -145,6 +164,15 @@ static expr_node_t *parse_codecomment(expr_ctx_t ctx, lextype_t lt, lexeme_t *le
 static int get_ctce(expr_ctx_t ctx, long *valp);
 static void reduce_op_expr(expr_ctx_t ctx, expr_node_t **expp);
 
+/*
+ * -- Miscellaneous utility functions --
+ */
+
+/*
+ * expr_signal
+ *
+ * Convenience function for calling log_signal.
+ */
 void
 expr_signal (expr_ctx_t ctx, statcode_t code, ...)
 {
@@ -152,8 +180,12 @@ expr_signal (expr_ctx_t ctx, statcode_t code, ...)
     va_start(ap, code);
     log_vsignal(ctx->logctx, parser_curpos(ctx->pctx), code, ap);
     va_end(ap);
-}
 
+} /* expr_signal */
+
+/*
+ * Type name functions - for debugging
+ */
 const char *
 exprtype_name (exprtype_t type) {
     if (type >= EXPTYPE_COUNT) {
@@ -170,16 +202,16 @@ oper_name (optype_t op) {
     return oper_names[op];
 } /* oper_name */
 
-static int op_is_unary (optype_t op) {
-    return (operinfo[op].isr2l & 2) != 0;
-}
-static int op_is_r2l (optype_t op) {
-    return (operinfo[op].isr2l & 1) != 0;
-}
-static int op_priority (optype_t op) {
-    return operinfo[op].priority;
-}
+static int op_is_unary (optype_t op) { return (operinfo[op].isr2l & 2) != 0; }
+static int op_is_r2l (optype_t op) { return (operinfo[op].isr2l & 1) != 0; }
+static int op_priority (optype_t op) { return operinfo[op].priority; }
 
+/*
+ * check_unary_op
+ *
+ * If a lextype is for a unary operator (+, -, NOT), returns
+ * 1 and maps the lextype to the operator type.
+ */
 static int
 check_unary_op (lextype_t lt, optype_t *opp)
 {
@@ -193,8 +225,14 @@ check_unary_op (lextype_t lt, optype_t *opp)
         return 1;
     }
     return 0;
-}
 
+} /* check_unary_op */
+
+/*
+ * expr_node_alloc
+ *
+ * Allocates an expression node.
+ */
 expr_node_t *
 expr_node_alloc (expr_ctx_t ctx, exprtype_t type, textpos_t pos)
 {
@@ -221,6 +259,12 @@ expr_node_alloc (expr_ctx_t ctx, exprtype_t type, textpos_t pos)
 
 } /* expr_node_alloc */
 
+/*
+ * expr_node_free
+ *
+ * Frees an expression node and any expressions the
+ * node references.
+ */
 void
 expr_node_free (expr_ctx_t ctx, expr_node_t *node)
 {
@@ -264,7 +308,6 @@ expr_node_free (expr_ctx_t ctx, expr_node_t *node)
             exprseq_free(ctx, expr_rtn_inargs(node));
             exprseq_free(ctx, expr_rtn_outargs(node));
             break;
-
         case EXPTYPE_CTRL_CASE: {
             expr_node_t **actarray = expr_case_cases(node);
             long which, lo, hi;
@@ -322,6 +365,12 @@ expr_node_free (expr_ctx_t ctx, expr_node_t *node)
 
 } /* expr_node_free */
 
+/*
+ * expr_node_copy
+ *
+ * Copy-constructor for an expression node, which copies
+ * the node's contents.
+ */
 expr_node_t *
 expr_node_copy (expr_ctx_t ctx, expr_node_t *node)
 {
@@ -378,7 +427,6 @@ expr_node_copy (expr_ctx_t ctx, expr_node_t *node)
             exprseq_copy(ctx, expr_rtn_inargs(dst), expr_rtn_inargs(node));
             exprseq_copy(ctx, expr_rtn_outargs(dst), expr_rtn_outargs(node));
             break;
-
         case EXPTYPE_CTRL_CASE: {
             expr_node_t **actarray = expr_case_cases(node);
             expr_node_t **dstarray;
@@ -427,7 +475,7 @@ expr_node_copy (expr_ctx_t ctx, expr_node_t *node)
             expr_exit_value_set(dst, expr_node_copy(ctx, expr_exit_value(node)));
             expr_exit_label_set(dst, expr_exit_label(node));
             break;
-            
+
         case EXPTYPE_PRIM_LIT:
             if (expr_litstring(node) != 0) {
                 expr_litstring_set(dst, string_copy(0, expr_litstring(node)));
@@ -448,6 +496,11 @@ expr_node_copy (expr_ctx_t ctx, expr_node_t *node)
 
 } /* expr_node_copy */
 
+/*
+ * exprseq_free
+ *
+ * Frees a sequence of expressions.
+ */
 void
 exprseq_free (expr_ctx_t ctx, exprseq_t *seq) {
     expr_node_t *exp;
@@ -461,6 +514,11 @@ exprseq_free (expr_ctx_t ctx, exprseq_t *seq) {
 
 } /* exprseq_free */
 
+/*
+ * exprseq_copy
+ *
+ * Copies an expression sequence.
+ */
 void
 exprseq_copy (expr_ctx_t ctx, exprseq_t *dst, exprseq_t *src)
 {
@@ -476,6 +534,12 @@ exprseq_copy (expr_ctx_t ctx, exprseq_t *dst, exprseq_t *src)
 
 } /* exprseq_copy */
 
+/*
+ * lextype_to_optype
+ *
+ * Translates a lexeme type to an operator type,
+ * or OPER_NONE if the lextype does not map to an operator.
+ */
 static optype_t
 lextype_to_optype (lextype_t lt)
 {
@@ -483,8 +547,16 @@ lextype_to_optype (lextype_t lt)
         return OPER_NONE;
     }
     return opmap[lt-LEXTYPE_OP_MIN];
-}
 
+} /* lextype_to_optype */
+
+/*
+ * parse_plit
+ *
+ * Calls define_plit to parse a PLIT or UPLIT, then wraps the
+ * resulting data segment (which is given a tempname) into an
+ * expression node.
+ */
 static expr_node_t *
 parse_plit (expr_ctx_t ctx, lextype_t curlt, lexeme_t *lex)
 {
@@ -494,8 +566,6 @@ parse_plit (expr_ctx_t ctx, lextype_t curlt, lexeme_t *lex)
 
     plitname = define_plit(ctx, curlt, lexeme_textpos_get(lex));
     if (plitname == 0) {
-        /* 
-         rror condition */
         return 0;
     }
     exp = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG, parser_curpos(pctx));
@@ -505,6 +575,13 @@ parse_plit (expr_ctx_t ctx, lextype_t curlt, lexeme_t *lex)
 
 } /* parse_plit */
 
+/*
+ * expr_dispatch_register
+ *
+ * Registers a handler for a NAME lextype or an expression keyword
+ * type.  Other modules call this routine to register their handlers,
+ * which get invoked from expr_parse().
+ */
 void
 expr_dispatch_register (expr_ctx_t ctx, lextype_t lt, expr_dispatch_fn fn)
 {
@@ -517,9 +594,15 @@ expr_dispatch_register (expr_ctx_t ctx, lextype_t lt, expr_dispatch_fn fn)
         return;
     }
     ctx->dispatchers[lt-LEXTYPE_EXPKWD_MIN] = fn;
-}
 
-expr_dispatch_fn
+} /* expr_dispatch_register */
+
+/*
+ * lookup_dispatcher
+ *
+ * Finds the dispatcher for a given lexeme type.
+ */
+static expr_dispatch_fn
 lookup_dispatcher (expr_ctx_t ctx, lextype_t lt)
 {
     if (lt >= LEXTYPE_NAME_MIN && lt <= LEXTYPE_NAME_MAX) {
@@ -529,8 +612,14 @@ lookup_dispatcher (expr_ctx_t ctx, lextype_t lt)
         return ctx->dispatchers[lt-LEXTYPE_EXPKWD_MIN];
     }
     return 0;
-}
 
+} /* lookup_dispatcher */
+
+/*
+ * expr_init
+ *
+ * Module initialization.
+ */
 expr_ctx_t
 expr_init (parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope)
 {
@@ -582,9 +671,12 @@ expr_init (parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope)
     execfunc_init(ectx, kwdscope);
 
     return ectx;
-    
+
 } /* expr_init */
 
+/*
+ * Getter/setters for the expression context
+ */
 parse_ctx_t expr_parse_ctx (expr_ctx_t ctx) { return ctx->pctx; }
 namectx_t expr_namectx (expr_ctx_t ctx) { return ctx->namectx; }
 stgctx_t expr_stg_ctx (expr_ctx_t ctx) { return ctx->stg; }
@@ -592,6 +684,12 @@ machinedef_t *expr_machinedef (expr_ctx_t ctx) { return ctx->mach; }
 lexctx_t expr_lexmemctx (expr_ctx_t ctx) { return ctx->lctx; }
 logctx_t expr_logctx (expr_ctx_t ctx) { return ctx->logctx; }
 
+/*
+ * expr_push_routine
+ *
+ * Pushes a routine on the routine stack.  Provides a mechanism
+ * for walking back through nested routine definitions.
+ */
 void
 expr_push_routine (expr_ctx_t ctx, name_t *np)
 {
@@ -601,8 +699,14 @@ expr_push_routine (expr_ctx_t ctx, name_t *np)
     } else {
         namereflist_inshead(&ctx->routinestack, ref);
     }
-}
 
+} /* expr_push_routine */
+
+/*
+ * expr_pop_routine
+ *
+ * Pops a routine off the routine stack.
+ */
 void
 expr_pop_routine (expr_ctx_t ctx)
 {
@@ -612,8 +716,15 @@ expr_pop_routine (expr_ctx_t ctx)
     } else {
         nameref_free(ctx->namectx, ref);
     }
-}
 
+} /* expr_pop_routine */
+
+/*
+ * expr_current_routine
+ *
+ * Returns a pointer to the name of the routine
+ * currently being parsed (or NULL if there is none).
+ */
 name_t *
 expr_current_routine (expr_ctx_t ctx)
 {
@@ -622,13 +733,19 @@ expr_current_routine (expr_ctx_t ctx)
         return 0;
     }
     return ref->np;
-}
+
+} /* expr_current_routine */
 
 /*
  * parse_block
  *
- * Can be preceded by CODECOMMENT 'qstring':
- * Can be preceded by label:...
+ * Parses a block from its opener (either BEGIN or left
+ * parenthesis).  The caller is expected to pass in the
+ * CODECOMMENT string and list of labels, if they were
+ * present.
+ *
+ * { CODECOMMENT 'qstring'{,...}: }
+ * {label: ...}
  * BEGIN or (
  *   {declarations or nothing}
  *   {actions or nothing}
@@ -652,9 +769,9 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
     lextype_t closer = (curlt == LEXTYPE_EXP_DELIM_BEGIN ?
                         LEXTYPE_EXP_DELIM_END : LEXTYPE_DELIM_RPAR);
 
-
     // Set a special value for the labels so that
-    // LEAVE processing will know that the labels are OK
+    // LEAVE processing will know that the labels are referring
+    // to a block we are currently in the middle of parsing
     for (ref = namereflist_head(labels); ref != 0; ref = ref->tq_next) {
         if (ref->np != 0 && name_value_pointer(ref->np) == 0) {
             name_value_pointer_set(ref->np, fake_label_ptr);
@@ -662,7 +779,6 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
     }
 
     parser_punctclass_set(pctx, PUNCT_SEMISEP_NOGROUP, LEXTYPE_DELIM_SEMI);
-
     lt = parser_next(pctx, QL_NORMAL, &lex);
 
     exprseq_init(&seq);
@@ -673,6 +789,8 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
             lexeme_free(ctx->lctx, lex);
             break;
         } else if (lt >= LEXTYPE_DCL_MIN && lt <= LEXTYPE_DCL_MAX) {
+			// Declarations are allowed only if we haven't
+			// yet seen an expressions in the block
             if (exprseq_length(&seq) != 0) {
                 expr_signal(ctx, STC__INTCMPERR, "parse_block");
                 lexeme_free(ctx->lctx, lex);
@@ -697,9 +815,12 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
             endpos = parser_curpos(pctx);
             break;
         }
+        // The last expression in a block is its value
+        // (as far as we know at compile time)
         valexp = exp;
         exprseq_instail(&seq, exp);
         lt = parser_next(pctx, QL_NORMAL, &lex);
+        // Semicolon separator also discards the value
         if (lt == LEXTYPE_DELIM_SEMI) {
             valexp = 0;
             lexeme_free(ctx->lctx, lex);
@@ -707,6 +828,12 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
         }
     }
 
+	// Check for the degenerate cases:
+	//	1. empty block ==  NOOP
+	//	2. block with single primary expression
+	//  along with no labels, no declarations, and no codecomment
+	//  In these cases, we can eliminate the block and just
+	//  return the NOOP or primary expression.
     if (scope == 0 && codecomment == 0 && namereflist_empty(labels)) {
         if (exprseq_length(&seq) == 0) {
             *expp = expr_node_alloc(ctx, EXPTYPE_NOOP, endpos);
@@ -730,8 +857,8 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
     }
     exp = expr_node_alloc(ctx, EXPTYPE_PRIM_BLK, endpos);
     expr_blk_scope_set(exp, scope);
-    
-    exprseq_set(expr_blk_seq(exp), &seq);
+
+    exprseq_append(expr_blk_seq(exp), &seq);
     expr_blk_valexp_set(exp, valexp);
     expr_has_value_set(exp, (valexp != 0));
     expr_blk_codecomment_set(exp, codecomment);
@@ -749,6 +876,13 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
 
 } /* parse_block */
 
+/*
+ * parse_leave
+ *
+ * LEAVE label {WITH expression}
+ *
+ * Forms an exit expression for leaving the labelled block.
+ */
 static expr_node_t *
 parse_leave (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
 {
@@ -761,6 +895,9 @@ parse_leave (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
         expr_signal(ctx, STC__EXPLABEL);
         return 0;
     }
+    // The label will be pointing to our 'fake' value if it's
+    // a block we are currently parsing (and thus eligible to
+    // be referenced in a LEAVE).
     lp = lexeme_ctx_get(lex);
     if (lp == 0 || name_value_pointer(lp) != fake_label_ptr) {
         expr_signal(ctx, STC__INVLABEL, lexeme_text(lex));
@@ -779,6 +916,14 @@ parse_leave (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
 
 } /* parse_leave */
 
+/*
+ * parse_exitloop
+ *
+ * EXITLOOP {expression}
+ *
+ * Forms an exit expression for leaving the innermost loop
+ * currently being parsed.
+ */
 static expr_node_t *
 parse_exitloop (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
 {
@@ -797,6 +942,14 @@ parse_exitloop (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
 
 } /* parse_exitloop */
 
+/*
+ * parse_return
+ *
+ * RETURN {expression}
+ *
+ * Forms a return expression for returning from the current
+ * routine.
+ */
 static expr_node_t *
 parse_return (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
 {
@@ -833,8 +986,17 @@ parse_return (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
     expr_has_value_set(exp, (valexp != 0));
     return exp;
 
-} /* parse_leave */
+} /* parse_return */
 
+/*
+ * parse_wu_loop
+ *
+ * WHILE expression DO expression
+ * UNTIL expression DO expression
+ *
+ * Forms a LOOPWU expression to represent the while or until
+ * loop, indicating that the test precedes the first iteration.
+ */
 static expr_node_t *
 parse_wu_loop (expr_ctx_t ctx, lextype_t opener, lexeme_t *curlex)
 {
@@ -867,6 +1029,15 @@ parse_wu_loop (expr_ctx_t ctx, lextype_t opener, lexeme_t *curlex)
 
 } /* parse_wu_loop */
 
+/*
+ * parse_do_loop
+ *
+ * DO expression WHILE expression
+ * DO expression UNTIL expression
+ *
+ * Forms a LOOPWU expression node to represent the while or
+ * until loop, indicating post-test.
+ */
 static expr_node_t *
 parse_do_loop (expr_ctx_t ctx, lextype_t opener, lexeme_t *curlex)
 {
@@ -907,14 +1078,18 @@ parse_do_loop (expr_ctx_t ctx, lextype_t opener, lexeme_t *curlex)
 } /* parse_do_loop */
 
 /*
- * parse_arglist
+ * expr_parse_arglist
+ *
+ * Parses the actual parameters for a routine call (ordinary
+ * or general).
  *
  * NB: assumes that we've just seen the opener - left paren
  * for ordinary calls, routine-address (but NOT the comma)
  * for general calls
  *
- * Assumes the routine-designator expression is at the top
- * of the expr tree
+ * rtn is the routine-designator expression
+ *
+ * If successful, a RTNCALL expression node is returned.
  */
 expr_node_t *
 expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
@@ -930,6 +1105,8 @@ expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
         while (1) {
+        	// Handle %REF() calls - storing the expression and pushing its
+        	// address into the argument list
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_PCTREF, 0, 1)) {
                 scopectx_t scope = parser_scope_get(pctx);
                 textpos_t pos = parser_curpos(pctx);
@@ -966,8 +1143,8 @@ expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
                     expr_seg_name_set(arg, tmpsym);
                 }
             } else if (!expr_parse_expr(ctx, &arg)) {
+            	// Use a zero literal expression for missing/erroneous parameters
                 arg = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
-                // null argument = zero literal
             }
 
             exprseq_instail((doing_outargs ? &outargs : &inargs), arg);
@@ -990,20 +1167,27 @@ expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
                 parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
                 return 0;
             }
-            
+
         } /* argument loop */
     }
 
-    // validate the arguments against the routine declaration, if we can
-    // Insert the routine-call into the expression tree
+    // XXX validate the arguments against the routine declaration, if we can
+
     exp = expr_node_alloc(ctx, EXPTYPE_PRIM_RTNCALL, parser_curpos(pctx));
     expr_rtnaddr_set(exp, rtn);
-    exprseq_set(expr_rtn_inargs(exp), &inargs);
-    exprseq_set(expr_rtn_outargs(exp), &outargs);
+    exprseq_append(expr_rtn_inargs(exp), &inargs);
+    exprseq_append(expr_rtn_outargs(exp), &outargs);
     return exp;
 
 } /* parse_arglist */
 
+/*
+ * lex_to_expr
+ *
+ * Converts a numeric literal lexeme or a "short" string lexeme (i.e.,
+ * a string whose length fits in a fullword) into a PRIM_LIT expression
+ * node.  If the lexeme is neither NUMERIC or STRING, returns 0.
+ */
 static expr_node_t *
 lex_to_expr (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 {
@@ -1038,6 +1222,21 @@ lex_to_expr (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 
 } /* lex_to_expr */
 
+/*
+ * parse_fldref
+ *
+ * Looks for the opening angle bracket of a field reference, and
+ * parses it if present.
+ *
+ * primary-expr OR executable-function-call <{args}>
+ * Arguments, if present, are:
+ *  P - starting bit position
+ *	S - size (number of bits)
+ *  E - sign-extension indicator (0=unsigned, 1=signed)
+ *
+ * Returns 1 on success, 0 otherwise.  If successful, a pointer to
+ * the resulting FLDREF expression node is stored in expp.
+ */
 static int
 parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
 
@@ -1060,6 +1259,7 @@ parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
         expr_signal(ctx, STC__EXPREXP);
         size = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
     }
+	// Sign-extension must be a compile-time constant expression
     if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
         if (!get_ctce(ctx, &signext) || (signext != 0 && signext != 1)) {
             expr_signal(ctx, STC__EXPCTCE);
@@ -1070,6 +1270,16 @@ parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
         expr_signal(ctx, STC__DELIMEXP, ">");
     }
 
+	// Handle degenerate cases:
+	//	1. If the expression being field-referenced is a literal, do
+	//     the field-extraction now.
+	//  2. If the expression being field-referenced is a segment, and
+	//     the position aligns to an addressable boundary, and
+	//     the size is an even multiple of addressable-unit bits,
+	// 	   stash the offset and number of AUs directly into the
+	//	   segment expression.
+	//  We can only do this if the position and size fields are CTCEs.
+	//
     if (expr_type(pos) == EXPTYPE_PRIM_LIT && expr_type(size) == EXPTYPE_PRIM_LIT) {
         machinedef_t *mach = parser_get_machinedef(pctx);
 
@@ -1082,7 +1292,8 @@ parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
             expr_node_free(ctx, size);
             return 1;
         }
-        if (expr_litval(pos) % machine_unit_bits(mach) == 0 &&
+        if (expr_type(*expp) == EXPTYPE_PRIM_SEG &&
+            expr_litval(pos) % machine_unit_bits(mach) == 0 &&
             expr_litval(size) == machine_scalar_bits(mach)) {
             expr_seg_offset_set(*expp, expr_seg_offset(*expp) +
                                 expr_litval(pos) / machine_unit_bits(mach));
@@ -1106,6 +1317,15 @@ parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
 
 } /* parse_fldref */
 
+/*
+ * parse_codecomment
+ *
+ * CODECOMMENT 'string'{,...}: block-expression
+ *
+ * Parses a codecomment, which must be followed by a block.
+ * This results in a block expression node with the codecomment
+ * annotation attached to it.
+ */
 static expr_node_t *
 parse_codecomment (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
 {
@@ -1146,8 +1366,16 @@ parse_codecomment (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
         return 0;
     }
     return exp;
-}
 
+} /* parse_codecomment */
+
+/*
+ * parse_primary
+ *
+ * Parses a primary-expression that isn't automatically
+ * handled through the expression binder: blocks and literals.
+ * The expression binder handles segment names.
+ */
 static expr_node_t *
 parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 {
@@ -1196,6 +1424,7 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         return exp;
     }
 
+	// Any primary can be followed by (...) to become a routine-call.
     if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
         expr_node_t *rtncall = expr_parse_arglist(ctx, exp);
         if (rtncall == 0) {
@@ -1206,7 +1435,8 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         exp = rtncall;
     }
 
-    // XXX Must also check for general routine calls
+    // XXX Must also check for general routine calls, once we
+    //  have linkages worked in
 
     // At this point, 'exp' is the primary expression.
     // If it's not already a field-ref, see if we've got one.
@@ -1218,6 +1448,14 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 
 } /* parse_primary */
 
+/*
+ * find_base_segname
+ *
+ * Searches for the name representing a segment
+ * being referenced in an expression (either a segment
+ * primary or an operator expression that has a segment
+ * primary as an operand).
+ */
 static name_t *
 find_base_segname (expr_node_t *expr)
 {
@@ -1237,27 +1475,46 @@ find_base_segname (expr_node_t *expr)
         np = find_base_segname(expr_op_rhs(expr));
     }
     return np;
-}
 
+} /* find_base_segname */
+
+/*
+ * update_xtce_bits
+ *
+ * Updates the CTCE and LTCE flags in an operator
+ * expression, based on the operator type and the
+ * operands' CTCE/LTCE status.
+ */
 static void
 update_xtce_bits (expr_node_t *opexpr)
 {
     optype_t op = expr_op_type(opexpr);
 
+	// Fetch and assign are never CTCE or LTCE, obviously
     if (op == OPER_FETCH || op == OPER_ASSIGN) {
         expr_is_ctce_set(opexpr, 0);
         expr_is_ltce_set(opexpr, 0);
         return;
     }
+    // For unary operators, inherit from the right-hand side only
+    // (since LHS is null)
     if (op_is_unary(op)) {
         expr_is_ctce_set(opexpr, expr_is_ctce(expr_op_rhs(opexpr)));
         expr_is_ltce_set(opexpr, 0);
         return;
     }
+    // For all other operators, the result is CTCE if both operands are CTCEs.
     if (expr_is_ctce(expr_op_lhs(opexpr)) && expr_is_ctce(expr_op_rhs(opexpr))) {
         expr_is_ctce_set(opexpr, 1);
         return;
     }
+    // If the LHS is LTCE (checked using is_ltce_only here, since
+    // normally CTCEs also qualify as LTCEs):
+    //	- adding or subtracting a CTCE gives an LTCE result
+    //  - address comparison or subtraction with another LTCE
+    //		that is either static and resides in the same psect
+    //      or is external and references the same external symbol
+    //		gives an LTCE result.
     if (expr_is_ltce_only(expr_op_lhs(opexpr))) {
         if ((op == OPER_ADD || op == OPER_SUBTRACT) &&
             expr_is_ctce(expr_op_rhs(opexpr))) {
@@ -1277,6 +1534,9 @@ update_xtce_bits (expr_node_t *opexpr)
             return;
         }
     }
+    // The LRM doesn't explicitly allow this, but we also
+    // check for an LTCE on the right-hand side added to
+    // to CTCE on the left-hand side.
     if (expr_is_ltce_only(expr_op_rhs(opexpr))) {
         if (op == OPER_ADD &&
             expr_is_ctce(expr_op_lhs(opexpr))) {
@@ -1289,6 +1549,9 @@ update_xtce_bits (expr_node_t *opexpr)
 /*
  * parse_operand
  *
+ * Parse an expression that could be an operand
+ * in an operator expression.  That is, it could
+ * be a primary or an executable function call.
  */
 static int
 parse_operand (expr_ctx_t ctx, expr_node_t **expp)
@@ -1338,7 +1601,17 @@ parse_operand (expr_ctx_t ctx, expr_node_t **expp)
 
 } /* parse_operand */
 
-
+/*
+ * parse_op_expr
+ *
+ * Parse an operator expression, given the operator and its operand(s) -
+ * a single RHS operand for unary operators, both LHS and RHS for other
+ * operators.  Note that the operand(s) could be operator expressions
+ * which need to be merged appropriately with the current operator based
+ * on operator precedence and associativity.  That is handled here.
+ *
+ * Control expressions are never permitted to be operands.
+ */
 static expr_node_t *
 parse_op_expr (expr_ctx_t ctx, optype_t curop, expr_node_t *lhs, expr_node_t *rhs)
 {
@@ -1367,6 +1640,9 @@ parse_op_expr (expr_ctx_t ctx, optype_t curop, expr_node_t *lhs, expr_node_t *rh
         expr_signal(ctx, STC__EXPRVALRQ);
     }
 
+    // OK, the operands are valid.  If they are operator expressions,
+    // we need to lok at the precedence and associativity.
+
     // It is invalid to have a unary operator on our right
     // that has lower priority.
     if (expr_is_opexp(rhs) && op_is_unary(expr_op_type(rhs))) {
@@ -1376,11 +1652,19 @@ parse_op_expr (expr_ctx_t ctx, optype_t curop, expr_node_t *lhs, expr_node_t *rh
     }
 
     normal = 1;
+
+    // If the LHS operator expression has higher precedence, or
+    // equal precedence but right-to-left associativity, it should
+    // just stay as the current operator's LHS.  Hence, 'normal'.
+    // Otherwise, we need to make this node the RHS of the
+    // LHS's operator, and put the RHS of the LHS's operator in as
+    // our LHS operand.
+
     if (expr_is_opexp(lhs)) {
         normal = 0;
         op = expr_op_type(lhs);
         if (op_priority(op) > op_priority(curop) ||
-            (op_priority(op) == op_priority(curop) &&op_is_r2l(curop))) {
+            (op_priority(op) == op_priority(curop) && op_is_r2l(curop))) {
             normal = 1;
         }
     }
@@ -1408,6 +1692,23 @@ parse_op_expr (expr_ctx_t ctx, optype_t curop, expr_node_t *lhs, expr_node_t *rh
 
 } /* parse_op_expr */
 
+/*
+ * reduce_op_expr
+ *
+ * This rather lengthy routine recursively descends
+ * into an operator expression's node tree, looking for
+ * simple reductions:
+ *
+ *   CTCE <op> CTCE => value of resulting operation
+ *   <anything> {add/subtract} <literal zero> => <anything>
+ *   <address> {add/subtract} CTCE => adjust offset in the segment expression
+ *   <anything> {times} <literal one> => <anything>
+ *
+ * Be careful about adding any further reductions/improvements
+ * here.  For example, <anything> {times} <literal zero> results
+ * in zero, but <anything> could have side effects that we cannot
+ * legitimately ignore here.
+ */
 void
 reduce_op_expr (expr_ctx_t ctx, expr_node_t **nodep) {
     expr_node_t *node, *lhs, *rhs;
@@ -1638,7 +1939,10 @@ reduce_op_expr (expr_ctx_t ctx, expr_node_t **nodep) {
 } /* reduce_op_expr */
 
 /*
+ * expr_parse_expr
  *
+ * The main entry point for parsing an expression of any
+ * kind.
  */
 int
 expr_parse_expr (expr_ctx_t ctx, expr_node_t **expp)
@@ -1651,6 +1955,9 @@ expr_parse_expr (expr_ctx_t ctx, expr_node_t **expp)
     int status = 0;
 
     lhs = rhs = 0;
+	// Loop to keep building an operator expression
+	// as long as we have valid operands and an operator
+	// to process.
     while (1) {
         if (lhs == 0) {
             if (!parse_operand(ctx, &lhs)) {
@@ -1693,9 +2000,21 @@ expr_parse_expr (expr_ctx_t ctx, expr_node_t **expp)
     }
 
     return status;
-    
+
 } /* parse_expr */
 
+/*
+ * expr_parse_seq
+ *
+ * Parse an expression from a given lexeme sequence.  The
+ * sequence is expected to contain exactly one complete
+ * expression.
+ *
+ * Returns 1 if successful, and sets expp to point to the
+ * resulting expression.  Returns 0 on failure.  In both
+ * cases, the entire lexeme sequence is consumed by this
+ * routine.
+ */
 int
 expr_parse_seq (expr_ctx_t ctx, lexseq_t *seq, expr_node_t **expp)
 {
@@ -1706,7 +2025,7 @@ expr_parse_seq (expr_ctx_t ctx, lexseq_t *seq, expr_node_t **expp)
     parser_insert(pctx, lexeme_create(ctx->lctx, LEXTYPE_MARKER, &nullstr));
     parser_insert_seq(pctx, seq);
     *expp = 0;
-    status =expr_parse_expr(ctx, expp);
+    status = expr_parse_expr(ctx, expp);
     if (status) {
         status = parser_expect(pctx, QL_NORMAL, LEXTYPE_MARKER, 0, 1);
     }
@@ -1717,7 +2036,9 @@ expr_parse_seq (expr_ctx_t ctx, lexseq_t *seq, expr_node_t **expp)
         }
     }
     return status;
-}
+
+} /* expr_parse_seq */
+
 /*
  * expr_parse_ctce
  *
@@ -1897,6 +2218,12 @@ parse_condexp (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
 
 } /* parse_condexp */
 
+/*
+ * get_ctce
+ *
+ * Convenience function for parsing a CTCE and
+ * getting its value.
+ */
 static int
 get_ctce (expr_ctx_t ctx, long *valp)
 {
@@ -1918,6 +2245,13 @@ get_ctce (expr_ctx_t ctx, long *valp)
 
 } /* get_ctce */
 
+/*
+ * expr_initval_add
+ *
+ * Convenience function for adding an initializer based on
+ * an expression.  Literal expressions are converted to literal
+ * initializers.
+ */
 initval_t *
 expr_initval_add (expr_ctx_t ctx, initval_t *ivlist, expr_node_t *exp,
                   unsigned int width)
@@ -1934,7 +2268,8 @@ expr_initval_add (expr_ctx_t ctx, initval_t *ivlist, expr_node_t *exp,
             return initval_expr_add(stg, ivlist, 1, 1, exp, width, 0);
             break;
     }
-}
+
+} /* expr_initval_add */
 
 /*
  * parse_case
@@ -1947,7 +2282,7 @@ expr_initval_add (expr_ctx_t ctx, initval_t *ivlist, expr_node_t *exp,
 static expr_node_t *
 parse_case (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
 {
-    
+
     expr_node_t *caseidx = 0;
     expr_node_t **cases, **unique, *exp;
     expr_node_t *outrange = 0;
@@ -2275,7 +2610,7 @@ parse_select (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
         default:
             break;
     }
-    exprseq_set(expr_sel_selectors(exp), &selseq);
+    exprseq_append(expr_sel_selectors(exp), &selseq);
     expr_has_value_set(exp, every_selector_has_value);
 
     return exp;
@@ -2381,6 +2716,14 @@ parse_incrdecr (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
 
 } /* parse_incrdecr */
 
+/*
+ * expr_parse_ISSTRING
+ *
+ * %ISSTRING(exp,...)
+ *
+ * Sets *allstrp to 1 if all of the arguments are literal string
+ * expressions.
+ */
 int
 expr_parse_ISSTRING (expr_ctx_t ctx, int *allstrp)
 {
@@ -2418,6 +2761,16 @@ expr_parse_ISSTRING (expr_ctx_t ctx, int *allstrp)
 
 } /* expr_parse_ISSTRING */
 
+/*
+ * expr_parse_xCTE
+ *
+ * %CTCE(exp,...)
+ * %LTCE(exp,...)
+ *
+ * Sets *allokp to 1 if all of the arguments are constant
+ * expressions (compile-time if checkltce is zero, link-time
+ * if 1).
+ */
 int
 expr_parse_xCTE (expr_ctx_t ctx, int checkltce, int *allokp)
 {
@@ -2460,6 +2813,11 @@ expr_parse_xCTE (expr_ctx_t ctx, int checkltce, int *allokp)
 
 } /* expr_parse_xCTE */
 
+/*
+ * expr_get_allocation
+ *
+ * Implements the symbol lookup and size check for %ALLOCATION.
+ */
 int
 expr_get_allocation (expr_ctx_t ctx, strdesc_t *name, unsigned int *units)
 {
@@ -2476,6 +2834,12 @@ expr_get_allocation (expr_ctx_t ctx, strdesc_t *name, unsigned int *units)
 
 } /* expr_get_allocation */
 
+/*
+ * expr_parse_SIZE
+ *
+ * Implements the structure lookup and allocation size check for
+ * %SIZE.
+ */
 int
 expr_parse_SIZE (expr_ctx_t ctx, unsigned int *units)
 {
@@ -2498,7 +2862,7 @@ expr_parse_SIZE (expr_ctx_t ctx, unsigned int *units)
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
         expr_signal(ctx, STC__DELIMEXP, ")");
     }
-    
+
     return 1;
 
 } /* expr_parse_SIZE */

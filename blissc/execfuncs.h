@@ -1,14 +1,16 @@
-//
-//  execfuncs.h
-//  blissc
-//
-//  Created by Matthew Madison on 12/11/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
-#ifndef blissc_execfuncs_h
-#define blissc_execfuncs_h
-
+#ifndef execfuncs_h__
+#define execfuncs_h__
+/*
+ *++
+ *	File:			execfuncs.h
+ *
+ *	Abstract:		Definitions for executable functions.
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2012, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 #include "expression.h"
 #include "nametable.h"
 #include "strings.h"
@@ -27,7 +29,9 @@ struct funcdef_s {
     unsigned short      namelen;
     char                name[NAME_SIZE];
 };
+
 typedef struct funcdef_s funcdef_t;
+
 /*
  * FUNCDEF(name, handler, contextptr, argcount, flags)
  */
@@ -36,4 +40,4 @@ typedef struct funcdef_s funcdef_t;
 void execfunc_init(expr_ctx_t ctx, scopectx_t scope);
 name_t *execfunc_define(scopectx_t ctx, funcdef_t *funcdef, textpos_t pos);
 
-#endif
+#endif /* execfuncs_h__ */

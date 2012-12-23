@@ -1,11 +1,30 @@
-//
-//  logging.c
-//  blissc
-//
-//  Created by Matthew Madison on 12/16/12.
-//  Copyright (c) 2012 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			logging.c
+ *
+ *	Abstract:		Logging/error handling facility.
+ *
+ *  Module description:
+ *		This module implements logging of diagnostic messages,
+ *		based on the status code definitions (see statcodes.c/h).
+ *		When a fatal error is encountered, or the number of
+ *		non-fatal errors exceeds the maximum-error threshold,
+ *		compilation is aborted via longjmp().  Otherwise, diagnostics
+ *		are simply formatted and logged to stderr with no
+ *		interruption in flow.
+ *
+ *		Text position will be reported with any diagnostic message,
+ *		if possible; for this to work, a function pointer must be
+ *		provided for this module to call to map the filename index
+ *		in the textpos_t type to an actual file name.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2012, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		22-Dec-2012	V1.0	Madison		Initial coding.
+ *--
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -22,6 +41,12 @@ struct logctx_s {
     unsigned int        errcount;
 };
 
+/*
+ * logging_init
+ *
+ * Module initialization.  The caller is expected to provide
+ * the jmp_buf for us to longjmp() to when we need to abort.
+ */
 logctx_t
 logging_init (jmp_buf retenv)
 {
@@ -36,25 +61,37 @@ logging_init (jmp_buf retenv)
 
 } /* logging init */
 
+/*
+ * logging_finish
+ *
+ * Frees up the logging context.
+ */
 void
 logging_finish (logctx_t ctx)
 {
     free(ctx);
-}
 
+} /* logging_finish */
+
+/*
+ * Getters/setters for logging context
+ */
 unsigned int log_maxerrs(logctx_t ctx) { return ctx->maxerrs; }
 void log_maxerrs_set(logctx_t ctx, unsigned int maxerrs) { ctx->maxerrs = maxerrs; }
 unsigned int log_infcount(logctx_t ctx) { return ctx->infocount; }
 unsigned int log_warncount(logctx_t ctx) { return ctx->warncount; }
 unsigned int log_errcount(logctx_t ctx) { return ctx->errcount; }
+void log_fetchfn_set(logctx_t ctx, filename_fetch_fn ffn, void *ffctx) {
+    ctx->fetchfn = ffn; ctx->ffctx = ffctx; }
 
-void
-log_fetchfn_set(logctx_t ctx, filename_fetch_fn ffn, void *ffctx)
-{
-    ctx->fetchfn = ffn;
-    ctx->ffctx = ffctx;
-}
-
+/*
+ * log_vsignal
+ *
+ * Core logging function.  Formats the diagnostic message and text
+ * position (if possible), emits the message on stderr, and handles
+ * the next step - incrementing the appropriate diagnostic counter
+ * and possibly aborting.
+ */
 void
 log_vsignal (logctx_t ctx, textpos_t pos, statcode_t code, va_list ap)
 {
@@ -77,7 +114,8 @@ log_vsignal (logctx_t ctx, textpos_t pos, statcode_t code, va_list ap)
         case STC_K_ERROR:
             ctx->errcount += 1;
             if (ctx->errcount < ctx->maxerrs) break;
-            fprintf(stderr, "%%BLISS-F-TOOMANYERRS, maximum number of errors exceeded, aborting\n");
+            fprintf(stderr, "%%BLISS-F-TOOMANYERRS, "
+            	    "maximum number of errors exceeded, aborting\n");
             // FALLTHROUGH
         case STC_K_FATAL:
             fflush(stderr);
@@ -95,6 +133,11 @@ log_vsignal (logctx_t ctx, textpos_t pos, statcode_t code, va_list ap)
 
 } /* log_vsignal */
 
+/*
+ * log_signal
+ *
+ * The varargs API for logging.
+ */
 void
 log_signal (logctx_t ctx, textpos_t pos, statcode_t code, ...)
 {
@@ -105,31 +148,14 @@ log_signal (logctx_t ctx, textpos_t pos, statcode_t code, ...)
 
 } /* log_signal */
 
-void
-log_message (logctx_t ctx, textpos_t pos, strdesc_t *str)
-{
-    log_signal(ctx, pos, STC__MESSAGE, str);
-}
-void
-log_warn (logctx_t ctx, textpos_t pos, strdesc_t *str)
-{
-    log_signal(ctx, pos, STC__USRWARN, str);
-}
-
-void
-log_error (logctx_t ctx, textpos_t pos, strdesc_t *str)
-{
-    log_signal(ctx, pos, STC__USRERR, str);
-}
-
-void
-log_inform (logctx_t ctx, textpos_t pos, strdesc_t *str)
-{
-    log_signal(ctx, pos, STC__INFORM, str);
-}
-
+/*
+ * log_print
+ *
+ * XXX this function should be moved to the listing module.
+ */
 void
 log_print (logctx_t ctx, textpos_t pos, strdesc_t *str)
 {
     printf("%% %-*.*s\n", str->len, str->len, str->ptr);
-}
+
+} /* log_print */
