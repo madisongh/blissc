@@ -174,14 +174,14 @@ bind_compiletime (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
 /*
  * bind_literal
  *
- * Binds a literal to its value.  Also called by the
+ * Binds a literal to its value.  Called by the
  * lexical binding function.
  */
 static int
-bind_literal (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
+bind_literal (lexctx_t lctx, void *vctx, quotelevel_t ql, quotemodifier_t qm,
               lextype_t lt, condstate_t cs, lexeme_t *lex,
               lexseq_t *result) {
-    parse_ctx_t pctx = ctx;
+    expr_ctx_t ctx = vctx;
     name_t *np = lexeme_ctx_get(lex);
     sym_literal_t *lit = name_extraspace(np);
     long val;
@@ -195,8 +195,7 @@ bind_literal (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
         return 0;
     }
     if ((lit->attr.flags & SYM_M_NOVALUE)) {
-        log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
-                   STC__LITNOVAL, lexeme_text(lex));
+        expr_signal(ctx, STC__LITNOVAL, lexeme_text(lex));
         val = 0;
     } else {
         val = getvalue(lit->attr.value, lit->attr.width,
@@ -234,8 +233,7 @@ bind_data (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LBRACK, 0, 1)) {
         exp = structure_reference(ctx, sym->attr.struc, 0, np, lex);
     } else {
-        exp = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG,
-                              lexeme_textpos_get(lex));
+        exp = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG, parser_curpos(pctx));
         expr_seg_name_set(exp, lexeme_ctx_get(lex));
         expr_seg_units_set(exp, sym->attr.units);
         expr_seg_signext_set(exp, (sym->attr.flags & SYM_M_SIGNEXT) != 0);
@@ -261,8 +259,7 @@ bind_routine (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
     if (np == 0) {
         return 0;
     }
-    exp = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG,
-                          lexeme_textpos_get(lex));
+    exp = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG, parser_curpos(pctx));
     expr_seg_name_set(exp, np);
     expr_seg_units_set(exp, machine_scalar_units(mach));
     expr_seg_signext_set(exp, machine_addr_signed(mach));
@@ -306,8 +303,8 @@ symbols_init (expr_ctx_t ctx)
     for (i = 0; i < sizeof(symvec)/sizeof(symvec[0]); i++)
         nametype_dataop_register(namectx, symtype[i], &symvec[i], ctx);
 
-    lextype_register(lctx, LEXTYPE_NAME_COMPILETIME, bind_compiletime);
-    lextype_register(lctx, LEXTYPE_NAME_LITERAL, bind_literal);
+    lextype_register(lctx, ctx, LEXTYPE_NAME_COMPILETIME, bind_compiletime);
+    lextype_register(lctx, ctx, LEXTYPE_NAME_LITERAL, bind_literal);
     expr_dispatch_register(ctx, LEXTYPE_NAME_DATA, bind_data);
     expr_dispatch_register(ctx, LEXTYPE_NAME_ROUTINE, bind_routine);
 

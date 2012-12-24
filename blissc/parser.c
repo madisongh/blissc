@@ -206,7 +206,7 @@ name_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
     // Now that we've resolved the name, repeat the
     // binding process on the resulting lexeme.
 
-    return lexeme_bind(lctx, ctx, ql, qm, cs, lex, result);
+    return lexeme_bind(lctx, pctx->curpos, ql, qm, cs, lex, result);
 
 } /* name_bind */
 
@@ -358,9 +358,9 @@ parser_init (namectx_t namectx, machinedef_t *mach, scopectx_t *kwdscopep,
 
     // Register the default binding routine for names
     for (lt = LEXTYPE_NAME_MIN; lt <= LEXTYPE_NAME_MAX; lt++) {
-        lextype_register(pctx->lmemctx, lt, name_XXX_bind);
+        lextype_register(pctx->lmemctx, pctx, lt, name_XXX_bind);
     }
-    lextype_register(pctx->lmemctx, LEXTYPE_NAME, name_bind);
+    lextype_register(pctx->lmemctx, pctx, LEXTYPE_NAME, name_bind);
 
     pctx->mach = mach;
     if (machine_scalar_bits(mach) == sizeof(pctx->valmask)*8) {
@@ -483,8 +483,7 @@ parser_insert (parse_ctx_t pctx, lexeme_t *lex)
 void
 parser_insert_seq (parse_ctx_t pctx, lexseq_t *seq) {
 
-    textpos_t pos = pctx->curpos;
-    lexer_insert_seq_with_pos(pctx->lexctx, seq, pos);
+    lexer_insert_seq(pctx->lexctx, seq);
 
 } /* parser_insert_seq */
 
@@ -496,9 +495,7 @@ parser_insert_seq (parse_ctx_t pctx, lexseq_t *seq) {
  */
 lexeme_t *
 parser_lexeme_create (parse_ctx_t pctx, lextype_t lt, strdesc_t *text) {
-    lexeme_t *lex = lexeme_create(pctx->lmemctx, lt, text);
-    lexeme_textpos_set(lex, pctx->curpos);
-    return lex;
+    return lexeme_create(pctx->lmemctx, lt, text);
 
 } /* parser_lexeme_create */
 
@@ -611,25 +608,24 @@ parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
 
     while (1) {
     	// Get the next raw lexeme from the lexer
-        lex = lexer_next(pctx->lexctx, pctx->no_eof);
+        lex = lexer_next(pctx->lexctx, pctx->no_eof, &pctx->curpos);
         lt = lexeme_type(lex);
         if (lt == LEXTYPE_NONE || lt == LEXTYPE_END) {
             break;
         }
-        pctx->curpos = lexeme_textpos_get(lex);
         // Bind the lexeme based on the current lexical context (quoting,
         // conditional state).  Returned status will be negative on error,
         // zero if processing should continue with the current lexeme
         // (it may have been modified), or positive if the 'result' sequence
         // should be used instead.
-        status = lexeme_bind(pctx->lmemctx, pctx, ql, pctx->quotemodifier,
+        status = lexeme_bind(pctx->lmemctx, pctx->curpos, ql, pctx->quotemodifier,
                              pctx->condstate[pctx->condlevel], lex, &result);
         if (status < 0) {
             log_signal(pctx->logctx, pctx->curpos, STC__INTCMPERR, "parser_next");
             return LEXTYPE_NONE;
         }
         if (status > 0) {
-            lexer_insert_seq_with_pos(pctx->lexctx, &result, pctx->curpos);
+            lexer_insert_seq(pctx->lexctx, &result);
             pctx->quotemodifier = QM_NONE;
             continue;
         }
@@ -1351,7 +1347,7 @@ parse_name_qname (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
     }
     result = parser_lexeme_create(pctx, LEXTYPE_NAME, lexeme_text(lex));
     lexseq_init(&resseq);
-    status = lexeme_bind(pctx->lmemctx, pctx, ql,
+    status = lexeme_bind(pctx->lmemctx, pctx->curpos, ql,
                          (curlt == LEXTYPE_LXF_QUOTENAME ? QM_QUOTE : QM_NONE),
                          pctx->condstate[pctx->condlevel], result, &resseq);
     if (status < 0) {
@@ -1572,7 +1568,7 @@ parse_msgfunc (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
 {
     lexeme_t *lex = parse_string_params(pctx, 0);
     lextype_t lt = lexeme_boundtype(lex);
-    textpos_t pos = lexeme_textpos_get(lex);
+    textpos_t pos = pctx->curpos;
 
     if (lt == LEXTYPE_STRING) {
         strdesc_t *text = lexeme_text(lex);

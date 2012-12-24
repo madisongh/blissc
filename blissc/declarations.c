@@ -110,35 +110,29 @@ static int
 declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
-    lexctx_t lctx = expr_lexmemctx(ctx);
-    lexeme_t *nlex;
+    textpos_t pos;
     lextype_t lt;
     name_t *np;
 
     while (1) {
-        if (!parser_expect(pctx, QL_NAME, LEXTYPE_NAME, &nlex, 0)) {
+        strdesc_t *namestr;
+        if (!parse_decl_name(pctx, &namestr, &pos)) {
             expr_signal(ctx, STC__NAMEEXP);
             return 0;
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 0)) {
             expr_signal(ctx, STC__OPEREXP, "=");
-            lexeme_free(lctx, nlex);
-            return 0;
         } else {
             long val;
             if (!expr_parse_ctce(ctx, 0, &val)) {
                 expr_signal(ctx, STC__EXPCTCE);
-                lexeme_free(lctx, nlex);
-                return 0;
             } else {
-                np = compiletime_declare(scope, lexeme_text(nlex), val,
-                                         lexeme_textpos_get(nlex));
+                np = compiletime_declare(scope, namestr, val, pos);
                 if (np == 0) {
                     expr_signal(ctx, STC__INTCMPERR, "declare_compiletime");
                 }
-                lexeme_free(lctx, nlex);
             }
-
+            string_free(namestr);
         }
 
         lt = parser_next(pctx, QL_NORMAL, 0);
@@ -147,6 +141,7 @@ declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
         }
         if (lt != LEXTYPE_DELIM_COMMA) {
             expr_signal(ctx, STC__DELIMEXP, ",");
+            string_free(namestr);
             return 0;
         }
 
@@ -164,8 +159,7 @@ declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
  * (quote-level QL_NAME).
  */
 int
-parse_decl_name (parse_ctx_t pctx, scopectx_t scope,
-                 strdesc_t **result, textpos_t *pos)
+parse_decl_name (parse_ctx_t pctx, strdesc_t **result, textpos_t *pos)
 {
     lextype_t lt;
     lexeme_t *lex;
@@ -174,7 +168,7 @@ parse_decl_name (parse_ctx_t pctx, scopectx_t scope,
 
     if (lt == LEXTYPE_NAME || lexeme_boundtype(lex) == LEXTYPE_NAME) {
         *result = string_copy(0, lexeme_text(lex));
-        *pos = lexeme_textpos_get(lex);
+        *pos = parser_curpos(pctx);
         lexeme_free(parser_lexmemctx(pctx), lex);
         return 1;
     }
@@ -205,7 +199,7 @@ declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
     literal_attr_t attr;
 
     while (1) {
-        if (!parse_decl_name(pctx, scope, &namestr, &pos)) {
+        if (!parse_decl_name(pctx, &namestr, &pos)) {
             expr_signal(ctx, STC__NAMEEXP);
             return 0;
         }
@@ -299,7 +293,7 @@ declare_label (parse_ctx_t pctx, scopectx_t scope)
     textpos_t pos;
 
     while (1) {
-        if (!parse_decl_name(pctx, scope, &namestr, &pos)) {
+        if (!parse_decl_name(pctx, &namestr, &pos)) {
             log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__NAMEEXP);
             return 0;
         }
@@ -396,7 +390,7 @@ declare_psect (expr_ctx_t ctx, scopectx_t scope)
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 1)) {
             expr_signal(ctx, STC__OPEREXP, "=");
         }
-        if (!parse_decl_name(pctx, scope, &psname, &defpos)) {
+        if (!parse_decl_name(pctx, &psname, &defpos)) {
             expr_signal(ctx, STC__NAMEEXP);
             parser_skip_to_delim(pctx, LEXTYPE_DELIM_SEMI);
             return 0;
@@ -809,7 +803,7 @@ attr_preset (expr_ctx_t ctx, name_t *np, seg_t *seg,
         }
         // We're essentially building an assignment expression that
         // will get interpreted at a later stage.
-        lex = name_to_lexeme(parser_lexmemctx(pctx), np, parser_curpos(pctx));
+        lex = name_to_lexeme(parser_lexmemctx(pctx), np);
         pexp = structure_reference(ctx, attr->struc, 1, np, lex);
         if (pexp == 0) {
             expr_signal(ctx, STC__INTCMPERR, "attr_preset");
@@ -1068,7 +1062,7 @@ declare_data (expr_ctx_t ctx, scopectx_t scope, lextype_t lt, decltype_t dt)
         data_attr_t attr;
         seg_t *seg;
 
-        if (!parse_decl_name(pctx, scope, &namestr, &pos)) {
+        if (!parse_decl_name(pctx, &namestr, &pos)) {
             expr_signal(ctx, STC__NAMEEXP);
             return 0;
         }
@@ -1143,7 +1137,7 @@ declare_bind (expr_ctx_t ctx, scopectx_t scope, decltype_t dt)
 
     while (status != 0) {
         data_attr_t attr;
-        if (!parse_decl_name(pctx, scope, &namestr, &pos)) {
+        if (!parse_decl_name(pctx, &namestr, &pos)) {
             expr_signal(ctx, STC__NAMEEXP);
             return 0;
         }
@@ -1228,7 +1222,7 @@ declare_map (expr_ctx_t ctx, scopectx_t scope)
 
     while (status != 0) {
         data_attr_t attr;
-        if (!parse_decl_name(pctx, scope, &namestr, &pos)) {
+        if (!parse_decl_name(pctx, &namestr, &pos)) {
             expr_signal(ctx, STC__NAMEEXP);
             return 0;
         }
@@ -1302,7 +1296,7 @@ parse_formals (expr_ctx_t ctx, scopectx_t curscope,
         data_attr_t attr;
         memset(&attr, 0, sizeof(attr));
         attr.flags = SYM_M_PENDING;
-        if (parse_decl_name(pctx, curscope, &namestr, &pos)) {
+        if (parse_decl_name(pctx, &namestr, &pos)) {
             if (*argtable == 0) {
                 *argtable = scope_begin(expr_namectx(ctx), 0);
             }
@@ -1431,7 +1425,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
 
     while (1) {
         routine_attr_t attr;
-        if (!parse_decl_name(pctx, scope, &namestr, &pos)) {
+        if (!parse_decl_name(pctx, &namestr, &pos)) {
             expr_signal(ctx, STC__NAMEEXP);
             return 0;
         }
@@ -1577,7 +1571,7 @@ undeclare (parse_ctx_t pctx, scopectx_t scope)
         if (!parser_expect(pctx, QL_NAME, LEXTYPE_NAME, &lex, 1)) {
             log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__NAMEEXP);
         } else {
-            sym_undeclare(scope, lexeme_text(lex), lexeme_textpos_get(lex));
+            sym_undeclare(scope, lexeme_text(lex), parser_curpos(pctx));
         }
         lexeme_free(parser_lexmemctx(pctx), lex);
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
@@ -1605,7 +1599,7 @@ declare_builtin (parse_ctx_t pctx, scopectx_t scope)
 
     while (1) {
         namestr = 0;
-        if (parse_decl_name(pctx, scope, &namestr, &pos)) {
+        if (parse_decl_name(pctx, &namestr, &pos)) {
             name_declare_builtin(scope, namestr, pos); // errors handled inside
             string_free(namestr);
         } else {
@@ -1820,7 +1814,7 @@ declare_module (expr_ctx_t ctx)
         expr_signal(ctx, STC__MODDCLEXP);
         return 0;
     }
-    if (!parse_decl_name(pctx, scope, &text, &pos)) {
+    if (!parse_decl_name(pctx, &text, &pos)) {
         expr_signal(ctx, STC__NAMEEXP);
         return 0;
     }

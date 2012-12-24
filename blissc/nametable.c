@@ -188,13 +188,12 @@ textpos_t name_defpos (name_t *np) { return np->namedclpos; }
  * Creates an unbound lexeme for a name.
  */
 lexeme_t *
-name_to_lexeme (lexctx_t lctx, name_t *np, textpos_t pos)
+name_to_lexeme (lexctx_t lctx, name_t *np)
 {
     lexeme_t *lex;
     strdesc_t dsc;
     strdesc_init(&dsc, np->name, np->namelen);
     lex = lexeme_create(lctx, LEXTYPE_NAME, &dsc);
-    if (lex != 0) lexeme_textpos_set(lex, pos);
     return lex;
 
 } /* name_to_lexeme */

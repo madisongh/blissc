@@ -27,11 +27,9 @@ int lexer_fopen(lexer_ctx_t ctx, const char *fname, size_t fnlen,
                 const char *suffix);
 int lexer_popen(lexer_ctx_t ctx, scan_input_fn infn, void *fnctx);
 void lexer_finish(lexer_ctx_t ctx);
-lexeme_t *lexer_next(lexer_ctx_t ctx, int erroneof);
+lexeme_t *lexer_next(lexer_ctx_t ctx, int erroneof, textpos_t *posp);
 lexeme_t *lexer_peek(lexer_ctx_t ctx, int erroneof);
 void lexer_insert(lexer_ctx_t ctx, lexeme_t *lex);
 void lexer_insert_seq(lexer_ctx_t ctx, lexseq_t *seq);
-void lexer_insert_seq_with_pos(lexer_ctx_t ctx, lexseq_t *seq,
-                               textpos_t pos);
 
 #endif /* lexer_h__ */

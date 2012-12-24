@@ -61,7 +61,7 @@ static lextype_t openers[] = { LEXTYPE_DELIM_LPAR, LEXTYPE_DELIM_LBRACK,
 static lextype_t closers[] = { LEXTYPE_DELIM_RPAR, LEXTYPE_DELIM_RBRACK,
                                LEXTYPE_DELIM_RANGLE };
 
-static int macro_expand(parse_ctx_t pctx, name_t *macroname,
+static int macro_expand(expr_ctx_t ctx, name_t *macroname,
                         lexseq_t *result);
 
 /*
@@ -71,10 +71,10 @@ static int macro_expand(parse_ctx_t pctx, name_t *macroname,
  * macro name is encountered.
  */
 static int
-macro_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
+macro_bind (lexctx_t lctx, void *vctx, quotelevel_t ql, quotemodifier_t qm,
             lextype_t lt, condstate_t cs, lexeme_t *lex, lexseq_t *result)
 {
-    parse_ctx_t pctx = ctx;
+    expr_ctx_t ctx = vctx;
     name_t *np = lexeme_ctx_get(lex);
 
     if (cs == COND_CWA || cs == COND_AWC) {
@@ -88,7 +88,7 @@ macro_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
             return 0;
         case QM_EXPAND:
             lexeme_free(lctx, lex);
-            return macro_expand(pctx, np, result);
+            return macro_expand(ctx, np, result);
         case QM_UNQUOTE:
             lex->type = LEXTYPE_NAME_MACRO;
             return 0;
@@ -104,7 +104,7 @@ macro_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
     }
 
     lexeme_free(lctx, lex);
-    return macro_expand(pctx, np, result);
+    return macro_expand(ctx, np, result);
 
 } /* macro_bind */
 
@@ -309,8 +309,8 @@ macros_init (scopectx_t kwdscope, expr_ctx_t ctx)
         name_declare(kwdscope, &macro_names[i], 0, 0, 0, 0);
     }
 
-    lextype_register(lctx, LEXTYPE_NAME_MACRO, macro_bind);
-    lextype_register(lctx, LEXTYPE_NAME_MAC_PARAM, macparam_bind);
+    lextype_register(lctx, ctx, LEXTYPE_NAME_MACRO, macro_bind);
+    lextype_register(lctx, ctx, LEXTYPE_NAME_MAC_PARAM, macparam_bind);
     memset(&vec, 0, sizeof(vec));
     vec.typesize = sizeof(struct macrodecl_s);
     vec.typeinit = macro_initdata;
@@ -393,7 +393,6 @@ macro_paramlist (expr_ctx_t ctx, scopectx_t curscope,
     lexctx_t lctx = parser_lexmemctx(pctx);
     lexeme_t *lex;
     lextype_t lt;
-    strdesc_t *ltext;
     name_t *mnp;
     scopectx_t pscope;
     lexseq_t nullseq;
@@ -421,32 +420,30 @@ macro_paramlist (expr_ctx_t ctx, scopectx_t curscope,
 
     while (1) {
         lexseq_t *pseq;
+        strdesc_t *namestr;
+        textpos_t pos;
         // Look for a parameter name
-        lt = parser_next(pctx, QL_NAME, &lex);
-        if (lexeme_boundtype(lex) != LEXTYPE_NAME) {
+        if (!parse_decl_name(pctx, &namestr, &pos)) {
         	// Null parameter list is OK, but empty parameter
         	// after a comma is not
             if (did1) {
-                log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
-                           STC__NAMEEXP);
+                expr_signal(ctx, STC__NAMEEXP);
             }
+            lt = parser_next(pctx, QL_NAME, 0);
             break;
         }
 
         // Declare the parameter in the parameter name table
         did1 = 1;
-        ltext = lexeme_text(lex);
-        ndef.name = ltext->ptr;
-        ndef.namelen = ltext->len;
-        mnp = name_declare(pscope, &ndef,
-                           lexeme_textpos_get(lex), 0, 0, &pseq);
+        ndef.name = namestr->ptr;
+        ndef.namelen = namestr->len;
+        mnp = name_declare(pscope, &ndef, pos, 0, 0, &pseq);
+        string_free(namestr);
         if (mnp == 0) {
-            log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
-                       STC__INTCMPERR, "macro_paramlist");
+            expr_signal(ctx, STC__INTCMPERR, "macro_paramlist");
             break;
         }
         namereflist_instail(plist, nameref_alloc(namectx, mnp));
-        lexeme_free(lctx, lex);
         // If assignment is allowed, parse the '=' and the
         // default value - a lexeme sequence for macros, a CTCE for
         // structures
@@ -463,8 +460,7 @@ macro_paramlist (expr_ctx_t ctx, scopectx_t curscope,
                 lt = parser_next(pctx, QL_NORMAL, 0);
             }
             if (!status) {
-                log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
-                           STC__SYNTAXERR);
+                expr_signal(ctx, STC__SYNTAXERR);
                 break;
             }
         } else {
@@ -515,17 +511,15 @@ declare_macro (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
     ndef.lt = LEXTYPE_NAME_MACRO;
     ndef.flags = NAME_M_DECLARED;
     while (1) {
-        if (!parse_decl_name(pctx, scope, &ltext, &pos)) {
-            log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                       STC__NAMEEXP);
+        if (!parse_decl_name(pctx, &ltext, &pos)) {
+            expr_signal(ctx, STC__NAMEEXP);
             skip_to_end = 1;
         }
         lt = parser_next(pctx, QL_NAME, 0);
         if (lt != LEXTYPE_DELIM_LPAR &&
             lt != LEXTYPE_OP_ASSIGN &&
             lt != LEXTYPE_DELIM_LBRACK) {
-            log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                       STC__SYNTAXERR);
+            expr_signal(ctx, STC__SYNTAXERR);
             skip_to_end = 1;
         }
         ndef.name = ltext->ptr;
@@ -540,8 +534,7 @@ declare_macro (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
                 skip_to_end = 1;
             }
             if (namereflist_length(&macro->plist) == 0) {
-                log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                           STC__NOMACPRMS);
+                expr_signal(ctx, STC__NOMACPRMS);
                 skip_to_end = 1;
             }
             lt = parser_next(pctx, QL_NAME, 0);
@@ -553,8 +546,7 @@ declare_macro (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
         // for conditional macros)
         if (lt == LEXTYPE_DELIM_LBRACK) {
             if (is_kwdmacro) {
-                log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
-                           STC__ITERKWMAC);
+                expr_signal(ctx, STC__ITERKWMAC);
                 skip_to_end = 1;
             }
             if (macro_paramlist(ctx, scope, 0, 1, &closers[1], 1,
@@ -584,8 +576,7 @@ declare_macro (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
                  lt != LEXTYPE_LXF_DELIM_PERCENT;
                  lt = parser_next(pctx, QL_MACRO, &lex)) {
                 if (lt == LEXTYPE_END || lt == LEXTYPE_NONE) {
-                    log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
-                               STC__SYNTAXERR);
+                    expr_signal(ctx, STC__SYNTAXERR);
                     skip_to_end = 1;
                     break;
                 }
@@ -605,13 +596,12 @@ declare_macro (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
         }
         string_free(ltext);
 
-        lt = parser_next(pctx, QL_NAME, 0);
-        if (lt == LEXTYPE_DELIM_SEMI) {
+        if (parser_expect(pctx, QL_NAME, LEXTYPE_DELIM_SEMI, 0, 1)) {
             break;
         }
-        if (lt != LEXTYPE_DELIM_COMMA) {
-            log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                       STC__DELIMEXP, ",");
+        if (!parser_expect(pctx, QL_NAME, LEXTYPE_DELIM_COMMA, 0, 1)) {
+            expr_signal(ctx, STC__DELIMEXP, ",");
+            parser_skip_to_delim(pctx, LEXTYPE_DELIM_SEMI);
             break;
         }
 
@@ -630,14 +620,14 @@ declare_macro (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
  * processing loop; conditional macros are handled with recursion.
  */
 static int
-prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
+prepare_body (expr_ctx_t ctx, scopectx_t expscope, struct macrodecl_s *macro,
               unsigned int curdepth, unsigned int actcount, lexseq_t *remaining,
               lexseq_t *result, int *errorout)
 {
+    parse_ctx_t pctx = expr_parse_ctx(ctx);
     lexctx_t lctx = parser_lexmemctx(pctx);
     lexeme_t *lex, *bodynext, *closer, *separator;
     name_t *np;
-    textpos_t pos = parser_curpos(pctx);
     int do_exitmacro, do_exititer, do_errormacro, do_recursion;
 
     do_recursion = do_exitmacro = do_exititer = do_errormacro = 0;
@@ -678,7 +668,6 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
             lextype_t lt;
             bodynext = lexeme_next(lex);
             lex = lexeme_copy(lctx, lex);
-            lexeme_textpos_set(lex, pos);
             lt = lexeme_boundtype(lex);
             if (lt == LEXTYPE_NAME) {
                 lextype_t nlt;
@@ -687,8 +676,7 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
                     struct macrodecl_s *mp = name_extraspace(np);
                     if (nlt == LEXTYPE_NAME_MACRO && mp == macro) {
                         if (macro->type != MACRO_COND) {
-                            log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
-                                       STC__ILLMRECUR);
+                            expr_signal(ctx, STC__ILLMRECUR);
                             lexseq_free(lctx, result);
                             return 0;
                         }
@@ -774,8 +762,7 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
 
                 lex = bodynext;
                 if (lex == 0) {
-                    log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                               STC__SYNTAXERR);
+                    expr_signal(ctx, STC__SYNTAXERR);
                     do_errormacro = 1;
                     break;
                 }
@@ -788,29 +775,25 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
                 }
                 lex = bodynext;
                 if (lex == 0) {
-                    log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                               STC__SYNTAXERR);
+                    expr_signal(ctx, STC__SYNTAXERR);
                     do_errormacro = 1;
                     break;
                 }
                 bodynext = lexeme_next(lex);
                 if (lexeme_boundtype(lex) != LEXTYPE_LXF_REMAINING) {
-                    log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
-                               STC__EXPREMAIN);
+                    expr_signal(ctx, STC__EXPREMAIN);
                     do_errormacro = 1;
                     break;
                 }
                 lex = bodynext;
                 if (lex == 0) {
-                    log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                               STC__SYNTAXERR);
+                    expr_signal(ctx, STC__SYNTAXERR);
                     do_errormacro = 1;
                     break;
                 }
                 bodynext = lexeme_next(lex);
                 if (lexeme_boundtype(lex) != closers[which]) {
-                    log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                               STC__SYNTAXERR);
+                    expr_signal(ctx, STC__SYNTAXERR);
                     do_errormacro = 1;
                     break;
                 }
@@ -831,8 +814,7 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
                         strdesc_t *cfname = name_string(cformal->np);
                         np = name_search(subscope, cfname->ptr, cfname->len, 0);
                         if (np == 0) {
-                            log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                                       STC__INTCMPERR, "prepare_body");
+                            expr_signal(ctx, STC__INTCMPERR, "prepare_body");
                         }
                         lexseq_free(lctx, name_extraspace(np));
                         if (lexseq_length(&newremain) != 0) {
@@ -844,7 +826,7 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
                     } /* walk the formals */
                     // Hook the name table into the hierarchy and recurse.
                     scope_setparent(subscope, scope_getparent(expscope));
-                    ok = prepare_body(pctx, subscope, macro, curdepth+1,
+                    ok = prepare_body(ctx, subscope, macro, curdepth+1,
                                       actcount-namereflist_length(&macro->plist),
                                       &newremain, &rresult, &do_errormacro);
                     scope_end(subscope);
@@ -901,10 +883,10 @@ prepare_body (parse_ctx_t pctx, scopectx_t expscope, struct macrodecl_s *macro,
  * Expands a macro.
  */
 static int
-macro_expand (parse_ctx_t pctx, name_t *macroname,
-              lexseq_t *result)
+macro_expand (expr_ctx_t ctx, name_t *macroname, lexseq_t *result)
 {
     struct macrodecl_s *macro = name_extraspace(macroname);
+    parse_ctx_t pctx = expr_parse_ctx(ctx);
     lexctx_t lctx = parser_lexmemctx(pctx);
     lextype_t lt;
     lexeme_t *lex;
@@ -919,8 +901,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
     static strdesc_t comma = STRDEF(",");
 
     if (macro == 0) {
-        log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                   STC__INTCMPERR, "macro_expand");
+        expr_signal(ctx, STC__INTCMPERR, "macro_expand");
         return 1;
     }
 
@@ -948,8 +929,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
         lt = parser_next(pctx, QL_NORMAL, &lex);
         if (macro->type == MACRO_KWD) {
             if (lt != LEXTYPE_DELIM_LPAR) {
-                log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
-                           STC__DELIMEXP, "(");
+                expr_signal(ctx, STC__DELIMEXP, "(");
                 parser_insert(pctx, lex);
                 return 1;
             }
@@ -958,8 +938,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
         } else {
             for (which = 0; lt != openers[which] && which < 3; which++);
             if (which >= 3 && namereflist_length(&macro->plist) > 0) {
-                log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
-                           STC__DELIMEXP, "(");
+                expr_signal(ctx, STC__DELIMEXP, "(");
                 parser_insert(pctx, lex);
                 return 1;
             }
@@ -992,20 +971,17 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
             if (macro->type == MACRO_KWD) {
                 lt = parser_next(pctx, QL_NAME, &lex);
                 if (lexeme_boundtype(lex) != LEXTYPE_NAME) {
-                    log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
-                               STC__NAMEEXP);
+                    expr_signal(ctx, STC__NAMEEXP);
                     lexeme_free(lctx, lex);
                     break;
                 }
                 np = name_search(macro->ptable, lex->text.ptr, lex->text.len, 0);
                 if (np == 0) {
-                    log_signal(parser_logctx(pctx), lexeme_textpos_get(lex),
-                               STC__INTCMPERR, "macro_expand[2]");
+                    expr_signal(ctx, STC__INTCMPERR, "macro_expand[2]");
                 }
                 lexeme_free(lctx, lex);
                 if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 1)) {
-                    log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                               STC__OPEREXP, "=");
+                    expr_signal(ctx, STC__OPEREXP, "=");
                     break;
                 }
             } else if (nactuals < namereflist_length(&macro->plist)) {
@@ -1036,8 +1012,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
                 // redeclarations.
                 actual = macparam_special(expscope, name_string(np), &val);
                 if (actual == 0) {
-                    log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                               STC__INTCMPERR, "macro_expand[3]");
+                    expr_signal(ctx, STC__INTCMPERR, "macro_expand[3]");
                 }
                 lexseq_free(lctx, &val);
             }
@@ -1049,16 +1024,14 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
             }
 
             if (lt != LEXTYPE_DELIM_COMMA) {
-                log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                           STC__DELIMEXP, ",");
+                expr_signal(ctx, STC__DELIMEXP, ",");
                 break;
             }
 
         } /* while (1) */
 
         if (lt != closers[which]) {
-            log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                       STC__DELIMEXP, "closer");
+            expr_signal(ctx, STC__DELIMEXP, "closer");
             lexseq_free(lctx, &extras);
             scope_end(expscope);
             return 1;
@@ -1069,8 +1042,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
             while (formal != 0) {
                 anp = macparam_special(expscope, name_string(formal->np), 0);
                 if (anp == 0) {
-                    log_signal(parser_logctx(pctx), parser_curpos(pctx),
-                               STC__INTCMPERR, "macro_expand[4]");
+                    expr_signal(ctx, STC__INTCMPERR, "macro_expand[4]");
                 }
                 formal = formal->tq_next;
             }
@@ -1086,7 +1058,7 @@ macro_expand (parse_ctx_t pctx, name_t *macroname,
     scope_setparent(expscope, parser_scope_get(pctx));
     parser_punctclass_set(pctx, pcl, psep);
 
-    ok = prepare_body(pctx, expscope, macro, 0, nactuals,
+    ok = prepare_body(ctx, expscope, macro, 0, nactuals,
                       &extras, result, 0);
 
     if (!ok) {

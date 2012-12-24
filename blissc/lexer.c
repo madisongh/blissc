@@ -358,7 +358,7 @@ lexer_finish (lexer_ctx_t ctx)
  * and lexer_peek processing.
  */
 static lexeme_t *
-lexer___next (lexer_ctx_t ctx, int erroneof, int peek)
+lexer___next (lexer_ctx_t ctx, int erroneof, int peek, textpos_t *posp)
 {
     lexeme_t *lex = 0;
     lextype_t lextype;
@@ -394,6 +394,9 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek)
                 lex = &errlex;
                 string_free(tok);
                 break;
+            }
+            if (!peek && posp != 0) {
+                *posp = textpos_create(chain->filename_index, lineno, column);
             }
             if (type == SCANTYPE_END) {
                 scan_finish(chain->sctx);
@@ -439,7 +442,6 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek)
                 lex = &errlex;
             } else {
                 lex = lexeme_create(ctx->lexctx, lextype, tok);
-                lexeme_setpos(lex, chain->filename_index, lineno, column);
                 if (peek) {
                     lexseq_inshead(&chain->seq, lex);
                 }
@@ -466,9 +468,9 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek)
  * Public API for fetching the next lexeme from the
  * input stream.
  */
-lexeme_t *lexer_next (lexer_ctx_t ctx, int erroneof)
+lexeme_t *lexer_next (lexer_ctx_t ctx, int erroneof, textpos_t *posp)
 {
-    return lexer___next(ctx, erroneof, 0);
+    return lexer___next(ctx, erroneof, 0, posp);
 
 } /* lexer_next */
 
@@ -480,7 +482,7 @@ lexeme_t *lexer_next (lexer_ctx_t ctx, int erroneof)
  */
 lexeme_t *lexer_peek (lexer_ctx_t ctx, int erroneof)
 {
-    return lexer___next(ctx, erroneof, 1);
+    return lexer___next(ctx, erroneof, 1, 0);
 
 } /* lexer_peek */
 
@@ -514,26 +516,17 @@ lexer_insert (lexer_ctx_t ctx, lexeme_t *lex)
 } /* lexer_insert */
 
 /*
- * lexer_insert_seq_internal
+ * lexer_insert_seq
  *
- * Internal routine for inserting a sequence of lexemes
- * at the front of the stream, possibly with resetting their
- * text positions.
+ * Inserts a sequence of lexemes at the front of the stream.
  */
-static void
-lexer_insert_seq_internal (lexer_ctx_t ctx, lexseq_t *seq,
-                           int resetpos, textpos_t pos)
+void
+lexer_insert_seq (lexer_ctx_t ctx, lexseq_t *seq)
 {
     lexchain_t *chain = ctx->chain;
 
     if (seq == 0 || lexseq_length(seq) == 0) {
         return;
-    }
-    if (resetpos) {
-        lexeme_t *lex;
-        for (lex = lexseq_head(seq); lex != 0; lex = lexeme_next(lex)) {
-            lexeme_textpos_set(lex, pos);
-        }
     }
     if (chain == 0) {
         chain = lexchain_alloc();
@@ -547,29 +540,3 @@ lexer_insert_seq_internal (lexer_ctx_t ctx, lexseq_t *seq,
     lexseq_prepend(&chain->seq, seq);
 
 } /* lexer_insert_seq_internal */
-
-/*
- * lexer_insert_seq
- *
- * Public API for normal insertion of a lexeme sequence,
- * with no text position update.
- */
-void
-lexer_insert_seq (lexer_ctx_t ctx, lexseq_t *seq)
-{
-    lexer_insert_seq_internal(ctx, seq, 0, 0);
-
-} /* lexer_insert_seq */
-
-/*
- * lexer_insert_seq_with_pos
- *
- * Public API for insertion of a lexeme sequence and
- * updating the text position.
- */
-void
-lexer_insert_seq_with_pos (lexer_ctx_t ctx, lexseq_t *seq, textpos_t pos)
-{
-    lexer_insert_seq_internal(ctx, seq, 1, pos);
-
-} /* lexer_insert_seq_with_pos */

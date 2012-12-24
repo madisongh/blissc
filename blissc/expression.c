@@ -576,7 +576,7 @@ parse_plit (expr_ctx_t ctx, lextype_t curlt, lexeme_t *lex)
     name_t *plitname;
     expr_node_t *exp;
 
-    plitname = define_plit(ctx, curlt, lexeme_textpos_get(lex));
+    plitname = define_plit(ctx, curlt, parser_curpos(pctx));
     if (plitname == 0) {
         return 0;
     }
@@ -792,7 +792,7 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
     valexp = 0;
     while (1) {
         if (lt == closer) {
-            endpos = lexeme_textpos_get(lex);
+            endpos = parser_curpos(pctx);
             lexeme_free(ctx->lctx, lex);
             break;
         } else if (lt >= LEXTYPE_DCL_MIN && lt <= LEXTYPE_DCL_MAX) {
@@ -988,47 +988,6 @@ expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
 } /* parse_arglist */
 
 /*
- * lex_to_expr
- *
- * Converts a numeric literal lexeme or a "short" string lexeme (i.e.,
- * a string whose length fits in a fullword) into a PRIM_LIT expression
- * node.  If the lexeme is neither NUMERIC or STRING, returns 0.
- */
-static expr_node_t *
-lex_to_expr (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
-{
-    expr_node_t *exp = 0;
-
-    if (lt == LEXTYPE_NUMERIC) {
-        exp = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, lexeme_textpos_get(lex));
-        expr_litval_set(exp, lexeme_signedval(lex));
-        expr_is_ctce_set(exp, 1);
-    } else if (lt == LEXTYPE_STRING) {
-        int i;
-        strdesc_t *text = lexeme_text(lex);
-        unsigned long val = 0;
-        int len = text->len;
-        if (len > machine_scalar_maxbytes(ctx->mach) && !ctx->longstringsok) {
-            expr_signal(ctx, STC__STRLENERR);
-            len = machine_scalar_maxbytes(ctx->mach);
-        }
-        exp = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, lexeme_textpos_get(lex));
-        expr_litstring_set(exp, string_copy(0, text));
-        for (i = 0; i < len; i++) {
-            val = val | (*(text->ptr+i) << (i*8));
-        }
-        expr_litval_set(exp, val);
-        expr_is_ctce_set(exp, 1);
-    }
-
-    if (exp != 0) {
-        expr_has_value_set(exp, 1);
-    }
-    return exp;
-
-} /* lex_to_expr */
-
-/*
  * parse_fldref
  *
  * Looks for the opening angle bracket of a field reference, and
@@ -1219,11 +1178,28 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         if (!parse_block(ctx, lt, &exp, 0, &labels)) {
             return 0;
         }
-    } else {
-        exp = lex_to_expr(ctx, lt, lex);
-        if (exp != 0) {
-            lexeme_free(ctx->lctx, lex);
+    } else if (lt == LEXTYPE_NUMERIC) {
+        exp = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
+        expr_litval_set(exp, lexeme_signedval(lex));
+        expr_is_ctce_set(exp, 1);
+        expr_has_value_set(exp, 1);
+    } else if (lt == LEXTYPE_STRING) {
+        int i;
+        strdesc_t *text = lexeme_text(lex);
+        unsigned long val = 0;
+        int len = text->len;
+        if (len > machine_scalar_maxbytes(ctx->mach) && !ctx->longstringsok) {
+            expr_signal(ctx, STC__STRLENERR);
+            len = machine_scalar_maxbytes(ctx->mach);
         }
+        exp = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
+        expr_litstring_set(exp, string_copy(0, text));
+        for (i = 0; i < len; i++) {
+            val = val | (*(text->ptr+i) << (i*8));
+        }
+        expr_litval_set(exp, val);
+        expr_is_ctce_set(exp, 1);
+        expr_has_value_set(exp, 1);
     }
 
     if (exp == 0) {

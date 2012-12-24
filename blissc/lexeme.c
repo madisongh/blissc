@@ -35,6 +35,7 @@ struct lexctx_s {
     logctx_t         logctx;
     lexeme_t        *freepool;
     lextype_bind_fn  binders[LEXTYPE_COUNT];
+    void            *bctx[LEXTYPE_COUNT];
 };
 
 static lexeme_t errlex = { 0, LEXTYPE_NONE };
@@ -61,12 +62,13 @@ lextype_name (lextype_t lt)
  * Registers a lexical binding function.
  */
 int
-lextype_register (lexctx_t lctx, lextype_t lt, lextype_bind_fn binder)
+lextype_register (lexctx_t lctx, void *ctx, lextype_t lt, lextype_bind_fn binder)
 {
     if (lt < LEXTYPE_MIN || lt > LEXTYPE_MAX) {
         return 0;
     }
     lctx->binders[lt] = binder;
+    lctx->bctx[lt] = ctx;
     return 1;
 
 } /* lextype_register */
@@ -129,13 +131,13 @@ lexeme_alloc (lexctx_t lctx, lextype_t type, const char *text, size_t len)
  *      lexeme sequence (could be null result)
  */
 int
-lexeme_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
+lexeme_bind (lexctx_t lctx, textpos_t curpos, quotelevel_t ql, quotemodifier_t qm,
              condstate_t cs, lexeme_t *lex, lexseq_t *result)
 {
     lextype_t lt = lexeme_boundtype(lex);
 
     if (lctx->binders[lt] != 0) {
-        return lctx->binders[lt](lctx, ctx, ql, qm, lt, cs, lex, result);
+        return lctx->binders[lt](lctx, lctx->bctx[lt], ql, qm, lt, cs, lex, result);
     }
 
     // Check for lexical conditional skips
@@ -165,8 +167,7 @@ lexeme_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
             char errbuf[64];
             errbuf[0] = '\0';
             strerror_r(errno, errbuf, sizeof(errbuf));
-            log_signal(lctx->logctx, lexeme_textpos_get(lex),
-                       STC__NUMCNVERR, errbuf, strlen(errbuf));
+            log_signal(lctx->logctx, curpos, STC__NUMCNVERR, errbuf, strlen(errbuf));
             return -1;
         }
         lexeme_val_setsigned(lex, val);
@@ -179,7 +180,6 @@ lexeme_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
         len = ltext->len > 255 ? 255 : ltext->len;
         cstr = ascic_string_from_chrs(0, ltext->ptr, len);
         nlex = lexeme_alloc(lctx, lt, cstr->ptr, cstr->len);
-        lexeme_copypos(nlex, lex);
         lexseq_instail(result, nlex);
         lexeme_free(lctx, lex);
         return 1;
@@ -289,9 +289,7 @@ lexeme_copy (lexctx_t lctx, lexeme_t *orig)
         return &errlex;
     }
     lex->boundtype = orig->boundtype;
-    lex->extra = orig->extra;
-    lex->numval = orig->numval;
-    lexeme_copypos(lex, orig);
+    memcpy(&lex->data, &orig->data, sizeof(lex->data));
     lex->tq_next = 0;
     return lex;
 
@@ -329,29 +327,6 @@ lexseq_copy (lexctx_t lctx, lexseq_t *dst, lexseq_t *src)
     return 1;
 
 } /* lexseq_copy */
-
-/*
- * lexseq_copy_and_setpos
- *
- * Returns a duplicate of a lexeme sequence,
- * appended to the destination, but resetting the
- * text position for the duplicate to the specified value.
- */
-int
-lexseq_copy_and_setpos (lexctx_t lctx, lexseq_t *dst, lexseq_t *src,
-                        textpos_t pos)
-{
-    lexeme_t *lex;
-
-    for (lex = lexseq_head(src); lex != 0; lex = lexeme_next(lex)) {
-        lexeme_t *copy = lexeme_copy(lctx, lex);
-        lexeme_textpos_set(copy, pos);
-        lexseq_instail(dst, copy);
-    }
-
-    return 1;
-
-} /* lexseq_copy_and_setpos */
 
 /*
  * lexemes_match

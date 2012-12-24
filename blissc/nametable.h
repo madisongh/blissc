@@ -117,7 +117,7 @@ void name_value_signed_set(name_t *np, long val);
 void name_value_unsigned_set(name_t *np, unsigned long val);
 int name_is_declared(scopectx_t scope, const char *id, size_t len);
 scopectx_t name_scope(name_t *np);
-lexeme_t *name_to_lexeme(lexctx_t lctx, name_t *np, textpos_t pos);
+lexeme_t *name_to_lexeme(lexctx_t lctx, name_t *np);
 strdesc_t *name_string(name_t *np);
 namectx_t nametables_init(logctx_t logctx);
 scopectx_t nametables_globalscope(namectx_t ctx);

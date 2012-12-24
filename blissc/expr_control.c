@@ -479,7 +479,7 @@ parse_incrdecr (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
 
     fromexp = toexp = byexp = 0;
     scope = parser_scope_begin(pctx);
-    if (!parse_decl_name(pctx, scope, &indexname, &pos)) {
+    if (!parse_decl_name(pctx, &indexname, &pos)) {
         expr_signal(ctx, STC__NAMEEXP);
         parser_scope_end(pctx);
         return 0;
@@ -574,6 +574,7 @@ static expr_node_t *
 parse_leave (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
+    textpos_t pos = parser_curpos(pctx);
     expr_node_t *exp, *valexp;
     lexeme_t *lex;
     name_t *lp;
@@ -595,7 +596,7 @@ parse_leave (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
             expr_signal(ctx, STC__LBLSCPERR, lexeme_text(lex));
         }
     }
-    exp = expr_node_alloc(ctx, EXPTYPE_CTRL_EXIT, lexeme_textpos_get(lex));
+    exp = expr_node_alloc(ctx, EXPTYPE_CTRL_EXIT, pos);
     expr_exit_label_set(exp, lp);
     expr_exit_value_set(exp, valexp);
     expr_has_value_set(exp, (valexp != 0));
@@ -640,6 +641,7 @@ parse_exitloop (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
 static expr_node_t *
 parse_return (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
 {
+    textpos_t pos = parser_curpos(expr_parse_ctx(ctx));
     expr_node_t *exp, *valexp;
     name_t *lp;
     routine_attr_t *attr;
@@ -667,7 +669,7 @@ parse_return (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
             expr_signal(ctx, STC__NORETVAL);
         }
     }
-    exp = expr_node_alloc(ctx, EXPTYPE_CTRL_RET, lexeme_textpos_get(curlex));
+    exp = expr_node_alloc(ctx, EXPTYPE_CTRL_RET, pos);
     expr_exit_label_set(exp, lp);
     expr_exit_value_set(exp, valexp);
     expr_has_value_set(exp, (valexp != 0));

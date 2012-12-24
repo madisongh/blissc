@@ -211,9 +211,10 @@ struct lexeme_s {
     lextype_t        boundtype;
     strdesc_t        text;
     unsigned long    flags;
-    unsigned long    numval;
-    void            *extra;
-    textpos_t        textpos;
+    union {
+        unsigned long    numval;
+        void            *extra;
+    }                data;
 };
 typedef struct lexeme_s lexeme_t;
 
@@ -236,8 +237,9 @@ void lexeme_free(lexctx_t lctx, lexeme_t *lex);
 lexeme_t *lexeme_create(lexctx_t lctx, lextype_t type, strdesc_t *dsc);
 const char *lextype_name(lextype_t lt);
 
-int lextype_register(lexctx_t lctx, lextype_t lt, lextype_bind_fn bindfn);
-int lexeme_bind(lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
+int lextype_register(lexctx_t lctx, void *ctx, lextype_t lt, lextype_bind_fn bindfn);
+int lexeme_bind(lexctx_t lctx, textpos_t curpos,
+                quotelevel_t ql, quotemodifier_t qm,
                 condstate_t cs, lexeme_t *lex, lexseq_t *result);
 
 void lexseq_free(lexctx_t lctx, lexseq_t *seq);
@@ -256,25 +258,18 @@ siu lextype_t lexeme_type (lexeme_t *lex) { return lex->type; }
 siu void lexeme_type_set(lexeme_t *lex, lextype_t type) {
     lex->type = type; if (type != LEXTYPE_UNBOUND) lex->boundtype = type; }
 siu void lexeme_boundtype_set(lexeme_t *lex, lextype_t type) { lex->boundtype = type; }
-siu long lexeme_signedval (lexeme_t *lex) { return (long) lex->numval; }
-siu unsigned long lexeme_unsignedval (lexeme_t *lex) { return lex->numval; }
-siu void lexeme_val_setsigned (lexeme_t *lex, long v) { lex->numval = (unsigned long) v; }
-siu void lexeme_val_setunsigned (lexeme_t *lex, unsigned long v) { lex->numval = v; }
+siu long lexeme_signedval (lexeme_t *lex) { return (long) lex->data.numval; }
+siu unsigned long lexeme_unsignedval (lexeme_t *lex) { return lex->data.numval; }
+siu void lexeme_val_setsigned (lexeme_t *lex, long v) {
+    lex->data.numval = (unsigned long) v; }
+siu void lexeme_val_setunsigned (lexeme_t *lex, unsigned long v) {
+    lex->data.numval = v; }
 siu strdesc_t *lexeme_text (lexeme_t *lex) { return &lex->text; }
 siu void lexeme_text_set (lexeme_t *lex, strdesc_t *newtext) {
     string_copy(&lex->text, newtext); }
 siu unsigned short lexeme_textlen(lexeme_t *lex) { return lex->text.len; }
-siu void *lexeme_ctx_get (lexeme_t *lex) { return lex->extra; }
-siu void lexeme_ctx_set (lexeme_t *lex, void *p) { lex->extra = p; }
-siu textpos_t lexeme_textpos_get(lexeme_t *lex) { return lex->textpos; }
-siu void lexeme_textpos_set (lexeme_t *lex, textpos_t pos) { lex->textpos = pos; }
-siu void lexeme_setpos (lexeme_t *lex, int f, unsigned int l, unsigned int c) {
-    lex->textpos = textpos_create(f, l, c); }
-siu void lexeme_getpos (lexeme_t *lex, int *f, unsigned int *l, unsigned int *c) {
-    *f = textpos_fileno(lex->textpos); *l = textpos_lineno(lex->textpos);
-    *c = textpos_colnum(lex->textpos); }
-siu void lexeme_copypos (lexeme_t *dst, lexeme_t *src) {
-	dst->textpos = src->textpos; }
+siu void *lexeme_ctx_get (lexeme_t *lex) { return lex->data.extra; }
+siu void lexeme_ctx_set (lexeme_t *lex, void *p) { lex->data.extra = p; }
 #undef siu
 
 DEFINE_TQ_FUNCS(lexseq, lexseq_t, lexeme_t)

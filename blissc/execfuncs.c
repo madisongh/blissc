@@ -103,6 +103,7 @@ static expr_node_t *
 function_bind (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 {
     name_t *np = lexeme_ctx_get(lex);
+    textpos_t pos = parser_curpos(expr_parse_ctx(ctx));
     funcdef_t *func;
     exprseq_t args;
     expr_node_t *result = 0;
@@ -127,7 +128,7 @@ function_bind (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
             expr_signal(ctx, STC__INSFUNARG, fname);
             string_free(fname);
         } else {
-            result = expr_node_alloc(ctx, EXPTYPE_EXECFUN, lexeme_textpos_get(lex));
+            result = expr_node_alloc(ctx, EXPTYPE_EXECFUN, pos);
         }
         if (result != 0) {
             expr_func_name_set(result, np);
@@ -135,7 +136,7 @@ function_bind (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
             expr_has_value_set(result, (func->flags & FUNC_M_NOVALUE) == 0);
         }
     } else {
-        result = (*func->handler)(ctx, func->fnctx, np, &args, lexeme_textpos_get(lex));
+        result = (*func->handler)(ctx, func->fnctx, np, &args, pos);
     }
 
     if (result == 0) {

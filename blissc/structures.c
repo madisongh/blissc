@@ -459,7 +459,7 @@ declare_structure (expr_ctx_t ctx, scopectx_t scope)
     int which;
 
     while (term == LEXTYPE_DELIM_COMMA) {
-        if (!parse_decl_name(pctx, scope, &struname, &pos)) {
+        if (!parse_decl_name(pctx, &struname, &pos)) {
             break;
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LBRACK, 0, 1)) {
@@ -532,7 +532,7 @@ parse_fields (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
     static strdesc_t zero = STRDEF("0");
 
     while (1) {
-        if (!parse_decl_name(pctx, scope, &fldname, &fpos)) {
+        if (!parse_decl_name(pctx, &fldname, &fpos)) {
             expr_signal(ctx, STC__NAMEEXP);
             break;
         }
@@ -793,7 +793,7 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
     scopectx_t myscope, fldscope;
     nameref_t *ref;
     expr_node_t *exp, *resexp;
-    textpos_t pos = lexeme_textpos_get(curlex);
+    textpos_t pos = parser_curpos(pctx);
     strudef_t *stru = name_extraspace(struname);
     static lextype_t delims[3] = { LEXTYPE_DELIM_RBRACK, LEXTYPE_DELIM_COMMA,
         LEXTYPE_DELIM_SEMI };
@@ -874,8 +874,6 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
                     lexseq_t testseq;
                     lexseq_init(&testseq);
                     lexseq_copy(lctx, &testseq, &seq);
-                    // XXX another place where it would be convenient
-                    // to have an expr_parse_seq_ctce() that returns a lexeme
                     if (!expr_parse_seq(ctx, &testseq, &exp) ||
                         expr_type(exp) != EXPTYPE_PRIM_LIT) {
                         expr_signal(ctx, STC__EXPCTCE);
