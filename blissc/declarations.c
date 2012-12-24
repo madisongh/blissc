@@ -110,6 +110,7 @@ static int
 declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
+    strctx_t strctx = expr_strctx(ctx);
     textpos_t pos;
     lextype_t lt;
     name_t *np;
@@ -132,7 +133,7 @@ declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
                     expr_signal(ctx, STC__INTCMPERR, "declare_compiletime");
                 }
             }
-            string_free(namestr);
+            string_free(strctx, namestr);
         }
 
         lt = parser_next(pctx, QL_NORMAL, 0);
@@ -141,7 +142,7 @@ declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
         }
         if (lt != LEXTYPE_DELIM_COMMA) {
             expr_signal(ctx, STC__DELIMEXP, ",");
-            string_free(namestr);
+            string_free(expr_strctx(ctx), namestr);
             return 0;
         }
 
@@ -167,7 +168,7 @@ parse_decl_name (parse_ctx_t pctx, strdesc_t **result, textpos_t *pos)
     lt = parser_next(pctx, QL_NAME, &lex);
 
     if (lt == LEXTYPE_NAME || lexeme_boundtype(lex) == LEXTYPE_NAME) {
-        *result = string_copy(0, lexeme_text(lex));
+        *result = string_copy(parser_strctx(pctx), 0, lexeme_text(lex));
         *pos = parser_curpos(pctx);
         lexeme_free(parser_lexmemctx(pctx), lex);
         return 1;
@@ -212,13 +213,13 @@ declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
         } else {
             if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 0)) {
                 expr_signal(ctx, STC__OPEREXP, "=");
-                string_free(namestr);
+                string_free(expr_strctx(ctx), namestr);
                 return 0;
             } else {
                 long val;
                 if (!expr_parse_ctce(ctx, 0, &val)) {
                     expr_signal(ctx, STC__EXPCTCE);
-                    string_free(namestr);
+                    string_free(expr_strctx(ctx), namestr);
                     return 0;
                 }
                 attr.value = (unsigned long) val;
@@ -247,7 +248,7 @@ declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
                 }
                 if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
                     expr_signal(ctx, STC__DELIMEXP, ")");
-                    string_free(namestr);
+                    string_free(expr_strctx(ctx), namestr);
                     return 0;
                 }
             }
@@ -259,7 +260,7 @@ declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
                             (decltype == DCL_GLOBAL ? SYMSCOPE_GLOBAL
                              : (decltype == DCL_EXTERNAL ? SYMSCOPE_EXTERNAL
                                 : SYMSCOPE_LOCAL)), &attr, pos);
-        string_free(namestr);
+        string_free(expr_strctx(ctx), namestr);
         if (np == 0) {
             expr_signal(ctx, STC__INTCMPERR, "declare_literal");
         }
@@ -302,7 +303,7 @@ declare_label (parse_ctx_t pctx, scopectx_t scope)
             log_signal(parser_logctx(pctx), parser_curpos(pctx),
                        STC__INTCMPERR, "declare_label");
         }
-        string_free(namestr);
+        string_free(parser_strctx(pctx), namestr);
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1)) {
             break;
         }
@@ -419,7 +420,7 @@ declare_psect (expr_ctx_t ctx, scopectx_t scope)
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
             expr_signal(ctx, STC__DELIMEXP);
         }
-        string_free(psname);
+        string_free(expr_strctx(ctx), psname);
     }
 
     return 1;
@@ -614,11 +615,14 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
         expr_signal(ctx, STC__INTCMPERR, "define_plit[1]");
         seg_free(stg, seg);
     } else {
-        strdesc_t *plitname = tempname_get(expr_namectx(ctx));
+        char pnbuf[32];
+        int pnlen = tempname_get(expr_namectx(ctx), pnbuf, sizeof(pnbuf));
         data_attr_t attr;
+        strdesc_t plitname;
         memset(&attr, 0, sizeof(attr));
         attr.psect = psname;
-        np = datasym_declare(parser_scope_get(pctx), plitname,
+        strdesc_init(&plitname, pnbuf, pnlen);
+        np = datasym_declare(parser_scope_get(pctx), &plitname,
                              SYMSCOPE_LOCAL, &attr, pos);
         if (np == 0) {
             expr_signal(ctx, STC__INTCMPERR, "define_plit[2]");
@@ -671,8 +675,6 @@ attr_align (expr_ctx_t ctx, int *valp)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     machinedef_t *mach = expr_machinedef(ctx);
-    lexctx_t lctx = expr_lexmemctx(ctx);
-    lexeme_t *lex;
     long val;
 
     if (mach->bpval % 8 != 0) {
@@ -684,12 +686,9 @@ attr_align (expr_ctx_t ctx, int *valp)
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
         expr_signal(ctx, STC__DELIMEXP, "(");
     }
-    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NUMERIC, &lex, 1)) {
+    if (!expr_parse_ctce(ctx, 0, &val)) {
         expr_signal(ctx, STC__EXPCTCE);
         val = machine_align_max(mach);
-    } else {
-        val = lexeme_signedval(lex);
-        lexeme_free(lctx, lex);
     }
     if (val < 0 || val > machine_align_max(mach)) {
         expr_signal(ctx, STC__INVALIGN, val);
@@ -1102,13 +1101,13 @@ declare_data (expr_ctx_t ctx, scopectx_t scope, lextype_t lt, decltype_t dt)
         }
         if (status < 0) {
             seg_free(stg, seg);
-            string_free(namestr);
+            string_free(expr_strctx(ctx), namestr);
             datasym_seg_set(np, 0);
             name_undeclare(scope, np, 0);
             break;
         }
         seg_commit(stg, seg);
-        string_free(namestr);
+        string_free(expr_strctx(ctx), namestr);
     }
 
     return 1;
@@ -1188,7 +1187,7 @@ declare_bind (expr_ctx_t ctx, scopectx_t scope, decltype_t dt)
         status = parser_expect_oneof(pctx, QL_NORMAL, delims, 2, 0, 1);
         if (status < 0) {
             seg_free(stg, seg);
-            string_free(namestr);
+            string_free(expr_strctx(ctx), namestr);
             if (np != 0) name_undeclare(scope, np, 0);
             expr_signal(ctx, STC__DELIMEXP, ",");
             break;
@@ -1197,7 +1196,7 @@ declare_bind (expr_ctx_t ctx, scopectx_t scope, decltype_t dt)
         attr.flags &= ~SYM_M_PENDING;
         datasym_attr_update(np, &attr);
         datasym_seg_set(np, seg);
-        string_free(namestr);
+        string_free(expr_strctx(ctx), namestr);
     }
 
     return 1;
@@ -1249,11 +1248,11 @@ declare_map (expr_ctx_t ctx, scopectx_t scope)
         }
         status = parser_expect_oneof(pctx, QL_NORMAL, delims, 2, 0, 1);
         if (status < 0) {
-            string_free(namestr);
+            string_free(expr_strctx(ctx), namestr);
             expr_signal(ctx, STC__DELIMEXP, ",");
             break;
         }
-        string_free(namestr);
+        string_free(expr_strctx(ctx), namestr);
     }
 
     return 1;
@@ -1301,7 +1300,7 @@ parse_formals (expr_ctx_t ctx, scopectx_t curscope,
                 *argtable = scope_begin(expr_namectx(ctx), 0);
             }
             np = datasym_declare(*argtable, namestr, SYMSCOPE_LOCAL, &attr, pos);
-            string_free(namestr);
+            string_free(expr_strctx(ctx), namestr);
             if (np == 0) {
                 expr_signal(ctx, STC__INTCMPERR, "parse_formals[1]");
                 break;
@@ -1601,7 +1600,7 @@ declare_builtin (parse_ctx_t pctx, scopectx_t scope)
         namestr = 0;
         if (parse_decl_name(pctx, &namestr, &pos)) {
             name_declare_builtin(scope, namestr, pos); // errors handled inside
-            string_free(namestr);
+            string_free(parser_strctx(pctx), namestr);
         } else {
             log_signal(parser_logctx(pctx), parser_curpos(pctx),
                        STC__NAMEEXP);
@@ -1828,7 +1827,7 @@ declare_module (expr_ctx_t ctx)
     ndef.name = text->ptr;
     ndef.namelen = text->len;
     np = name_declare(scope, &ndef, pos, 0, 0, 0);
-    string_free(text);
+    string_free(expr_strctx(ctx), text);
     if (np == 0) {
         expr_signal(ctx, STC__INTCMPERR, "declare_module");
         return 0;

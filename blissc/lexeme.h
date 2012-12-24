@@ -211,10 +211,7 @@ struct lexeme_s {
     lextype_t        boundtype;
     strdesc_t        text;
     unsigned long    flags;
-    union {
-        unsigned long    numval;
-        void            *extra;
-    }                data;
+    void            *extra;
 };
 typedef struct lexeme_s lexeme_t;
 
@@ -230,7 +227,7 @@ typedef int (*lextype_bind_fn)(lexctx_t lctx, void *pctx, quotelevel_t ql,
              quotemodifier_t qm, lextype_t lt, condstate_t cs,
              lexeme_t *orig, lexseq_t *result);
 
-lexctx_t lexeme_init(logctx_t logctx);
+lexctx_t lexeme_init(strctx_t strctx, logctx_t logctx);
 void lexeme_finish(lexctx_t lctx);
 lexeme_t *lexeme_copy(lexctx_t lctx, lexeme_t *orig);
 void lexeme_free(lexctx_t lctx, lexeme_t *lex);
@@ -258,18 +255,12 @@ siu lextype_t lexeme_type (lexeme_t *lex) { return lex->type; }
 siu void lexeme_type_set(lexeme_t *lex, lextype_t type) {
     lex->type = type; if (type != LEXTYPE_UNBOUND) lex->boundtype = type; }
 siu void lexeme_boundtype_set(lexeme_t *lex, lextype_t type) { lex->boundtype = type; }
-siu long lexeme_signedval (lexeme_t *lex) { return (long) lex->data.numval; }
-siu unsigned long lexeme_unsignedval (lexeme_t *lex) { return lex->data.numval; }
-siu void lexeme_val_setsigned (lexeme_t *lex, long v) {
-    lex->data.numval = (unsigned long) v; }
-siu void lexeme_val_setunsigned (lexeme_t *lex, unsigned long v) {
-    lex->data.numval = v; }
 siu strdesc_t *lexeme_text (lexeme_t *lex) { return &lex->text; }
-siu void lexeme_text_set (lexeme_t *lex, strdesc_t *newtext) {
-    string_copy(&lex->text, newtext); }
+siu void lexeme_text_set (lexeme_t *lex, strctx_t strctx, strdesc_t *newtext) {
+    string_copy(strctx, &lex->text, newtext); }
 siu unsigned short lexeme_textlen(lexeme_t *lex) { return lex->text.len; }
-siu void *lexeme_ctx_get (lexeme_t *lex) { return lex->data.extra; }
-siu void lexeme_ctx_set (lexeme_t *lex, void *p) { lex->data.extra = p; }
+siu void *lexeme_ctx_get (lexeme_t *lex) { return lex->extra; }
+siu void lexeme_ctx_set (lexeme_t *lex, void *p) { lex->extra = p; }
 #undef siu
 
 DEFINE_TQ_FUNCS(lexseq, lexseq_t, lexeme_t)

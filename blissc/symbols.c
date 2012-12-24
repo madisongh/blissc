@@ -147,9 +147,10 @@ data_copy (void *vctx, name_t *dnp, void *dp, name_t *snp, void *sp)
  * lexeme_bind.
  */
 static int
-bind_compiletime (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
+bind_compiletime (lexctx_t lctx, void *vctx, quotelevel_t ql, quotemodifier_t qm,
                   lextype_t lt, condstate_t cs, lexeme_t *lex,
                   lexseq_t *result) {
+    expr_ctx_t ctx = vctx;
     name_t *np = lexeme_ctx_get(lex);
     long val;
 
@@ -162,10 +163,9 @@ bind_compiletime (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
         return 0;
     }
     val = name_value_signed(np);
-    string_free(&lex->text);
-    string_printf(&lex->text, "%ld", val);
+    string_free(expr_strctx(ctx), &lex->text);
+    string_printf(expr_strctx(ctx), &lex->text, "%ld", val);
     lex->type = lex->boundtype = LEXTYPE_NUMERIC;
-    lexeme_val_setsigned(lex, val);
 
     return 0;
 
@@ -202,9 +202,8 @@ bind_literal (lexctx_t lctx, void *vctx, quotelevel_t ql, quotemodifier_t qm,
                        (lit->attr.flags & SYM_M_SIGNEXT) != 0);
     }
     lexeme_type_set(lex, LEXTYPE_NUMERIC);
-    string_free(lexeme_text(lex));
-    string_printf(lexeme_text(lex), "%ld", val);
-    lexeme_val_setsigned(lex, val);
+    string_free(expr_strctx(ctx), lexeme_text(lex));
+    string_printf(expr_strctx(ctx), lexeme_text(lex), "%ld", val);
     return 0;
 
 } /* bind_literal */
@@ -449,10 +448,8 @@ datasym_attr_update (name_t *np, data_attr_t *attrp)
         gsym = name_extraspace(sym->globalsym);
         if (!(gsym->attr.flags & SYM_M_PENDING) &&
             !compare_data_attrs(&gsym->attr, attrp)) {
-            strdesc_t *dsc = name_string(np);
             symctx_t symctx = nametables_symctx_get(scope_namectx(name_scope(np)));
-            log_signal(symctx->logctx, name_defpos(np), STC__ATTRNCMPT, dsc);
-            string_free(dsc);
+            log_signal(symctx->logctx, name_defpos(np), STC__ATTRNCMPT, name_string(np));
             return 0;
         }
     }
@@ -797,10 +794,8 @@ rtnsym_attr_update (name_t *np, routine_attr_t *attrp)
         gsym = name_extraspace(sym->globalsym);
         if (!(gsym->attr.flags & SYM_M_PENDING) &&
             !compare_routine_attrs(&gsym->attr, attrp)) {
-            strdesc_t *dsc = name_string(np);
             symctx_t symctx = nametables_symctx_get(scope_namectx(name_scope(np)));
-            log_signal(symctx->logctx, name_defpos(np), STC__ATTRNCMPT, dsc);
-            string_free(dsc);
+            log_signal(symctx->logctx, name_defpos(np), STC__ATTRNCMPT, name_string(np));
             return 0;
         }
     }
@@ -1075,9 +1070,7 @@ sym_check_dangling_forwards (scopectx_t scope, textpos_t pos)
         }
         if (is_dangling) {
             symctx_t symctx = nametables_symctx_get(scope_namectx(scope));
-            strdesc_t *str = name_string(np);
-            log_signal(symctx->logctx, pos, STC__FWDNOTDCL, str);
-            string_free(str);
+            log_signal(symctx->logctx, pos, STC__FWDNOTDCL, name_string(np));
         }
     }
 

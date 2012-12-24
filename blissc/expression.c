@@ -43,13 +43,19 @@
 static const char *exptypenames[] = { DOEXPTYPES };
 #undef DOEXPTYPE
 
+struct extenthdr_s {
+    struct extenthdr_s *next;
+};
+
 struct expr_ctx_s {
+    strctx_t            strctx;
     parse_ctx_t         pctx;
     stgctx_t            stg;
     namectx_t           namectx;
     lexctx_t            lctx;
     machinedef_t       *mach;
     logctx_t            logctx;
+    struct extenthdr_s *extents;
     expr_node_t        *freenodes;
     expr_dispatch_fn    dispatchers[LEXTYPE_EXPKWD_MAX-LEXTYPE_EXPKWD_MIN+1];
     expr_dispatch_fn    name_dispatchers[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1];
@@ -252,10 +258,14 @@ expr_node_alloc (expr_ctx_t ctx, exprtype_t type, textpos_t pos)
     int i;
 
     if (ctx->freenodes == 0) {
-        ctx->freenodes = malloc(ALLOC_QTY * sizeof(expr_node_t));
-        if (ctx->freenodes == 0) {
+        struct extenthdr_s *extent;
+        extent = malloc(sizeof(struct extenthdr_s) + (ALLOC_QTY * sizeof(expr_node_t)));
+        if (extent == 0) {
             return 0;
         }
+        extent->next = ctx->extents;
+        ctx->extents = extent;
+        ctx->freenodes = (expr_node_t *)(extent + 1);
         memset(ctx->freenodes, 0x66, ALLOC_QTY*sizeof(expr_node_t));
         for (i = 0, node = ctx->freenodes; i < ALLOC_QTY-1; i++, node++) {
             expr_next_set(node, node+1);
@@ -360,7 +370,7 @@ expr_node_free (expr_ctx_t ctx, expr_node_t *node)
             break;
 
         case EXPTYPE_PRIM_LIT:
-            string_free(expr_litstring(node));
+            string_free(ctx->strctx, expr_litstring(node));
             break;
 
         case EXPTYPE_EXECFUN:
@@ -490,7 +500,7 @@ expr_node_copy (expr_ctx_t ctx, expr_node_t *node)
 
         case EXPTYPE_PRIM_LIT:
             if (expr_litstring(node) != 0) {
-                expr_litstring_set(dst, string_copy(0, expr_litstring(node)));
+                expr_litstring_set(dst, string_copy(ctx->strctx, 0, expr_litstring(node)));
             }
             break;
 
@@ -633,7 +643,7 @@ lookup_dispatcher (expr_ctx_t ctx, lextype_t lt)
  * Module initialization.
  */
 expr_ctx_t
-expr_init (parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope)
+expr_init (strctx_t strctx, parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope)
 {
     expr_ctx_t ectx;
     int i;
@@ -643,6 +653,7 @@ expr_init (parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope)
         return 0;
     }
     memset(ectx, 0, sizeof(struct expr_ctx_s));
+    ectx->strctx = strctx;
     ectx->pctx = pctx;
     ectx->lctx = parser_lexmemctx(pctx);
     ectx->stg = stg;
@@ -690,6 +701,25 @@ void expr_loopdepth_incr (expr_ctx_t ctx) { ctx->loopdepth += 1; }
 void expr_loopdepth_decr (expr_ctx_t ctx) { ctx->loopdepth -= 1; }
 int expr_loopdepth_get (expr_ctx_t ctx) { return ctx->loopdepth; }
 void *expr_fake_label_ptr (expr_ctx_t ctx) { return ctx->fake_label_ptr; }
+strctx_t expr_strctx(expr_ctx_t ctx) { return ctx->strctx; }
+
+void
+expr_finish (expr_ctx_t ctx)
+{
+    struct extenthdr_s *e, *enext;
+
+    if (ctx == 0) {
+        return;
+    }
+
+    for (e = ctx->extents; e != 0; e = enext) {
+        enext = e->next;
+        free(e);
+    }
+
+    free(ctx);
+
+} /* expr_finish */
 
 /*
  * expr_push_routine
@@ -916,7 +946,9 @@ expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_PCTREF, 0, 1)) {
                 scopectx_t scope = parser_scope_get(pctx);
                 textpos_t pos = parser_curpos(pctx);
-                strdesc_t *str;
+                char tnbuf[32];
+                int tnlen;
+                strdesc_t str;
                 name_t *tmpsym;
                 initval_t *ivlist;
                 seg_t *seg;
@@ -932,9 +964,9 @@ expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
                 if (!expr_has_value(exp)) {
                     expr_signal(ctx, STC__EXPRVALRQ);
                 }
-                str = tempname_get(ctx->namectx);
-                tmpsym = datasym_declare(scope, str, SYMSCOPE_LOCAL, 0, pos);
-                string_free(str);
+                tnlen = tempname_get(ctx->namectx, tnbuf, sizeof(tnbuf));
+                strdesc_init(&str, tnbuf, tnlen);
+                tmpsym = datasym_declare(scope, &str, SYMSCOPE_LOCAL, 0, pos);
                 ivlist = expr_initval_add(ctx, 0, exp, machine_scalar_units(ctx->mach));
                 seg = seg_alloc_stack(ctx->stg, pos, 0);
                 if (tmpsym == 0 || seg == 0 || !seg_initval_set(ctx->stg, seg, ivlist)) {
@@ -1103,7 +1135,7 @@ parse_codecomment (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
 
     namereflist_init(&labels);
     while (parser_expect(pctx, QL_NORMAL, LEXTYPE_STRING, &lex, 1)) {
-        codecomment = string_append(codecomment, lexeme_text(lex));
+        codecomment = string_append(ctx->strctx, codecomment, lexeme_text(lex));
         lexeme_free(ctx->lctx, lex);
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
             break;
@@ -1123,7 +1155,7 @@ parse_codecomment (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
     lt = parser_next(pctx, QL_NORMAL, &lex);
     if (lt != LEXTYPE_DELIM_LPAR && lt != LEXTYPE_EXP_DELIM_BEGIN) {
         expr_signal(ctx, STC__BLOCKEXP);
-        string_free(codecomment);
+        string_free(ctx->strctx, codecomment);
         return 0;
     }
     lexeme_free(ctx->lctx, lex);
@@ -1179,8 +1211,14 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
             return 0;
         }
     } else if (lt == LEXTYPE_NUMERIC) {
+        strdesc_t *ltext = lexeme_text(lex);
+        long val;
         exp = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
-        expr_litval_set(exp, lexeme_signedval(lex));
+        if (!string_numval(ltext, 10, &val)) {
+            expr_signal(ctx, STC__NUMCNVERR, ltext->ptr, ltext->len);
+            val = 0;
+        }
+        expr_litval_set(exp, val);
         expr_is_ctce_set(exp, 1);
         expr_has_value_set(exp, 1);
     } else if (lt == LEXTYPE_STRING) {
@@ -1193,7 +1231,7 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
             len = machine_scalar_maxbytes(ctx->mach);
         }
         exp = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
-        expr_litstring_set(exp, string_copy(0, text));
+        expr_litstring_set(exp, string_copy(ctx->strctx, 0, text));
         for (i = 0; i < len; i++) {
             val = val | (*(text->ptr+i) << (i*8));
         }
@@ -1847,11 +1885,10 @@ expr_parse_ctce (expr_ctx_t ctx, lexeme_t **lexp, long *valp)
     }
     val = expr_litval(exp);
     if (lexp != 0) {
-        strdesc_t *str = string_printf(0, "%ld", expr_litval(exp));
+        strdesc_t *str = string_printf(ctx->strctx, 0, "%ld", expr_litval(exp));
         *lexp = parser_lexeme_create(pctx, LEXTYPE_NUMERIC, str);
-        lexeme_val_setsigned(*lexp, val);
         (*lexp)->type = LEXTYPE_NUMERIC;
-        string_free(str);
+        string_free(ctx->strctx, str);
     }
     if (valp != 0) {
         *valp = val;
@@ -2050,10 +2087,10 @@ parse_EXACTSTRING (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curl
     }
     fillchr = val & 0xff;
     if (val > 255) {
-        strdesc_t *valstr = string_printf(0, "%ld", val);
+        strdesc_t *valstr = string_printf(ctx->strctx, 0, "%ld", val);
         expr_signal(ctx, STC__INVCHRVAL, valstr);
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
-        string_free(valstr);
+        string_free(ctx->strctx, valstr);
         return 1;
     }
 
@@ -2074,19 +2111,19 @@ parse_EXACTSTRING (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curl
         lexeme_free(expr_lexmemctx(ctx), lex);
         return 1;
     }
-    str = string_copy(0, lexeme_text(lex));
+    str = string_copy(ctx->strctx, 0, lexeme_text(lex));
     if (str->len < len) {
         strdesc_t *filldsc;
-        filldsc = string_alloc(0, len - str->len);
+        filldsc = string_alloc(ctx->strctx, 0, len - str->len);
         if (filldsc == 0) {
             expr_signal(ctx, STC__OUTOFMEM);
         } else {
             memset(filldsc->ptr, fillchr, filldsc->len);
-            str = string_append(str, filldsc);
+            str = string_append(ctx->strctx, str, filldsc);
             if (str == 0) {
                 expr_signal(ctx, STC__OUTOFMEM);
             }
-            string_free(filldsc);
+            string_free(ctx->strctx, filldsc);
         }
     } else if (str->len > len) {
         str->len = len;
@@ -2094,7 +2131,7 @@ parse_EXACTSTRING (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curl
 
     lexeme_free(expr_lexmemctx(ctx), lex);
     parser_insert(pctx, parser_lexeme_create(pctx, LEXTYPE_STRING, str));
-    string_free(str);
+    string_free(ctx->strctx, str);
 
     return 1;
 
@@ -2123,7 +2160,7 @@ parse_CHAR (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
         return 1;
     }
 
-    result = string_alloc(0, 0);
+    result = string_alloc(ctx->strctx, 0, 0);
     strdesc_init(&chdsc, &ch, 1);
     while (1) {
         if (!expr_parse_ctce(ctx, 0, &val)) {
@@ -2133,16 +2170,15 @@ parse_CHAR (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
             break;
         }
         if (val > 255) {
-            strdesc_t *text = string_printf(0, "%ld", val);
-            expr_signal(ctx, STC__NUMCNVERR,
-                       text->ptr, text->len);
-            string_free(text);
+            strdesc_t *text = string_printf(ctx->strctx, 0, "%ld", val);
+            expr_signal(ctx, STC__NUMCNVERR, text->ptr, text->len);
+            string_free(ctx->strctx, text);
             skip_to_paren = 1;
             hit_error = 1;
             break;
         }
         ch = val & 0xff;
-        result = string_append(result, &chdsc);
+        result = string_append(ctx->strctx, result, &chdsc);
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
             break;
         }
@@ -2161,7 +2197,7 @@ parse_CHAR (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
     } else {
         parser_insert(pctx, parser_lexeme_create(pctx, LEXTYPE_STRING, result));
     }
-    string_free(result);
+    string_free(ctx->strctx, result);
 
     return 1;
 
@@ -2303,7 +2339,6 @@ parse_NUMBER (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
             lexeme_free(lctx, lex);
             rlex = lexeme_create(lctx, LEXTYPE_STRING, &zero);
         } else {
-            lexeme_val_setsigned(lex, val);
             rlex = lex;
         }
     } else {
@@ -2313,9 +2348,9 @@ parse_NUMBER (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
             val = 0;
             expr_signal(ctx, STC__EXPCTCE);
         }
-        str = string_printf(0, "%ld", val);
+        str = string_printf(ctx->strctx, 0, "%ld", val);
         rlex = lexeme_create(lctx, LEXTYPE_STRING, str);
-        string_free(str);
+        string_free(ctx->strctx, str);
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
         expr_signal(ctx, STC__DELIMEXP, ")");
@@ -2383,9 +2418,9 @@ parse_nbits_func (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt
         expr_signal(ctx, STC__NBITSERR, maxbits, machine_scalar_bits(mach));
         maxbits = machine_scalar_bits(mach);
     }
-    bcstr = string_printf(0, "%ld", maxbits);
+    bcstr = string_printf(ctx->strctx, 0, "%ld", maxbits);
     parser_insert(pctx, parser_lexeme_create(pctx, LEXTYPE_NUMERIC, bcstr));
-    string_free(bcstr);
+    string_free(ctx->strctx, bcstr);
     return 1;
 
 } /* parse_nbits_func */
@@ -2405,6 +2440,7 @@ parse_ALLOCATION (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt
     name_t *np;
     data_attr_t attr;
 
+    attr.units = 0;
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
         expr_signal(ctx, STC__DELIMEXP, "(");
     }
@@ -2422,7 +2458,8 @@ parse_ALLOCATION (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt
     }
 
     parser_insert(pctx, parser_lexeme_create(pctx, LEXTYPE_NUMERIC,
-                                             string_printf(0, "%lu", attr.units)));
+                                             string_printf(ctx->strctx, 0,
+                                                           "%lu", attr.units)));
     return 1;
 
 } /* parse_ALLOCATION */

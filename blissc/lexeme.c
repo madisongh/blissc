@@ -31,11 +31,17 @@ static const char *ltnames[] = { DOLEXTYPES };
 
 #define ALLOC_QTY 512
 
+struct extenthdr_s {
+    struct extenthdr_s *next;
+};
+
 struct lexctx_s {
-    logctx_t         logctx;
-    lexeme_t        *freepool;
-    lextype_bind_fn  binders[LEXTYPE_COUNT];
-    void            *bctx[LEXTYPE_COUNT];
+    logctx_t             logctx;
+    strctx_t             strctx;
+    struct extenthdr_s  *extents;
+    lexeme_t            *freepool;
+    lextype_bind_fn      binders[LEXTYPE_COUNT];
+    void                *bctx[LEXTYPE_COUNT];
 };
 
 static lexeme_t errlex = { 0, LEXTYPE_NONE };
@@ -86,11 +92,15 @@ lexeme_alloc (lexctx_t lctx, lextype_t type, const char *text, size_t len)
     int i;
 
     if (lctx->freepool == 0) {
-        lctx->freepool = malloc(ALLOC_QTY * sizeof(lexeme_t));
-        if (lctx->freepool == 0) {
+        struct extenthdr_s *extent;
+        extent = malloc(sizeof(struct extenthdr_s) + (ALLOC_QTY * sizeof(lexeme_t)));
+        if (extent == 0) {
             log_signal(lctx->logctx, 0, STC__OUTOFMEM, "lexeme_alloc");
             return &errlex;
         }
+        extent->next = lctx->extents;
+        lctx->extents = extent;
+        lctx->freepool = (lexeme_t *)(extent + 1);
         for (i = 0, lex = lctx->freepool; i < ALLOC_QTY-1; i++, lex++) {
             lex->tq_next = lex + 1;
         }
@@ -100,9 +110,9 @@ lexeme_alloc (lexctx_t lctx, lextype_t type, const char *text, size_t len)
     lex = lctx->freepool;
     lctx->freepool = lex->tq_next;
     memset(lex, 0, sizeof(lexeme_t));
-    string_alloc(&lex->text, len);
+    string_alloc(lctx->strctx, &lex->text, len);
     if (text != 0) {
-        string_from_chrs(&lex->text, text, len);
+        string_from_chrs(lctx->strctx, &lex->text, text, len);
     }
     lex->type = lex->boundtype = type;
     lex->flags = LEX_M_ALLOCATED;
@@ -156,29 +166,14 @@ lexeme_bind (lexctx_t lctx, textpos_t curpos, quotelevel_t ql, quotemodifier_t q
         return 0;
     }
 
-    if (lt == LEXTYPE_NUMERIC) {
-        long val;
-        strdesc_t *ltext = lexeme_text(lex);
-        char *cp;
-
-        errno = 0;
-        val = strtol(ltext->ptr, &cp, 10);
-        if (errno != 0) {
-            char errbuf[64];
-            errbuf[0] = '\0';
-            strerror_r(errno, errbuf, sizeof(errbuf));
-            log_signal(lctx->logctx, curpos, STC__NUMCNVERR, errbuf, strlen(errbuf));
-            return -1;
-        }
-        lexeme_val_setsigned(lex, val);
-    } else if (lt == LEXTYPE_CSTRING) {
+    if (lt == LEXTYPE_CSTRING) {
         strdesc_t *ltext = lexeme_text(lex);
         strdesc_t *cstr;
         lexeme_t *nlex;
         size_t len;
 
         len = ltext->len > 255 ? 255 : ltext->len;
-        cstr = ascic_string_from_chrs(0, ltext->ptr, len);
+        cstr = ascic_string_from_chrs(lctx->strctx, 0, ltext->ptr, len);
         nlex = lexeme_alloc(lctx, lt, cstr->ptr, cstr->len);
         lexseq_instail(result, nlex);
         lexeme_free(lctx, lex);
@@ -196,13 +191,14 @@ lexeme_bind (lexctx_t lctx, textpos_t curpos, quotelevel_t ql, quotemodifier_t q
  * Module initialization.  Called from the lexer module.
  */
 lexctx_t
-lexeme_init (logctx_t logctx)
+lexeme_init (strctx_t strctx, logctx_t logctx)
 {
     lexctx_t lctx = malloc(sizeof(struct lexctx_s));
 
     if (lctx != 0) {
         memset(lctx, 0, sizeof(struct lexctx_s));
         lctx->logctx = logctx;
+        lctx->strctx = strctx;
     }
     return lctx;
 
@@ -216,6 +212,15 @@ lexeme_init (logctx_t logctx)
 void
 lexeme_finish (lexctx_t lctx)
 {
+    struct extenthdr_s *e, *enext;
+    if (lctx == 0) {
+        return;
+    }
+    for (e = lctx->extents; e != 0; e = enext) {
+        enext = e->next;
+        free(e);
+    }
+
     free(lctx);
 
 } /* lexeme_finish */
@@ -260,7 +265,7 @@ lexeme_free (lexctx_t lctx, lexeme_t *lex)
         return;
     }
     if (lex->flags & LEX_M_ALLOCATED) {
-        string_free(&lex->text);
+        string_free(lctx->strctx, &lex->text);
         memset(lex, 0xdd, sizeof(lexeme_t));
         lex->tq_next = lctx->freepool;
         lctx->freepool = lex;
@@ -289,7 +294,7 @@ lexeme_copy (lexctx_t lctx, lexeme_t *orig)
         return &errlex;
     }
     lex->boundtype = orig->boundtype;
-    memcpy(&lex->data, &orig->data, sizeof(lex->data));
+    lex->extra = orig->extra;
     lex->tq_next = 0;
     return lex;
 

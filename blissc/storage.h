@@ -88,7 +88,7 @@ initval_t *preset_scalar_add(stgctx_t ctx, initval_t *head, void *pexp, long val
 initval_t *preset_expr_add(stgctx_t ctx, initval_t *head, void *pexp,
                            int is_expr, void *exp);
 
-stgctx_t storage_init(machinedef_t *mach);
+stgctx_t storage_init(strctx_t strctx, machinedef_t *mach);
 void storage_finish(stgctx_t ctx);
 
 frame_t *frame_begin(stgctx_t ctx, textpos_t defpos, void *routine);

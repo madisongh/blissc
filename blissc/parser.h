@@ -31,7 +31,7 @@ typedef struct parse_ctx_s *parse_ctx_t;
 
 typedef int (*lexfunc_t)(parse_ctx_t pctx, void *ctx, quotelevel_t ql,
                          lextype_t curlt);
-parse_ctx_t parser_init(namectx_t namectx, machinedef_t *mach,
+parse_ctx_t parser_init(strctx_t strctx, namectx_t namectx, machinedef_t *mach,
                         scopectx_t *kwdscopep, logctx_t logctx);
 void parser_lexfunc_register(parse_ctx_t pctx, void *ctx,
                              lextype_t lt, lexfunc_t fn);
@@ -63,6 +63,7 @@ int parser_expect_oneof(parse_ctx_t pctx, quotelevel_t ql,
                               lextype_t explts[], int numlts,
                               lexeme_t **lex, int pboe);
 machinedef_t *parser_get_machinedef(parse_ctx_t pctx);
+strctx_t parser_strctx(parse_ctx_t pctx);
 textpos_t parser_curpos(parse_ctx_t pctx);
 void parser_punctclass_set(parse_ctx_t pctx, punctclass_t cl, lextype_t lt);
 void parser_punctclass_get(parse_ctx_t pctx, punctclass_t *clp, lextype_t *ltp);

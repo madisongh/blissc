@@ -454,7 +454,9 @@ DEFINE_TQ_FUNCS(exprseq, exprseq_t, expr_node_t)
 void exprseq_free(expr_ctx_t ctx, exprseq_t *seq);
 void exprseq_copy(expr_ctx_t ctx, exprseq_t *dst, exprseq_t *src);
 
-expr_ctx_t expr_init (parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope);
+expr_ctx_t expr_init (strctx_t strctx, parse_ctx_t pctx,
+                      stgctx_t stg, scopectx_t kwdscope);
+void expr_finish(expr_ctx_t ctx);
 int expr_parse_expr(expr_ctx_t ctx, expr_node_t **expp);
 int expr_parse_ctce(expr_ctx_t ctx, lexeme_t **lex, long *valp);
 int expr_parse_block(expr_ctx_t ctx, expr_node_t **blkexp);
@@ -468,6 +470,7 @@ machinedef_t *expr_machinedef(expr_ctx_t);
 namectx_t expr_namectx(expr_ctx_t);
 lexctx_t expr_lexmemctx(expr_ctx_t);
 logctx_t expr_logctx(expr_ctx_t);
+strctx_t expr_strctx(expr_ctx_t);
 expr_node_t *expr_parse_arglist(expr_ctx_t ctx, expr_node_t *rtn);
 initval_t *expr_initval_add(expr_ctx_t ctx, initval_t *ivlist, expr_node_t *exp,
                             unsigned int width);

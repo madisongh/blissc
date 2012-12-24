@@ -154,8 +154,8 @@ log_signal (logctx_t ctx, textpos_t pos, statcode_t code, ...)
  * XXX this function should be moved to the listing module.
  */
 void
-log_print (logctx_t ctx, textpos_t pos, strdesc_t *str)
+log_print (logctx_t ctx, textpos_t pos, const char *s, size_t len)
 {
-    printf("%% %-*.*s\n", str->len, str->len, str->ptr);
+    printf("%% %-*.*s\n", (int)len, (int)len, s);
 
 } /* log_print */

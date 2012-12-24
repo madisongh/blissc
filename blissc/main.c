@@ -60,6 +60,7 @@ test_scanner (int argc, const char *argv[])
 {
     scanctx_t ctx = 0;
     jmp_buf retenv;
+    strctx_t strctx = 0;
     logctx_t logctx = 0;
     strdesc_t *tok;
     scantype_t toktype;
@@ -68,8 +69,9 @@ test_scanner (int argc, const char *argv[])
     int keepgoing = 1;
 
     if (setjmp(retenv)) goto finish;
+    strctx = strings_init();
     logctx =logging_init(retenv);
-    ctx = scan_init(logctx);
+    ctx = scan_init(strctx, logctx);
 
     if (ctx == 0) {
         return 999;
@@ -139,7 +141,7 @@ void PRINTCR (void)
     delim = "";
 }
 
-void PRINTEXPR(expr_node_t *exp);
+void PRINTEXPR(strctx_t strctx, expr_node_t *exp);
 
 void PRINTLEX(lexeme_t *lex)
 {
@@ -173,6 +175,7 @@ test_parser (int argc, const char *argv[])
     parse_ctx_t pctx = 0;
     scopectx_t kwdscope;
     jmp_buf retenv;
+    strctx_t strctx = 0;
     logctx_t logctx = 0;
     lexctx_t lctx;
 //    stgctx_t stg;
@@ -183,9 +186,10 @@ test_parser (int argc, const char *argv[])
     machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32, .signext_supported=1 };
 
     if (setjmp(retenv)) goto finish;
+    strctx = strings_init();
     logctx = logging_init(retenv);
 //    stg = storage_init(&machdef);
-    pctx = parser_init(0, &machdef, &kwdscope, logctx);
+    pctx = parser_init(strctx, 0, &machdef, &kwdscope, logctx);
     lctx = parser_lexmemctx(pctx);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]), ".bli")) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
@@ -220,6 +224,7 @@ test_expr (int argc, const char *argv[])
 {
     parse_ctx_t pctx = 0;
     stgctx_t stg;
+    strctx_t strctx = 0;
     expr_ctx_t  ectx;
     scopectx_t kwdscope;
     logctx_t logctx = 0;
@@ -235,10 +240,11 @@ test_expr (int argc, const char *argv[])
         goto finish;
     }
 
+    strctx = strings_init();
     logctx = logging_init(retenv);
-    stg = storage_init(&machdef);
-    pctx = parser_init(0, &machdef, &kwdscope, logctx);
-    ectx = expr_init(pctx, stg, kwdscope);
+    stg = storage_init(strctx, &machdef);
+    pctx = parser_init(strctx, 0, &machdef, &kwdscope, logctx);
+    ectx = expr_init(strctx, pctx, stg, kwdscope);
     if (!parser_fopen(pctx, argv[0], strlen(argv[0]), ".bli")) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
@@ -255,7 +261,7 @@ finish:
     return 0;
 }
 
-void PRINTEXPR_internal(int level, expr_node_t *exp)
+void PRINTEXPR_internal(int level, strctx_t strctx, expr_node_t *exp)
 {
     static char pfx[] = "                    +";
     if (level >= sizeof(pfx)) level = sizeof(pfx)-1;
@@ -268,14 +274,14 @@ void PRINTEXPR_internal(int level, expr_node_t *exp)
             expr_node_t *e;
             printf("%-*.*s{BLK:BEGIN}\n", level, level, pfx);
             for (e = exprseq_head(expr_blk_seq(exp)); e != 0; e = expr_next(e)) {
-                PRINTEXPR_internal(level+1, e);
+                PRINTEXPR_internal(level+1, strctx, e);
             }
             printf("%-*.*s{BLK:END}\n", level, level, pfx);
             break;
         }
         case EXPTYPE_PRIM_STRUREF:
             printf("%-*.*s{STRUREF<}\n", level, level, pfx);
-            PRINTEXPR_internal(level+1, expr_struref_accexpr(exp));
+            PRINTEXPR_internal(level+1, strctx, expr_struref_accexpr(exp));
             printf("%-*.*s{>STRUREF}\n", level, level, pfx);
             break;
         case EXPTYPE_PRIM_LIT:
@@ -286,7 +292,7 @@ void PRINTEXPR_internal(int level, expr_node_t *exp)
             if (expr_seg_name(exp) != 0) {
                 str = name_string(expr_seg_name(exp));
             } else {
-                str = string_printf(0, "<UNKNOWN>");
+                str = string_printf(strctx, 0, "<UNKNOWN>");
             }
             printf("%-*.*s{SEG:%-*.*s(%lx)}\n",
                    level, level, pfx, str->len, str->len, str->ptr,
@@ -295,15 +301,15 @@ void PRINTEXPR_internal(int level, expr_node_t *exp)
         }
         case EXPTYPE_PRIM_FLDREF:
             printf("%-*.*s{FLDREF<}\n", level, level, pfx);
-            PRINTEXPR_internal(level+1, expr_fldref_addr(exp));
-            PRINTEXPR_internal(level+1, expr_fldref_pos(exp));
-            PRINTEXPR_internal(level+1, expr_fldref_size(exp));
+            PRINTEXPR_internal(level+1, strctx, expr_fldref_addr(exp));
+            PRINTEXPR_internal(level+1, strctx, expr_fldref_pos(exp));
+            PRINTEXPR_internal(level+1, strctx, expr_fldref_size(exp));
             printf("%-*.*s{>FLDREF}\n", level, level, pfx);
             break;
         case EXPTYPE_OPERATOR:
             printf("%-*.*s{%s<}\n", level, level, pfx, oper_name(expr_op_type(exp)));
-            PRINTEXPR_internal(level+1, expr_op_lhs(exp));
-            PRINTEXPR_internal(level+1, expr_op_rhs(exp));
+            PRINTEXPR_internal(level+1, strctx, expr_op_lhs(exp));
+            PRINTEXPR_internal(level+1, strctx, expr_op_rhs(exp));
             printf("%-*.*s{>%s}\n", level, level, pfx, oper_name(expr_op_type(exp)));
             break;
         default:
@@ -311,7 +317,7 @@ void PRINTEXPR_internal(int level, expr_node_t *exp)
             break;
     }
 }
-void PRINTEXPR(expr_node_t *exp) {
-    PRINTEXPR_internal(0, exp);
+void PRINTEXPR(strctx_t strctx, expr_node_t *exp) {
+    PRINTEXPR_internal(0, strctx, exp);
 }
 

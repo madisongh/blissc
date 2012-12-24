@@ -86,6 +86,8 @@ fileio_finish (fioctx_t fio)
         free(ctx);
     }
 
+    free(fio);
+
 } /* fileio_finish */
 
 /*

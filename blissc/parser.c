@@ -32,6 +32,7 @@
 
 // Parser context structure
 struct parse_ctx_s {
+    strctx_t        strctx;
     namectx_t       namectx;
     scopectx_t      kwdscope, curscope;
     machinedef_t    *mach;
@@ -319,8 +320,8 @@ select_punctclass (parse_ctx_t pctx, lextype_t lt)
  * pointer to be stored in the block.
  */
 parse_ctx_t
-parser_init (namectx_t namectx, machinedef_t *mach, scopectx_t *kwdscopep,
-             logctx_t logctx)
+parser_init (strctx_t strctx, namectx_t namectx, machinedef_t *mach,
+             scopectx_t *kwdscopep, logctx_t logctx)
 {
     parse_ctx_t pctx;
     scopectx_t kwdscope;
@@ -338,6 +339,7 @@ parser_init (namectx_t namectx, machinedef_t *mach, scopectx_t *kwdscopep,
     pctx = malloc(sizeof(struct parse_ctx_s));
     if (pctx != 0) {
         memset(pctx, 0, sizeof(struct parse_ctx_s));
+        pctx->strctx   = strctx;
         pctx->logctx   = logctx;
         pctx->namectx  = namectx;
         pctx->kwdscope = kwdscope;
@@ -345,7 +347,7 @@ parser_init (namectx_t namectx, machinedef_t *mach, scopectx_t *kwdscopep,
             *kwdscopep = kwdscope;
         }
         pctx->curscope = scope_begin(namectx, kwdscope);
-        pctx->lexctx = lexer_init(pctx->kwdscope, logctx);
+        pctx->lexctx = lexer_init(strctx, pctx->kwdscope, logctx);
         if (pctx->lexctx != 0) {
             pctx->lmemctx = lexer_lexctx(pctx->lexctx);
         }
@@ -396,6 +398,7 @@ textpos_t parser_curpos(parse_ctx_t pctx) { return pctx->curpos; }
 lexctx_t parser_lexmemctx (parse_ctx_t pctx) { return pctx->lmemctx; }
 logctx_t parser_logctx (parse_ctx_t pctx) { return pctx->logctx; }
 machinedef_t *parser_get_machinedef (parse_ctx_t pctx) { return pctx->mach; }
+strctx_t parser_strctx (parse_ctx_t pctx) { return pctx->strctx; }
 void parser_punctclass_set (parse_ctx_t pctx, punctclass_t cl, lextype_t sep) {
     pctx->punctclass = cl; pctx->separator = sep; }
 void parser_punctclass_get (parse_ctx_t pctx, punctclass_t *clp, lextype_t *sepp) {
@@ -634,18 +637,20 @@ parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
         // Re-bind numeric lexemes, taking into account the target machine's
         // word size.  XXX look at moving this to a binding hook XXX
         if (lt == LEXTYPE_NUMERIC) {
+            strdesc_t *ltext = lexeme_text(lex);
             long sval;
-            sval = lexeme_signedval(lex);
+            if (!string_numval(ltext, 10, &sval)) {
+                log_signal(pctx->logctx, pctx->curpos, STC__NUMCNVERR, ltext->ptr, ltext->len);
+                sval = 0;
+            }
             if (sval < 0) {
                 if ((pctx->valmask & (-sval)) != (-sval)) {
                     log_signal(pctx->logctx, pctx->curpos, STC__NUMLITTRC, sval);
-                    lexeme_val_setsigned(lex, sval | ~pctx->valmask);
-                    string_printf(&lex->text, "%ld", (sval | ~pctx->valmask));
+                    string_printf(pctx->strctx, &lex->text, "%ld", (sval | ~pctx->valmask));
                 }
             } else if ((pctx->valmask & sval) != sval) {
                 log_signal(pctx->logctx, pctx->curpos, STC__NUMLITTRC, sval);
-                lexeme_val_setsigned(lex, sval & pctx->valmask);
-                string_printf(&lex->text, "%ld", (sval & pctx->valmask));
+                string_printf(pctx->strctx, &lex->text, "%ld", (sval & pctx->valmask));
             }
         }
         // Dispatch for lexical function processing
@@ -1003,7 +1008,7 @@ parse_string_literal (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t cu
     } else {
         if (curlt == LEXTYPE_LXF_ASCIZ) {
             static strdesc_t nullchr = STRZDEF("");
-            str = string_append(str, &nullchr);
+            str = string_append(pctx->strctx, str, &nullchr);
         } else if (curlt == LEXTYPE_LXF_ASCIC) {
             lt = LEXTYPE_CSTRING;
         }
@@ -1046,9 +1051,9 @@ parse_numeric_literal (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t c
         lexeme_free(pctx->lmemctx, lex);
         return 1;
     }
-    str = string_printf(0, "%ld", val);
+    str = string_printf(pctx->strctx, 0, "%ld", val);
     parser_lexeme_add(pctx, LEXTYPE_NUMERIC, str);
-    string_free(str);
+    string_free(pctx->strctx, str);
     lexeme_free(pctx->lmemctx, lex);
 
     return 1;
@@ -1075,7 +1080,7 @@ parse_C (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt) {
         strdesc_init(&dsc, buf, len);
         parser_lexeme_add(pctx, LEXTYPE_NUMERIC, &dsc);
     }
-    string_free(str);
+    string_free(pctx->strctx, str);
     lexeme_free(pctx->lmemctx, lex);
 
     return 1;
@@ -1096,7 +1101,7 @@ parse_string_params (parse_ctx_t pctx, int already_have_open_paren)
 {
     lexeme_t *lex;
     lextype_t lt;
-    strdesc_t *result = string_alloc(0,0);
+    strdesc_t *result = string_alloc(pctx->strctx, 0,0);
 
     if (!already_have_open_paren) {
         lt = parser_next(pctx, QL_NORMAL, &lex);
@@ -1123,11 +1128,11 @@ parse_string_params (parse_ctx_t pctx, int already_have_open_paren)
             case LEXTYPE_NUMERIC:
             case LEXTYPE_CSTRING:
             case LEXTYPE_STRING:
-                result = string_append(result, lexeme_text(lex));
+                result = string_append(pctx->strctx, result, lexeme_text(lex));
                 break;
             default:
                 if (is_name(lt)) {
-                    result = string_append(result, lexeme_text(lex));
+                    result = string_append(pctx->strctx, result, lexeme_text(lex));
                     break;
                 }
                 lexeme_free(pctx->lmemctx, lex);
@@ -1150,7 +1155,7 @@ parse_string_params (parse_ctx_t pctx, int already_have_open_paren)
     }
 
     lex = parser_lexeme_create(pctx, LEXTYPE_STRING, result);
-    string_free(result);
+    string_free(pctx->strctx, result);
     return lex;
 
 } /* parse_string_params */
@@ -1195,7 +1200,7 @@ parse_CHARCOUNT (parse_ctx_t pctx, void * ctx, quotelevel_t ql, lextype_t curlt)
     strdesc_init(&dsc, buf, len);
     parser_lexeme_add(pctx, LEXTYPE_NUMERIC, &dsc);
     lexeme_free(pctx->lmemctx, lex);
-    string_free(str);
+    string_free(pctx->strctx, str);
     return 1;
 
 } /* parse_CHARCOUNT */
@@ -1226,7 +1231,7 @@ parse_EXPLODE (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
     str = lexeme_text(lex);
     if (str->len == 0) {
         parser_lexeme_add(pctx, LEXTYPE_STRING, str);
-        string_free(str);
+        string_free(pctx->strctx, str);
         lexeme_free(pctx->lmemctx, lex);
         return 1;
     }
@@ -1575,7 +1580,7 @@ parse_msgfunc (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
         switch (curlt) {
             case LEXTYPE_LXF_PRINT:
                 // XXX this should be a listing function XXX
-                log_print(pctx->logctx, pos, text);
+                log_print(pctx->logctx, pos, text->ptr, text->len);
                 break;
             case LEXTYPE_LXF_MESSAGE:
                 log_signal(pctx->logctx, pos, STC__MESSAGE, text);

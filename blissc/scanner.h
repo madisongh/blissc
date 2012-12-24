@@ -41,7 +41,7 @@ static inline int __unused scan_ok (scantype_t typ) {
 
 typedef int (*scan_input_fn)(void *ctx, char *buf, size_t siz, size_t *len);
 
-scanctx_t scan_init(logctx_t logctx);
+scanctx_t scan_init(strctx_t strctx, logctx_t logctx);
 int scan_fopen(scanctx_t ctx, const char *fname, size_t fnlen,
                const char *suffix, char **actnamep);
 int scan_popen(scanctx_t ctx, scan_input_fn infn, void *fnctx);

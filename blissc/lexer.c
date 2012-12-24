@@ -65,6 +65,7 @@ typedef struct lexchain_s lexchain_t;
  */
 struct lexer_ctx_s {
     logctx_t                 logctx;
+    strctx_t                 strctx;
     lexctx_t                 lexctx;
     struct saved_filename_s *saved_filenames;
     lexchain_t              *chain;
@@ -187,7 +188,7 @@ filename_lookup (lexer_ctx_t lctx, const char *name, size_t len,
             lastsf->next = sf;
         }
         sf->next = 0;
-        sf->filename = string_from_chrs(0, name, len);
+        sf->filename = string_from_chrs(lctx->strctx, 0, name, len);
         sf->filename_index = lctx->filename_count;
         lctx->filename_count += 1;
     }
@@ -209,7 +210,7 @@ filename_lookup (lexer_ctx_t lctx, const char *name, size_t len,
  * is performed here as well.
  */
 lexer_ctx_t
-lexer_init (scopectx_t kwdscope, logctx_t logctx)
+lexer_init (strctx_t strctx, scopectx_t kwdscope, logctx_t logctx)
 {
     lexer_ctx_t ctx;
     int i;
@@ -221,10 +222,11 @@ lexer_init (scopectx_t kwdscope, logctx_t logctx)
     ctx = malloc(sizeof(struct lexer_ctx_s));
     if (ctx != 0) {
         memset(ctx, 0, sizeof(struct lexer_ctx_s));
+        ctx->strctx = strctx;
         ctx->logctx = logctx;
         log_fetchfn_set(logctx, (filename_fetch_fn) lexer_filename, ctx);
         ctx->signok = 1;
-        ctx->lexctx = lexeme_init(logctx);
+        ctx->lexctx = lexeme_init(strctx, logctx);
     }
 
     return ctx;
@@ -277,7 +279,7 @@ lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen,
         log_signal(ctx->logctx, 0, STC__OUTOFMEM, "lexer_fopen");
         return 0;
     }
-    chain->sctx = scan_init(ctx->logctx);
+    chain->sctx = scan_init(ctx->strctx, ctx->logctx);
     if (chain->sctx == 0) {
         lexchain_free(ctx->lexctx, chain);
         return 0;
@@ -308,7 +310,7 @@ lexer_popen (lexer_ctx_t ctx, scan_input_fn infn, void *fnctx)
         log_signal(ctx->logctx, 0, STC__OUTOFMEM, "lexer_popen");
         return 0;
     }
-    chain->sctx = scan_init(ctx->logctx);
+    chain->sctx = scan_init(ctx->strctx, ctx->logctx);
     if (chain->sctx == 0) {
         lexchain_free(ctx->lexctx, chain);
         return 0;
@@ -392,7 +394,7 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek, textpos_t *posp)
             if (!scan_ok(type)) {
                 log_signal(ctx->logctx, 0, STC__INTCMPERR, "lexer___next");
                 lex = &errlex;
-                string_free(tok);
+                string_free(ctx->strctx, tok);
                 break;
             }
             if (!peek && posp != 0) {
@@ -406,10 +408,10 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek, textpos_t *posp)
                 if (ctx->chain == 0) {
                     lex = &endlex;
                     ctx->atend = 1;
-                    string_free(tok);
+                    string_free(ctx->strctx, tok);
                     break;
                 }
-                string_free(tok);
+                string_free(ctx->strctx, tok);
                 continue;
             }
             switch (type) {
@@ -446,7 +448,7 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek, textpos_t *posp)
                     lexseq_inshead(&chain->seq, lex);
                 }
             }
-            string_free(tok);
+            string_free(ctx->strctx, tok);
             break;
         } else {
             ctx->chain = chain->nextchain;

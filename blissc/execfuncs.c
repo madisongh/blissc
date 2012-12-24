@@ -124,9 +124,7 @@ function_bind (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         int varargs = (func->flags & FUNC_M_VARARGS) != 0;
         if ((varargs && exprseq_length(&args) < func->numargs) ||
             (!varargs && exprseq_length(&args) != func->numargs)) {
-            strdesc_t *fname = name_string(np);
-            expr_signal(ctx, STC__INSFUNARG, fname);
-            string_free(fname);
+            expr_signal(ctx, STC__INSFUNARG, name_string(np));
         } else {
             result = expr_node_alloc(ctx, EXPTYPE_EXECFUN, pos);
         }

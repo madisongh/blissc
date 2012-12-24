@@ -76,6 +76,15 @@ struct stringpool_s {
     size_t           maxsize;
 };
 
+struct extenthdr_s {
+    struct extenthdr_s *next;
+};
+
+struct strctx_s {
+    struct stringpool_s pool[POOL_COUNT];
+    struct extenthdr_s *extents;
+};
+
 static struct stringpool_s  pool[POOL_COUNT] = {
     { 0, SMALLSZ }, { 0, MEDSZ }, { 0, LRGSZ }
 };
@@ -108,53 +117,89 @@ static inline string_t *desc_to_str (strdesc_t *dsc) {
  * Add more entries to a string pool's lookaside list.
  */
 static int
-stringpool_expand (int idx)
+stringpool_expand (strctx_t strctx, int idx)
 {
-    string_t *more = malloc((pool[idx].maxsize + sizeof(string_t))*ALLOCOUNT);
+    size_t maxsize = strctx->pool[idx].maxsize;
+    struct extenthdr_s *extent;
+    string_t *more;
     string_t *str;
     char *cp;
     int i;
 
-    if (more == 0) {
+    extent = malloc(sizeof(struct extenthdr_s) + (maxsize + sizeof(string_t))*ALLOCOUNT);
+    if (extent == 0) {
         return 0;
     }
+    extent->next = strctx->extents;
+    strctx->extents = extent;
+    more = (string_t *)(extent + 1);
 
     for (cp = (char *)more, i = 0; i < ALLOCOUNT;
          i++, cp += pool[idx].maxsize) {
         str = (string_t *) cp;
         cp += sizeof(string_t);
         str->poolindex = idx;
-        str->next = (string_t *)(cp + pool[idx].maxsize);
+        str->next = (string_t *)(cp + maxsize);
         str->desc.flags = 0;
         str->desc.len = 0;
         str->desc.ptr = cp;
     }
     // on exit, 'str' still points to the last allocated entry
-    str->next = pool[idx].freelist;
-    pool[idx].freelist = (string_t *) more;
+    str->next = strctx->pool[idx].freelist;
+    strctx->pool[idx].freelist = (string_t *) more;
     return 1;
 
 } /* stringpool_expand */
 
 
 /*
- * stringpool_init
+ * strings_init
  *
  * Initialize the string pools.
  */
-int
-stringpool_init (void)
+strctx_t
+strings_init (void)
 {
     int i;
+    strctx_t sctx = malloc(sizeof(struct strctx_s));
 
-    for (i = 0; i < POOL_COUNT; i++) {
-        if (!stringpool_expand(i)) {
-            return 0;
+    if (sctx != 0) {
+        memset(sctx, 0, sizeof(struct strctx_s));
+        sctx->pool[0].maxsize = SMALLSZ;
+        sctx->pool[1].maxsize = MEDSZ;
+        sctx->pool[2].maxsize = LRGSZ;
+        for (i = 0; i < POOL_COUNT; i++) {
+            if (!stringpool_expand(sctx, i)) {
+                return 0;
+            }
         }
     }
-    return 1;
+    return sctx;
 
-} /* stringpool_init */
+} /* strings_init */
+
+/*
+ * strings_finish
+ *
+ * Release all string memory.
+ */
+void
+strings_finish (strctx_t strctx)
+{
+    struct extenthdr_s *e, *enext;
+
+    if (strctx == 0) {
+        return;
+    }
+
+    for (e = strctx->extents; e != 0; e = enext) {
+        enext = e->next;
+        free(e);
+    }
+
+    free(strctx);
+
+} /* strings_finish */
 
 /*
  * string___alloc
@@ -164,7 +209,7 @@ stringpool_init (void)
  * if needed.
  */
 static string_t *
-string___alloc (size_t len)
+string___alloc (strctx_t strctx, size_t len)
 {
     string_t *str;
     int i = size_to_pool(len);
@@ -172,13 +217,13 @@ string___alloc (size_t len)
     if (i == POOL_NONE) {
         return 0;
     }
-    if (pool[i].freelist == 0) {
-        if (!stringpool_expand(i)) {
+    if (strctx->pool[i].freelist == 0) {
+        if (!stringpool_expand(strctx, i)) {
             return 0;
         }
     }
-    str = pool[i].freelist;
-    pool[i].freelist = str->next;
+    str = strctx->pool[i].freelist;
+    strctx->pool[i].freelist = str->next;
     str->next = 0;
     return str;
 
@@ -190,13 +235,13 @@ string___alloc (size_t len)
  * Return a string cell to its pool's lookaside list.
  */
 static void
-string___free (string_t *str)
+string___free (strctx_t strctx, string_t *str)
 {
     if (str->poolindex == POOL_NONE) {
         return;
     }
-    str->next = pool[str->poolindex].freelist;
-    pool[str->poolindex].freelist = str;
+    str->next = strctx->pool[str->poolindex].freelist;
+    strctx->pool[str->poolindex].freelist = str;
 
 } /* string___free */
 
@@ -209,9 +254,9 @@ string___free (string_t *str)
  *
  */
 strdesc_t *
-string_from_chrs (strdesc_t *dest, const char *cp, size_t len)
+string_from_chrs (strctx_t strctx, strdesc_t *dest, const char *cp, size_t len)
 {
-    string_t *str = string___alloc(len);
+    string_t *str = string___alloc(strctx, len);
 
     if (str == 0) {
         return 0;
@@ -235,9 +280,9 @@ string_from_chrs (strdesc_t *dest, const char *cp, size_t len)
  * prefixed with a length byte.
  */
 strdesc_t *
-ascic_string_from_chrs (strdesc_t *dest, const char *cp, size_t len)
+ascic_string_from_chrs (strctx_t strctx, strdesc_t *dest, const char *cp, size_t len)
 {
-    string_t *str = string___alloc(len+1);
+    string_t *str = string___alloc(strctx, len+1);
     if (str == 0) {
         return 0;
     }
@@ -264,13 +309,13 @@ ascic_string_from_chrs (strdesc_t *dest, const char *cp, size_t len)
  * returned by this routine to access the result.
  */
 strdesc_t *
-string_append (strdesc_t *trg, strdesc_t *add)
+string_append (strctx_t strctx, strdesc_t *trg, strdesc_t *add)
 {
     string_t *str;
     string_t *newstr;
 
     if (trg == 0) {
-        return string_copy(trg, add);
+        return string_copy(strctx, trg, add);
     }
     str = desc_to_str(trg);
     if (is_static(trg) ||
@@ -279,14 +324,14 @@ string_append (strdesc_t *trg, strdesc_t *add)
         trg->len += add->len;
         return trg;
     }
-    newstr = string___alloc(trg->len + add->len);
+    newstr = string___alloc(strctx, trg->len + add->len);
     if (newstr == 0) {
         return 0;
     }
     newstr->desc.len = trg->len + add->len;
     memcpy(newstr->desc.ptr, trg->ptr, trg->len);
     memcpy(newstr->desc.ptr + trg->len, add->ptr, add->len);
-    string___free(str);
+    string___free(strctx, str);
     return &newstr->desc;
 
 } /* string_append */
@@ -300,12 +345,12 @@ string_append (strdesc_t *trg, strdesc_t *add)
  * be silently ignored.
  */
 void
-string_free (strdesc_t *dsc)
+string_free (strctx_t strctx, strdesc_t *dsc)
 {
     if (dsc == 0 || is_static(dsc)) {
         return;
     }
-    string___free(desc_to_str(dsc));
+    string___free(strctx, desc_to_str(dsc));
 
 } /* string_free */
 
@@ -319,9 +364,9 @@ string_free (strdesc_t *dsc)
  * string.
  */
 strdesc_t *
-string_alloc (strdesc_t *dest, size_t len)
+string_alloc (strctx_t strctx, strdesc_t *dest, size_t len)
 {
-    string_t *str = string___alloc(len);
+    string_t *str = string___alloc(strctx, len);
     if (str == 0) {
         return 0;
     }
@@ -343,20 +388,20 @@ string_alloc (strdesc_t *dest, size_t len)
  * descriptor, if 'dest' is non-null).
  */
 strdesc_t *
-string_copy (strdesc_t *dest, strdesc_t *src)
+string_copy (strctx_t strctx, strdesc_t *dest, strdesc_t *src)
 {
     string_t *str;
 
     if (dest != 0 && !is_static(dest)) {
         str = desc_to_str(dest);
-        if (pool[str->poolindex].maxsize >= src->len) {
+        if (strctx->pool[str->poolindex].maxsize >= src->len) {
             dest->len = src->len;
             memcpy(dest->ptr, src->ptr, src->len);
             return dest;
         }
-        string___free(str);
+        string___free(strctx, str);
     }
-    str = string___alloc(src->len);
+    str = string___alloc(strctx, src->len);
     if (str == 0) {
         return 0;
     }
@@ -396,7 +441,7 @@ strings_eql (strdesc_t *a, strdesc_t *b)
  * and then copied to the dynamic string.
  */
 strdesc_t *
-string_printf (strdesc_t *dst, const char *fmt, ...)
+string_printf (strctx_t strctx, strdesc_t *dst, const char *fmt, ...)
 {
     va_list ap;
     char buf[256];
@@ -405,7 +450,7 @@ string_printf (strdesc_t *dst, const char *fmt, ...)
     va_start(ap, fmt);
     len = vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
-    return string_from_chrs(dst, buf, (len < 0 ? 0 : len));
+    return string_from_chrs(strctx, dst, buf, (len < 0 ? 0 : len));
 
 } /* string_printf */
 

@@ -28,8 +28,15 @@
 #include "strings.h"
 
 // Context structure for this module
+
+struct extenthdr_s {
+    struct extenthdr_s *next;
+};
+
 struct stgctx_s {
+    strctx_t         strctx;
     machinedef_t    *mach;
+    struct extenthdr_s *extents;
     psect_t         *psects;
     frame_t         *topframe;
     frame_t         *curframe;
@@ -141,12 +148,13 @@ struct seg_s {
  * Module initialization.
  */
 stgctx_t
-storage_init (machinedef_t *mach)
+storage_init (strctx_t strctx, machinedef_t *mach)
 {
     struct stgctx_s *ctx = malloc(sizeof(struct stgctx_s));
     if (ctx != 0) {
         memset(ctx, 0, sizeof(struct stgctx_s));
         ctx->mach = mach;
+        ctx->strctx = strctx;
     }
     return ctx;
 
@@ -161,7 +169,25 @@ storage_init (machinedef_t *mach)
 void
 storage_finish (stgctx_t ctx)
 {
-    return; // XXX to be filled in later
+    struct extenthdr_s *e, *enext;
+    psect_t *p, *pnext;
+
+    if (ctx == 0) {
+        return;
+    }
+
+    for (p = ctx->psects; p != 0; p = pnext) {
+        pnext = p->next;
+        string_free(ctx->strctx, p->name);
+        free(p);
+    }
+
+    for (e = ctx->extents; e != 0; e = enext) {
+        enext = e->next;
+        free(e);
+    }
+
+    free(ctx);
 
 } /* storage_finish */
 
@@ -209,7 +235,7 @@ psect_free (stgctx_t ctx, psect_t *psect)
     } else {
         lp->next = psect->next;
     }
-    string_free(psect->name);
+    string_free(ctx->strctx, psect->name);
     memset(psect, 0xf0, sizeof(psect_t));
     free(psect);
     // XXX - free the segments, too?
@@ -227,7 +253,7 @@ psect_create (stgctx_t ctx, strdesc_t *name, textpos_t pos, unsigned int attr)
     psect_t *psect = psect_alloc(ctx);
 
     if (psect != 0) {
-        psect->name = string_copy(0, name);
+        psect->name = string_copy(ctx->strctx, 0, name);
         psect->defpos = pos;
         psect->attr = attr;
     }
@@ -259,8 +285,15 @@ frame_begin (stgctx_t ctx, textpos_t pos, void *routine)
     frame_t *frm;
 
     if (ctx->freeframes == 0) {
+        struct extenthdr_s *extent;
         int i;
-        ctx->freeframes = malloc(sizeof(frame_t)*FRAME_ALLOCOUNT);
+        extent = malloc(sizeof(struct extenthdr_s) + sizeof(frame_t)*FRAME_ALLOCOUNT);
+        if (extent == 0) {
+            return 0;
+        }
+        extent->next = ctx->extents;
+        ctx->extents = extent;
+        ctx->freeframes = (frame_t *)(extent + 1);
         for (i = 0, frm = ctx->freeframes; i < FRAME_ALLOCOUNT-1; i++, frm++) {
             frm->parent = frm + 1;
         }
@@ -312,8 +345,15 @@ seg_alloc (stgctx_t ctx, segtype_t type, textpos_t defpos)
     seg_t *seg;
 
     if (ctx->freesegs == 0) {
+        struct extenthdr_s *extent;
         int i;
-        ctx->freesegs = malloc(sizeof(seg_t)*SEG_ALLOCOUNT);
+        extent = malloc(sizeof(struct extenthdr_s) + sizeof(seg_t)*SEG_ALLOCOUNT);
+        if (extent == 0) {
+            return 0;
+        }
+        extent->next = ctx->extents;
+        ctx->extents = extent;
+        ctx->freesegs = (seg_t *)(extent + 1);
         for (i = 0, seg = ctx->freesegs; i < SEG_ALLOCOUNT-1; i++, seg++) {
             seg->next = seg + 1;
         }
@@ -365,8 +405,15 @@ initval_alloc (stgctx_t ctx)
     initval_t *iv;
 
     if (ctx->freeivs == 0) {
+        struct extenthdr_s *extent;
         int i;
-        ctx->freeivs = malloc(sizeof(initval_t)*IV_ALLOCOUNT);
+        extent = malloc(sizeof(struct extenthdr_s) + sizeof(initval_t)*IV_ALLOCOUNT);
+        if (extent == 0) {
+            return 0;
+        }
+        extent->next = ctx->extents;
+        ctx->extents = extent;
+        ctx->freeivs = (initval_t *)(extent + 1);
         for (i = 0, iv = ctx->freeivs; i < IV_ALLOCOUNT-1; i++, iv++) {
             iv->next = iv + 1;
         }
@@ -581,7 +628,7 @@ initval_freelist (stgctx_t ctx, initval_t *iv)
         nextiv = iv->next;
         switch (iv->type) {
             case IVTYPE_STRING:
-                string_free(iv->data.string);
+                string_free(ctx->strctx, iv->data.string);
                 break;
             case IVTYPE_EXPR_EXP:
                 break; // XXX possible memory leak here?
@@ -763,7 +810,7 @@ initval_string_add (stgctx_t ctx, initval_t *listhead, unsigned int reps,
     }
     iv->type = IVTYPE_STRING;
     iv->repcount = reps;
-    iv->data.string = string_copy(0, str);
+    iv->data.string = string_copy(ctx->strctx, 0, str);
     if (listhead == 0) {
         iv->lastptr = iv;
         return iv;

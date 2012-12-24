@@ -53,6 +53,7 @@ struct bufctx_s {
 // Structure for tracking the current scanner
 // context.
 struct scanctx_s {
+    strctx_t        strctx;
     logctx_t        logctx;
     fioctx_t        fioctx;
     struct bufctx_s bufstack[SCAN_MAXFILES];
@@ -98,11 +99,12 @@ const static char valid_ident_char[256] = {
  * Initializes the scanner.
  */
 scanctx_t
-scan_init (logctx_t logctx)
+scan_init (strctx_t strctx, logctx_t logctx)
 {
     scanctx_t ctx = malloc(sizeof(struct scanctx_s));
     if (ctx != 0) {
         memset(ctx, 0, sizeof(struct scanctx_s));
+        ctx->strctx = strctx;
         ctx->logctx = logctx;
         ctx->curbuf = -1;
         ctx->fioctx = fileio_init(logctx);
@@ -234,7 +236,7 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                                (curbuf->inpfn == 0 ? file_getname(curbuf->fctx)
                                 : "(internal stream)"));
                     len = outp - ctx->tokbuf;
-                    *tok = string_from_chrs(0, ctx->tokbuf, len);
+                    *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
                     *lineno = curbuf->curline;
                     *column = 0;
                     return SCANTYPE_ERR_FIO;
@@ -244,7 +246,7 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
 				// of the original input stream, so we're done.
                 if (ctx->curbuf < 0) {
                     len = outp - ctx->tokbuf;
-                    *tok = string_from_chrs(0, ctx->tokbuf, len);
+                    *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
                     *lineno = curbuf->curline;
                     *column = 0;
                     return SCANTYPE_END;
@@ -254,7 +256,7 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                                (curbuf->inpfn == 0 ? file_getname(curbuf->fctx)
                                 : "(internal stream)"));
                     len = outp - ctx->tokbuf;
-                    *tok = string_from_chrs(0, ctx->tokbuf, len);
+                    *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
                     *lineno = curbuf->curline;
                     *column = 0;
                     return SCANTYPE_ERR_EOF;
@@ -426,7 +428,7 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                     }
                     curbuf->curpos = cp - &curbuf->linebuf[0];
                     len = outp - ctx->tokbuf;
-                    *tok = string_from_chrs(0, ctx->tokbuf, len);
+                    *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
                     return rettype;
 
                 case STATE_EXIT:
@@ -434,7 +436,7 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                     // set correctly before entry
                     curbuf->curpos = cp - &curbuf->linebuf[0];
                     len = outp - ctx->tokbuf;
-                    *tok = string_from_chrs(0, ctx->tokbuf, len);
+                    *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
                     return rettype;
 
             } /* switch */
@@ -452,17 +454,17 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
         switch (curstate) {
             case STATE_IN_DECLIT:
                 len = outp - ctx->tokbuf;
-                *tok = string_from_chrs(0, ctx->tokbuf, len);
+                *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
                 return SCANTYPE_DECLITERAL;
             case STATE_IN_IDENTIFIER:
                 len = outp - ctx->tokbuf;
-                *tok = string_from_chrs(0, ctx->tokbuf, len);
+                *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
                 return SCANTYPE_IDENTIFIER;
             case STATE_IN_QSTRING:
                 return SCANTYPE_ERR_QSTR;
             case STATE_EXIT:
                 len = outp - ctx->tokbuf;
-                *tok = string_from_chrs(0, ctx->tokbuf, len);
+                *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
                 return rettype;
             default:
                 break;
@@ -472,7 +474,7 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
     } /* while ctx->curbuf >= 0 */
 
     len = outp - ctx->tokbuf;
-    *tok = string_from_chrs(0, ctx->tokbuf, len);
+    *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
     return rettype;
 
 } /* scan_getnext */

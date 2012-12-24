@@ -724,7 +724,6 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
                     expr_signal(ctx, STC__INTCMPERR, "structure_allocate[4]");
                 }
             }
-            string_free(alloname);
             // Now copy the declaration into the scope we'll pass back
             // to the caller for later use
             if (scopep != 0) {
@@ -949,7 +948,9 @@ parse_FIELDEXPAND (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curl
 {
     expr_ctx_t ctx = vctx;
     lexctx_t lctx = expr_lexmemctx(ctx);
+    long val;
     lexeme_t *lex;
+    int gotval = 0;
     name_t *fnp;
 
     if (!(parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1))) {
@@ -966,29 +967,28 @@ parse_FIELDEXPAND (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curl
         return 1;
     }
     lexeme_free(lctx, lex);
-    lex = 0;
     if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
-        if (!expr_parse_ctce(ctx, &lex, 0)) {
+        gotval = 1;
+        if (!expr_parse_ctce(ctx, 0, &val)) {
             expr_signal(ctx, STC__EXPCTCE);
+            val = 0;
         }
     }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
         expr_signal(ctx, STC__DELIMEXP, ")");
     }
-    if (lex == 0) {
+    if (!gotval) {
         lexseq_t tmpseq;
         lexseq_init(&tmpseq);
         lexseq_copy(lctx, &tmpseq, field_lexseq(fnp));
         parser_insert_seq(pctx, &tmpseq);
     } else {
-        unsigned int which = (unsigned int) lexeme_unsignedval(lex);
-        lexeme_t *rlex = field_extract(fnp, which);
-        lexeme_free(lctx, lex);
-        if (rlex == 0) {
+        lex = field_extract(fnp, (unsigned int) val);
+        if (lex == 0) {
             expr_signal(ctx, STC__FLDEXPERR);
             parser_insert(pctx, parser_lexeme_create(pctx, LEXTYPE_NUMERIC, &zero));
         } else {
-            parser_insert(pctx, lexeme_copy(lctx, rlex));
+            parser_insert(pctx, lexeme_copy(lctx, lex));
         }
 
     }
@@ -1031,7 +1031,8 @@ parse_SIZE (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t lt)
     }
 
     parser_insert(pctx, parser_lexeme_create(pctx, LEXTYPE_NUMERIC,
-                                             string_printf(0, "%u", units)));
+                                             string_printf(expr_strctx(ctx), 0,
+                                                           "%u", units)));
 
     return 1;
 

@@ -120,6 +120,7 @@ scopectx_t name_scope(name_t *np);
 lexeme_t *name_to_lexeme(lexctx_t lctx, name_t *np);
 strdesc_t *name_string(name_t *np);
 namectx_t nametables_init(logctx_t logctx);
+void nametables_finish(namectx_t ctx);
 scopectx_t nametables_globalscope(namectx_t ctx);
 void *nametables_symctx_get(namectx_t ctx);
 void nametables_symctx_set(namectx_t ctx, void *p);
@@ -134,7 +135,7 @@ void scope_setparent(scopectx_t scope, scopectx_t newparent);
 void nametype_dataop_register(namectx_t ctx, lextype_t lt,
                               nametype_vectors_t *vec, void *vctx);
 int name_undeclare(scopectx_t scope, name_t *np, textpos_t pos);
-strdesc_t *tempname_get(namectx_t ctx);
+int tempname_get(namectx_t ctx, char *buf, size_t bufsiz);
 
 nameref_t *nameref_alloc(namectx_t ctx, name_t *np);
 void nameref_free(namectx_t ctx, nameref_t *nr);

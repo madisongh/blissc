@@ -13,6 +13,9 @@
  */
 #include <string.h>
 
+struct strctx_s;
+typedef struct strctx_s *strctx_t;
+
 /*
  * String descriptor structure.
  */
@@ -49,17 +52,18 @@ strdesc_init (strdesc_t *dsc, char *s, size_t len)
  */
 #define STRING_MAXLEN 1024
 
-int stringpool_init(void);
-strdesc_t *string_from_chrs(strdesc_t *dest,
+strctx_t strings_init(void);
+void strings_finish(strctx_t strctx);
+strdesc_t *string_from_chrs(strctx_t strctx, strdesc_t *dest,
                             const char *cp, size_t len);
-strdesc_t *ascic_string_from_chrs(strdesc_t *dest,
+strdesc_t *ascic_string_from_chrs(strctx_t strctx, strdesc_t *dest,
                                   const char *cp, size_t len);
-strdesc_t *string_append(strdesc_t *trg, strdesc_t *add);
-strdesc_t *string_alloc(strdesc_t *dest, size_t len);
-strdesc_t *string_copy(strdesc_t *dest, strdesc_t *src);
-void string_free(strdesc_t *dsc);
+strdesc_t *string_append(strctx_t strctx, strdesc_t *trg, strdesc_t *add);
+strdesc_t *string_alloc(strctx_t strctx, strdesc_t *dest, size_t len);
+strdesc_t *string_copy(strctx_t strctx, strdesc_t *dest, strdesc_t *src);
+void string_free(strctx_t strctx, strdesc_t *dsc);
 int strings_eql(strdesc_t *a, strdesc_t *b);
-strdesc_t *string_printf(strdesc_t *dst, const char *fmt, ...);
+strdesc_t *string_printf(strctx_t strctx, strdesc_t *dst, const char *fmt, ...);
 int string_numval(strdesc_t *str, int base, long *valp);
 
 #endif /* strings_h__ */

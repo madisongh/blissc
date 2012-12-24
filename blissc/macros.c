@@ -270,8 +270,7 @@ macro_copydata (void *vctx, name_t *dst, void *dp, name_t *src, void *sp)
             np = 0;
         } else {
             strdesc_t *namestr = name_string(ref->np);
-            np = name_search(dstm->ptable, namestr->ptr,
-                             namestr->len, 0);
+            np = name_search(dstm->ptable, namestr->ptr, namestr->len, 0);
         }
         namereflist_instail(&dstm->plist, nameref_alloc(namectx, np));
     }
@@ -281,8 +280,7 @@ macro_copydata (void *vctx, name_t *dst, void *dp, name_t *src, void *sp)
             np = 0;
         } else {
             strdesc_t *namestr = name_string(ref->np);
-            np = name_search(dstm->ptable, namestr->ptr,
-                             namestr->len, 0);
+            np = name_search(dstm->ptable, namestr->ptr, namestr->len, 0);
         }
         namereflist_instail(&dstm->ilist, nameref_alloc(namectx, np));
     }
@@ -438,7 +436,7 @@ macro_paramlist (expr_ctx_t ctx, scopectx_t curscope,
         ndef.name = namestr->ptr;
         ndef.namelen = namestr->len;
         mnp = name_declare(pscope, &ndef, pos, 0, 0, &pseq);
-        string_free(namestr);
+        string_free(expr_strctx(ctx), namestr);
         if (mnp == 0) {
             expr_signal(ctx, STC__INTCMPERR, "macro_paramlist");
             break;
@@ -588,13 +586,13 @@ declare_macro (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
 
         if (skip_to_end) {
             name_free(np);
-            string_free(ltext);
+            string_free(expr_strctx(ctx), ltext);
             break;
         }
         if (macro->ptable != 0) {
             scope_setparent(macro->ptable, 0);
         }
-        string_free(ltext);
+        string_free(expr_strctx(ctx), ltext);
 
         if (parser_expect(pctx, QL_NAME, LEXTYPE_DELIM_SEMI, 0, 1)) {
             break;
@@ -730,12 +728,12 @@ prepare_body (expr_ctx_t ctx, scopectx_t expscope, struct macrodecl_s *macro,
                 case LEXTYPE_LXF_COUNT:
                 case LEXTYPE_LXF_LENGTH: {
                     strdesc_t * str;
-                    str = string_printf(0, "%u",
+                    str = string_printf(expr_strctx(ctx), 0, "%u",
                                         (lt == LEXTYPE_LXF_COUNT
                                          ? curdepth : actcount));
                     lexeme_free(lctx, lex);
                     lex = parser_lexeme_create(pctx, LEXTYPE_NUMERIC, str);
-                    string_free(str);
+                    string_free(expr_strctx(ctx), str);
                     break;
                 }
             } /* switch (lt) */

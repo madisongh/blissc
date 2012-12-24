@@ -32,7 +32,7 @@ unsigned int log_warncount(logctx_t ctx);
 unsigned int log_errcount(logctx_t ctx);
 void log_signal(logctx_t ctx, textpos_t pos, statcode_t code, ...);
 void log_vsignal(logctx_t ctx, textpos_t pos, statcode_t code, va_list ap);
-void log_print(logctx_t ctx, textpos_t pos, strdesc_t *str);
+void log_print(logctx_t ctx, textpos_t pos, const char *s, size_t len);
 void logging_finish(logctx_t ctx);
 
 #endif /* logging_h__ */
