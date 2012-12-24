@@ -50,6 +50,7 @@ static lextype_t bodyends[] = { LEXTYPE_DELIM_COMMA, LEXTYPE_DELIM_SEMI };
 static strdesc_t leftparen = STRDEF("(");
 static strdesc_t rightparen = STRDEF(")");
 static strdesc_t dot = STRDEF(".");
+static strdesc_t zero = STRDEF("0");
 
 /*
  * The following definitions are used in the initialization
@@ -86,6 +87,9 @@ static char *predeclared_blockvector_u =
 static char *predeclared_blockvector_nu =
     "STRUCTURE BLOCKVECTOR[I,O,P,S,E;N,BS] = "
     "[N*BS](BLOCKVECTOR+(I*BS+O)<P,S,E>;";
+
+static int parse_FIELDEXPAND(parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t lt);
+static int parse_SIZE(parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t lt);
 
 /*
  * structure_bind
@@ -127,7 +131,7 @@ structure_init (void *vctx, name_t *np, void *p)
     namereflist_init(&stru->accformals);
     namereflist_init(&stru->alloformals);
     lexseq_init(&stru->accbody);
-    lexseq_init(&stru->allobody);
+    lexseq_init(&stru->allobody);    
     return 1;
 
 } /* structure_init */
@@ -399,6 +403,8 @@ structures_init (expr_ctx_t ctx)
     int i;
 
     expr_dispatch_register(ctx, LEXTYPE_NAME_STRUCTURE, structure_bind);
+    parser_lexfunc_register(pctx, ctx, LEXTYPE_LXF_FIELDEXPAND, parse_FIELDEXPAND);
+    parser_lexfunc_register(pctx, ctx, LEXTYPE_LXF_SIZE, parse_SIZE);
 
     memset(&vec, 0, sizeof(vec));
     vec.typesize = sizeof(strudef_t);
@@ -468,12 +474,12 @@ declare_structure (expr_ctx_t ctx, scopectx_t scope)
         if (np == 0) {
             expr_signal(ctx, STC__INTCMPERR, "declare_structure");
         }
-        which = macro_paramlist(pctx, 0, 1, 0, delims, 2,
+        which = macro_paramlist(ctx, 0, 1, 0, delims, 2,
                                 &stru->acctbl, &stru->accformals);
         if (which < 0) {
             expr_signal(ctx, STC__SYNTAXERR);
         } else if (which == 1) {
-            which = macro_paramlist(pctx, 0, 1, 0, delims, 1,
+            which = macro_paramlist(ctx, 0, 1, 0, delims, 1,
                                     &stru->allotbl, &stru->alloformals);
             if (which < 0) {
                 expr_signal(ctx, STC__SYNTAXERR);
@@ -572,7 +578,7 @@ parse_fields (expr_ctx_t ctx, scopectx_t scope, namereflist_t *fldset)
             expr_signal(ctx, STC__DELIMEXP, "]");
         }
         while (1) {
-            if (expr_parse_ctce(ctx, &lex)) {
+            if (expr_parse_ctce(ctx, &lex, 0)) {
                 lexseq_instail(fseq, lex);
             } else {
                 expr_signal(ctx, STC__EXPCTCE);
@@ -629,7 +635,6 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
     strudef_t *stru = name_extraspace(struname);
     machinedef_t *mach = expr_machinedef(ctx);
     lexctx_t lctx = expr_lexmemctx(ctx);
-    lexeme_t *lex;
     lexseq_t tmpseq;
     scopectx_t myscope, retscope;
     nameref_t *ref;
@@ -700,9 +705,7 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
                 }
                 if (i >= 0) {
                     val = i;
-                } else if (expr_parse_ctce(ctx, &lex)) {
-                    val = lexeme_unsignedval(lex);
-                    lexeme_free(lctx, lex);
+                } else if (expr_parse_ctce(ctx, 0, (long *)&val)) {
                     np = litsym_special(myscope, alloname, val);
                     i = 0;
                 }
@@ -748,15 +751,15 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
     if (lexseq_length(&stru->allobody) == 0) {
         *nunits = (is_ref ? machine_addr_units(mach) : 0);
     } else {
+        long val;
         lexseq_init(&tmpseq);
         lexseq_copy(lctx, &tmpseq, &stru->allobody);
         parser_insert_seq(pctx, &tmpseq);
-        if (!expr_parse_ctce(ctx, &lex)) {
+        if (!expr_parse_ctce(ctx, 0, &val)) {
             expr_signal(ctx, STC__EXPCTCE);
             return 0;
         }
-        *nunits = (unsigned int)lexeme_unsignedval(lex);
-        lexeme_free(lctx, lex);
+        *nunits = (unsigned int) val;
     }
     if (scopep != 0) *scopep = retscope;
     parser_scope_end(pctx);
@@ -937,3 +940,101 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
     return exp;
 
 } /* structure_reference */
+
+/*
+ * parse_FIELDEXPAND
+ *
+ * %FIELDEXPAND(field-name {,n})
+ */
+static int
+parse_FIELDEXPAND (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
+{
+    expr_ctx_t ctx = vctx;
+    lexctx_t lctx = expr_lexmemctx(ctx);
+    lexeme_t *lex;
+    name_t *fnp;
+
+    if (!(parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1))) {
+        expr_signal(ctx, STC__DELIMEXP, "(");
+        return 1;
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NAME_FIELD, &lex, 1)) {
+        expr_signal(ctx, STC__FLDNAMEXP);
+        return 1;
+    }
+    fnp = lexeme_ctx_get(lex);
+    if (fnp == 0) {
+        expr_signal(ctx, STC__INTCMPERR, "parse_FIELDEXPAND");
+        return 1;
+    }
+    lexeme_free(lctx, lex);
+    lex = 0;
+    if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
+        if (!expr_parse_ctce(ctx, &lex, 0)) {
+            expr_signal(ctx, STC__EXPCTCE);
+        }
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
+        expr_signal(ctx, STC__DELIMEXP, ")");
+    }
+    if (lex == 0) {
+        lexseq_t tmpseq;
+        lexseq_init(&tmpseq);
+        lexseq_copy(lctx, &tmpseq, field_lexseq(fnp));
+        parser_insert_seq(pctx, &tmpseq);
+    } else {
+        unsigned int which = (unsigned int) lexeme_unsignedval(lex);
+        lexeme_t *rlex = field_extract(fnp, which);
+        lexeme_free(lctx, lex);
+        if (rlex == 0) {
+            expr_signal(ctx, STC__FLDEXPERR);
+            parser_insert(pctx, parser_lexeme_create(pctx, LEXTYPE_NUMERIC, &zero));
+        } else {
+            parser_insert(pctx, lexeme_copy(lctx, rlex));
+        }
+
+    }
+
+    return 1;
+
+} /* parse_FIELDEXPAND */
+
+/*
+ * parse_SIZE
+ *
+ * %SIZE(structure-attribute)
+ *
+ * Returns the number of addressable units that would
+ * be allocated for a data segment with the specified
+ * structure attribute.
+ */
+static int
+parse_SIZE (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t lt)
+{
+    expr_ctx_t ctx = vctx;
+    lexeme_t *lex;
+    strudef_t *stru;
+    unsigned int units;
+
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
+        expr_signal(ctx, STC__DELIMEXP, "(");
+        return 0;
+    }
+    units = 0;
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NAME_STRUCTURE, &lex, 1)) {
+        expr_signal(ctx, STC__STRUNMEXP);
+        return 1;
+    }
+    if (!structure_allocate(ctx, lexeme_ctx_get(lex), &stru, &units, 0, 0)) {
+        expr_signal(ctx, STC__SYNTAXERR);
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
+        expr_signal(ctx, STC__DELIMEXP, ")");
+    }
+
+    parser_insert(pctx, parser_lexeme_create(pctx, LEXTYPE_NUMERIC,
+                                             string_printf(0, "%u", units)));
+
+    return 1;
+
+} /* expr_parse_SIZE */

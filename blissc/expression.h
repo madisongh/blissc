@@ -456,7 +456,7 @@ void exprseq_copy(expr_ctx_t ctx, exprseq_t *dst, exprseq_t *src);
 
 expr_ctx_t expr_init (parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope);
 int expr_parse_expr(expr_ctx_t ctx, expr_node_t **expp);
-int expr_parse_ctce(expr_ctx_t ctx, lexeme_t **lex);
+int expr_parse_ctce(expr_ctx_t ctx, lexeme_t **lex, long *valp);
 int expr_parse_block(expr_ctx_t ctx, expr_node_t **blkexp);
 int expr_parse_seq(expr_ctx_t ctx, lexseq_t *seq, expr_node_t **expp);
 void expr_dispatch_register(expr_ctx_t ctx, lextype_t lt, expr_dispatch_fn fn);
@@ -471,13 +471,13 @@ logctx_t expr_logctx(expr_ctx_t);
 expr_node_t *expr_parse_arglist(expr_ctx_t ctx, expr_node_t *rtn);
 initval_t *expr_initval_add(expr_ctx_t ctx, initval_t *ivlist, expr_node_t *exp,
                             unsigned int width);
-int expr_parse_ISSTRING(expr_ctx_t ctx, int *allstr);
-int expr_parse_xCTE(expr_ctx_t ctx, int checkltce, int *allok);
-int expr_get_allocation(expr_ctx_t ctx, strdesc_t *name, unsigned int *units);
-int expr_parse_SIZE(expr_ctx_t ctx, unsigned int *units);
 void expr_push_routine(expr_ctx_t ctx, name_t *np);
 void expr_pop_routine(expr_ctx_t ctx);
 name_t *expr_current_routine (expr_ctx_t ctx);
+void expr_loopdepth_incr(expr_ctx_t ctx);
+void expr_loopdepth_decr(expr_ctx_t ctx);
+int expr_loopdepth_get(expr_ctx_t ctx);
+void *expr_fake_label_ptr(expr_ctx_t ctx);
 void expr_signal(expr_ctx_t ctx, statcode_t code, ...);
 
 #endif /* expression_h__ */

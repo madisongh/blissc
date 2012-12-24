@@ -29,14 +29,16 @@ typedef enum {
 struct parse_ctx_s;
 typedef struct parse_ctx_s *parse_ctx_t;
 
+typedef int (*lexfunc_t)(parse_ctx_t pctx, void *ctx, quotelevel_t ql,
+                         lextype_t curlt);
 parse_ctx_t parser_init(namectx_t namectx, machinedef_t *mach,
                         scopectx_t *kwdscopep, logctx_t logctx);
+void parser_lexfunc_register(parse_ctx_t pctx, void *ctx,
+                             lextype_t lt, lexfunc_t fn);
 int parser_fopen(parse_ctx_t pctx, const char *fname, size_t fnlen,
                  const char *suffix);
 int parser_popen(parse_ctx_t pctx, scan_input_fn infn, void *fnctx);
 void parser_finish(parse_ctx_t pctx);
-void *parser_get_expctx(parse_ctx_t pctx);
-void parser_set_expctx(parse_ctx_t pctx, void *ectx);
 lexctx_t parser_lexmemctx(parse_ctx_t pctx);
 logctx_t parser_logctx(parse_ctx_t pctx);
 lextype_t parser_next(parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lex);
@@ -50,6 +52,7 @@ scopectx_t parser_scope_begin(parse_ctx_t pctx);
 scopectx_t parser_scope_end(parse_ctx_t pctx);
 void parser_incr_erroneof(parse_ctx_t pctx);
 void parser_decr_erroneof(parse_ctx_t pctx);
+int parser_condstate_push(parse_ctx_t pctx, condstate_t newcs);
 int parse_lexeme_seq(parse_ctx_t pctx, lexseq_t *seq, quotelevel_t ql,
                      lextype_t terms[], int nterms,
                      lexseq_t *result, lextype_t *term);
@@ -65,5 +68,5 @@ void parser_punctclass_set(parse_ctx_t pctx, punctclass_t cl, lextype_t lt);
 void parser_punctclass_get(parse_ctx_t pctx, punctclass_t *clp, lextype_t *ltp);
 lexeme_t *parser_punct_grouper(parse_ctx_t pctx, int docloser);
 lexeme_t *parser_punct_separator(parse_ctx_t pctx);
-
+lexeme_t *parse_string_params(parse_ctx_t pctx, int openparenparsed);
 #endif /* parser_h__ */

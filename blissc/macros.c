@@ -383,11 +383,12 @@ macparam_lookup (lexctx_t lctx, scopectx_t scope, strdesc_t *pname, lexseq_t *va
  *          index of closing delimiter in delims[] array on success
  */
 int
-macro_paramlist (parse_ctx_t pctx, scopectx_t curscope,
+macro_paramlist (expr_ctx_t ctx, scopectx_t curscope,
                  int assign_allowed, int for_macro,
                  lextype_t delims[], int ndelims,
                  scopectx_t *ptable, namereflist_t *plist)
 {
+    parse_ctx_t pctx = expr_parse_ctx(ctx);
     namectx_t namectx = scope_namectx(parser_scope_get(pctx));
     lexctx_t lctx = parser_lexmemctx(pctx);
     lexeme_t *lex;
@@ -457,7 +458,7 @@ macro_paramlist (parse_ctx_t pctx, scopectx_t curscope,
                 status = parse_lexeme_seq(pctx, 0, QL_MACRO,
                                           terms, ndelims+1, pseq, &lt);
             } else {
-                status = expr_parse_ctce(parser_get_expctx(pctx), &lex);
+                status = expr_parse_ctce(ctx, &lex, 0);
                 if (status) lexseq_instail(pseq, lex);
                 lt = parser_next(pctx, QL_NORMAL, 0);
             }
@@ -497,8 +498,9 @@ macro_paramlist (parse_ctx_t pctx, scopectx_t curscope,
  * KEYWORDMACRO macro-name { (param{=defval},...) } = {stuff} % {,...}
  */
 int
-declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
+declare_macro (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
 {
+    parse_ctx_t pctx = expr_parse_ctx(ctx);
     int skip_to_end = 0;
     lexeme_t *lex;
     lextype_t lt;
@@ -532,7 +534,7 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
         macro->type = (is_kwdmacro ? MACRO_KWD : MACRO_UNK);
         // Parse the regular parameters
         if (lt == LEXTYPE_DELIM_LPAR) {
-            if (macro_paramlist(pctx, scope, is_kwdmacro, 1,
+            if (macro_paramlist(ctx, scope, is_kwdmacro, 1,
                                 closers, 1, &macro->ptable,
                                 &macro->plist) < 0) {
                 skip_to_end = 1;
@@ -555,7 +557,7 @@ declare_macro (parse_ctx_t pctx, scopectx_t scope, lextype_t curlt)
                            STC__ITERKWMAC);
                 skip_to_end = 1;
             }
-            if (macro_paramlist(pctx, scope, 0, 1, &closers[1], 1,
+            if (macro_paramlist(ctx, scope, 0, 1, &closers[1], 1,
                                 &macro->ptable, &macro->ilist) < 0) {
                 skip_to_end = 1;
             }

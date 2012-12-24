@@ -93,8 +93,11 @@ static namedef_t decl_names[] = {
     NAMEDEF("OVERLAY", LEXTYPE_KWD_OVERLAY, 0),
     NAMEDEF("CONCATENATE", LEXTYPE_KWD_CONCATENATE, 0),
     NAMEDEF("REF", LEXTYPE_KWD_REF, 0),
-    NAMEDEF("NOVALUE", LEXTYPE_ATTR_NOVALUE, NAME_M_RESERVED)
+    NAMEDEF("NOVALUE", LEXTYPE_ATTR_NOVALUE, NAME_M_RESERVED),
+    NAMEDEF("%ASSIGN", LEXTYPE_LXF_ASSIGN, NAME_M_RESERVED)
 };
+
+static int parse_ASSIGN(parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t lt);
 
 /*
  * declare_compiletime
@@ -108,7 +111,7 @@ declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     lexctx_t lctx = expr_lexmemctx(ctx);
-    lexeme_t *lex, *nlex;
+    lexeme_t *nlex;
     lextype_t lt;
     name_t *np;
 
@@ -122,19 +125,17 @@ declare_compiletime (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
             lexeme_free(lctx, nlex);
             return 0;
         } else {
-
-            if (!expr_parse_ctce(ctx, &lex)) {
+            long val;
+            if (!expr_parse_ctce(ctx, 0, &val)) {
                 expr_signal(ctx, STC__EXPCTCE);
                 lexeme_free(lctx, nlex);
                 return 0;
             } else {
-                np = compiletime_declare(scope, lexeme_text(nlex),
-                                         lexeme_signedval(lex),
+                np = compiletime_declare(scope, lexeme_text(nlex), val,
                                          lexeme_textpos_get(nlex));
                 if (np == 0) {
                     expr_signal(ctx, STC__INTCMPERR, "declare_compiletime");
                 }
-                lexeme_free(lctx, lex);
                 lexeme_free(lctx, nlex);
             }
 
@@ -196,9 +197,7 @@ static int
 declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
-    lexctx_t lctx = expr_lexmemctx(ctx);
     machinedef_t *mach = expr_machinedef(ctx);
-    lexeme_t *lex;
     lextype_t lt;
     name_t *np;
     textpos_t pos;
@@ -222,16 +221,14 @@ declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
                 string_free(namestr);
                 return 0;
             } else {
-                if (!expr_parse_ctce(ctx, &lex)) {
+                long val;
+                if (!expr_parse_ctce(ctx, 0, &val)) {
                     expr_signal(ctx, STC__EXPCTCE);
                     string_free(namestr);
                     return 0;
-                } else {
-                    attr.value = lexeme_signedval(lex);
-                    lexeme_free(lctx, lex);
                 }
+                attr.value = (unsigned long) val;
             }
-
         }
 
         lt = parser_next(pctx, QL_NORMAL, 0);
@@ -243,12 +240,9 @@ declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
                 if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
                     expr_signal(ctx, STC__DELIMEXP, "(");
                 }
-                if (!expr_parse_ctce(ctx, &lex)) {
+                if (!expr_parse_ctce(ctx, 0, &rval)) {
                     expr_signal(ctx, STC__EXPCTCE);
                     rval = machine_scalar_bits(mach);
-                } else {
-                    rval = lexeme_signedval(lex);
-                    lexeme_free(lctx, lex);
                 }
                 if (!machine_signext_supported(mach)) {
                     expr_signal(ctx, STC__SGNEXTUNS);
@@ -528,13 +522,13 @@ plit_items (expr_ctx_t ctx, int defau) {
     ivlist = 0;
     while (1) {
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_REP, 0, 1)) {
+            long val;
             unsigned int repcount;
-            if (!expr_parse_ctce(ctx, &lex)) {
+            if (!expr_parse_ctce(ctx, 0, &val)) {
                 expr_signal(ctx, STC__EXPCTCE);
                 repcount = 1;
             } else {
-                repcount = (unsigned int)lexeme_unsignedval(lex);
-                lexeme_free(lctx, lex);
+                repcount = (unsigned int) val;
             }
             if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_OF, 0, 1)) {
                 expr_signal(ctx, STC__KWDEXP, "OF");
@@ -1676,6 +1670,8 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
         name_declare(kwdscope, &decl_names[i], 0, 0, 0, 0);
     }
 
+    parser_lexfunc_register(pctx, ctx, LEXTYPE_LXF_ASSIGN, parse_ASSIGN);
+
     symbols_init(ctx);
     macros_init(kwdscope, ctx);
     psects_init(kwdscope, stg, mach);
@@ -1762,7 +1758,7 @@ parse_declaration (expr_ctx_t ctx)
             break;
         case LEXTYPE_DCL_MACRO:
         case LEXTYPE_DCL_KEYWORDMACRO:
-            status = declare_macro(pctx, scope, lt);
+            status = declare_macro(ctx, scope, lt);
             break;
         case LEXTYPE_DCL_COMPILETIME:
             status = declare_compiletime(ctx, scope, lt);
@@ -1859,3 +1855,45 @@ declare_module (expr_ctx_t ctx)
     return 1;
 
 } /* declare_module */
+
+/*
+ * %ASSIGN(#name, n)
+ *
+ * Assign a value to a compiletime constant.
+ */
+static int
+parse_ASSIGN (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
+{
+    expr_ctx_t ctx = vctx;
+    name_t *np;
+    lexeme_t *lex;
+    long val;
+
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
+        expr_signal(ctx, STC__DELIMEXP, "(");
+        return 1;
+    }
+    if (!parser_expect(pctx, QL_NAME, LEXTYPE_NAME_COMPILETIME, &lex, 1)) {
+        expr_signal(ctx, STC__CTNAMEXP);
+        parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
+        return 1;
+    }
+    np = lexeme_ctx_get(lex);
+    lexeme_free(expr_lexmemctx(ctx), lex);
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
+        expr_signal(ctx, STC__DELIMEXP, ",");
+        parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
+        return 1;
+    }
+    if (!expr_parse_ctce(ctx, 0, &val)) {
+        expr_signal(ctx, STC__EXPCTCE);
+    } else {
+        compiletime_assign(np, val);
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 0)) {
+        expr_signal(ctx, STC__DELIMEXP, ")");
+    }
+
+    return 1;
+
+} /* parse_ASSIGN */
