@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7A02B3B01688900300E273AC /* expr_control.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A02B3AF1688900300E273AC /* expr_control.c */; };
 		7A13E03616775C9600C4F14D /* execfuncs.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A13E03516775C9600C4F14D /* execfuncs.c */; };
 		7A2DD25B165009F1002CD078 /* declarations.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A2DD25A165009F1002CD078 /* declarations.c */; };
 		7A7FD5151636C29C00B2D7FC /* lexer.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A7FD5141636C29C00B2D7FC /* lexer.c */; };
@@ -42,6 +43,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		7A02B3AF1688900300E273AC /* expr_control.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = expr_control.c; sourceTree = "<group>"; };
 		7A13E03516775C9600C4F14D /* execfuncs.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = execfuncs.c; sourceTree = "<group>"; };
 		7A13E03816775CA100C4F14D /* execfuncs.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = execfuncs.h; sourceTree = "<group>"; };
 		7A2DD25A165009F1002CD078 /* declarations.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; path = declarations.c; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.c; };
@@ -168,6 +170,7 @@
 				7A13E03816775CA100C4F14D /* execfuncs.h */,
 				7AB5ED811642A3AB0063EC94 /* expression.c */,
 				7AB5ED841642A3B80063EC94 /* expression.h */,
+				7A02B3AF1688900300E273AC /* expr_control.c */,
 				7A9D4CA61635A93A0013AE09 /* fileio.c */,
 				7A9D4CA81635ACCA0013AE09 /* fileio.h */,
 				7A995E0C163C2286003BEAC7 /* lexeme.c */,
@@ -329,6 +332,7 @@
 				7A13E03616775C9600C4F14D /* execfuncs.c in Sources */,
 				7ADCC897167E23CF00D09FA4 /* statcodes.c in Sources */,
 				7ADCC89C167E422A00D09FA4 /* logging.c in Sources */,
+				7A02B3B01688900300E273AC /* expr_control.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
