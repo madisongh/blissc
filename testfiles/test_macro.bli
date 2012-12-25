@@ -1,3 +1,5 @@
+MODULE test =
+BEGIN
 MACRO
     farfel (p1, p2) =
     BEGIN
@@ -7,9 +9,9 @@ MACRO
         (p2) = tmp;
     END%,
     nullmacro = %,
-    cmacro (x)[] = %STRING(x) cmacro(%REMAINING) %,
-    cmnoparams = bite me %,
-    imacro (x)[y] = %IDENTICAL(x,y)%;
+    cmacro (x)[] = %STRING(x), cmacro(%REMAINING) %,
+    cmnoparams = 'bite me' %,
+    imacro (x)[y] = 'Identical=',%IDENTICAL(x,y),' '%;
 
 KEYWORDMACRO
     copyvector(dest,source,n=1) =
@@ -18,22 +20,30 @@ KEYWORDMACRO
             
 MACRO
     HOHOHO = (A,B)%,
-    SPTEST1(x) = %ASCII'Length' %LENGTH %ASCII'Remaining' %REMAINING %,
-    SPTEST2(x)[] = %ASCII'Count' %COUNT SPTEST2(%REMAINING)%,
+    SPTEST1(x) = %STRING('Length=',%NUMBER(%LENGTH)) %,
+    SPTEST2(x)[] = %STRING('Count=',%NUMBER(%COUNT),' ',SPTEST2(%REMAINING))%,
     SPTEST3(x)[y] =
-        %ASCII'X=' x %ASCII'Y=' y
-        %ASCII'Count' %COUNT %ASCII'Remaining' %REMAINING %;
+        %STRING('X=',x,',Y=',y,',Count=',%NUMBER(%COUNT),%CHAR(13),%CHAR(10))%;
     
-%Ascii'...all macros defined...'
-a b
-copyvector(dest=eatme,source=biteme,n=10);
-farfel(x,y)
-cmacro(xxx,yyy,zzz)
-cmnoparams
-imacro((a,b),HOHOHO,(a,b))
-SPTEST1(a)
-SPTEST1((a+b),(c+d),(e-f))
-SPTEST2(a)
-SPTEST2(a,b,c,d,e,f,g)
-SPTEST3(a,b)
-SPTEST3('a','b','c','d','e','f','g')
+%MESSAGE(%Ascii'...all macros defined...')
+ROUTINE testroutine : NOVALUE =
+BEGIN
+    LOCAL
+        eatme : VECTOR[10],
+        biteme : VECTOR[10],
+        x, y;
+%INFORM('hi')
+    copyvector(dest=eatme,source=biteme,n=10);
+    farfel(x,y);
+%MESSAGE(cmacro(xxx,yyy,zzz))
+%MESSAGE(cmnoparams)
+%MESSAGE(imacro((a,b),HOHOHO,(a,b)))
+%MESSAGE(SPTEST1(a))
+%MESSAGE(SPTEST1((a+b),(c+d),(e-f)))
+%MESSAGE(SPTEST2(a))
+%MESSAGE(SPTEST2(a,b,c,d,e,f,g))
+%MESSAGE(SPTEST3(a,b))
+%MESSAGE(SPTEST3('a','b','c','d','e','f','g'))
+END; ! testroutine
+END
+ELUDOM
