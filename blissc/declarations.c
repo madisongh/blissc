@@ -1679,7 +1679,7 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
     litsym_declare(kwdscope, &bpdsc[2], SYMSCOPE_LOCAL, &attr, 0);
     attr.value = machine_scalar_units(mach);
     litsym_declare(kwdscope, &bpdsc[3], SYMSCOPE_LOCAL, &attr, 0);
-    structures_init(ctx);
+    structures_init(ctx, kwdscope);
 
 } /* declarations_init */
 

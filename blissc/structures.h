@@ -19,7 +19,7 @@ struct strudef_s;
 typedef struct strudef_s strudef_t;
 struct sym_data_s;
 
-void structures_init(expr_ctx_t ctx);
+void structures_init(expr_ctx_t ctx, scopectx_t kwdscope);
 int declare_structure(expr_ctx_t ctx, scopectx_t scope);
 int declare_field(expr_ctx_t ctx, scopectx_t scope);
 int structure_allocate(expr_ctx_t ctx, name_t *struname,

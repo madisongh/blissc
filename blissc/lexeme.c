@@ -157,6 +157,14 @@ lexeme_bind (lexctx_t lctx, textpos_t curpos, quotelevel_t ql, quotemodifier_t q
         return 1;
     }
 
+    // Check for special 'macro skip' - which skips everything except
+    // the macro-end marker and terminating of conditionals (the check for
+    // which is above).
+    if (ql == QL_MACROSKIP && cs == COND_NORMAL && lt != LEXTYPE_MACROEND ) {
+        lexeme_free(lctx, lex);
+        return 1;
+    }
+
     if (qm == QM_QUOTE) {
         lex->type = LEXTYPE_UNBOUND;
         return 0;

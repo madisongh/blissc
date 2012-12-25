@@ -22,7 +22,7 @@
  * routine lives in lexeme.c and needs this information.
  */
 typedef enum {
-    QL_NORMAL, QL_NAME, QL_MACRO
+    QL_NORMAL, QL_NAME, QL_MACRO, QL_MACROSKIP
 } quotelevel_t;
 
 typedef enum {
@@ -63,6 +63,7 @@ typedef enum {
     DOLEXTYPE(NONE) \
     DOLEXTYPE(END) \
     DOLEXTYPE(MARKER) \
+    DOLEXTYPE(MACROEND) \
     DOLEXTYPE(UNBOUND) \
     DOLEXTYPE(NUMERIC) \
     DOLEXTYPE(STRING) \

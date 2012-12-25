@@ -132,7 +132,9 @@ STATCODE( 79,E,MODDCLEXP, "MODULE declaration expected") \
 STATCODE( 80,W,NOTBUILTN, "name !SD declared BUILTIN unknown") \
 STATCODE( 81,W,UNDECUND,  "attempt to UNDECLARE unknown name !SD") \
 STATCODE( 82,W,FWDNOTDCL, "FORWARD name not declared: !SD") \
-STATCODE( 83,F,OPENERR,   "error opening file !SL: !SZ")
+STATCODE( 83,F,OPENERR,   "error opening file !SL: !SZ") \
+STATCODE( 84,E,INVMACFUN, "macro function encountered outside of macro expansion") \
+STATCODE( 85,E,INVEXITER, "%EXITITERATION encountered in non-iterative macro !SD")
 
 #define STATCODE(msg,typ,nam,txt) STC__##nam =  STC_CODE_##typ(msg),
 typedef enum {

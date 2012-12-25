@@ -154,7 +154,7 @@ bind_compiletime (lexctx_t lctx, void *vctx, quotelevel_t ql, quotemodifier_t qm
     name_t *np = lexeme_ctx_get(lex);
     long val;
 
-    if (cs == COND_CWA || cs == COND_AWC) {
+    if (cs == COND_CWA || cs == COND_AWC || ql == QL_MACROSKIP) {
         lexeme_free(lctx, lex);
         return 1;
     }
@@ -186,7 +186,7 @@ bind_literal (lexctx_t lctx, void *vctx, quotelevel_t ql, quotemodifier_t qm,
     sym_literal_t *lit = name_extraspace(np);
     long val;
 
-    if (cs == COND_CWA || cs == COND_AWC) {
+    if (cs == COND_CWA || cs == COND_AWC || ql == QL_MACROSKIP) {
         lexeme_free(lctx, lex);
         return 1;
     }

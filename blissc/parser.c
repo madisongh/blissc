@@ -42,6 +42,7 @@ struct parse_ctx_s {
     condstate_t     condstate[64];
     int             condlevel;
     int             no_eof;
+    int             macroskip;
     textpos_t       curpos;
     unsigned long   valmask;
     punctclass_t    punctclass;
@@ -177,6 +178,11 @@ name_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
         }
     }
 
+    if (cs == COND_NORMAL && ql == QL_MACROSKIP) {
+        lexeme_free(lctx, lex);
+        return 1;
+    }
+
     if (qm == QM_QUOTE) {
         lex->type = LEXTYPE_UNBOUND;
         return 0;
@@ -221,7 +227,7 @@ static int
 name_XXX_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
                lextype_t lt, condstate_t cs, lexeme_t *lex, lexseq_t *result)
 {
-    if (cs == COND_CWA || cs == COND_AWC) {
+    if (cs == COND_CWA || cs == COND_AWC || ql == QL_MACROSKIP) {
         lexeme_free(lctx, lex);
         return 1;
     }
@@ -405,6 +411,7 @@ void parser_punctclass_get (parse_ctx_t pctx, punctclass_t *clp, lextype_t *sepp
     *clp = pctx->punctclass; *sepp = pctx->separator; }
 void parser_incr_erroneof (parse_ctx_t pctx) { pctx->no_eof += 1; }
 void parser_decr_erroneof (parse_ctx_t pctx) { pctx->no_eof -= 1; }
+void parser_skipmode_set (parse_ctx_t pctx, int val) { pctx->macroskip = val; }
 
 /*
  * parser_condstate_push
@@ -621,7 +628,8 @@ parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
         // zero if processing should continue with the current lexeme
         // (it may have been modified), or positive if the 'result' sequence
         // should be used instead.
-        status = lexeme_bind(pctx->lmemctx, pctx->curpos, ql, pctx->quotemodifier,
+        status = lexeme_bind(pctx->lmemctx, pctx->curpos,
+                             (pctx->macroskip ? QL_MACROSKIP : ql), pctx->quotemodifier,
                              pctx->condstate[pctx->condlevel], lex, &result);
         if (status < 0) {
             log_signal(pctx->logctx, pctx->curpos, STC__INTCMPERR, "parser_next");
@@ -750,7 +758,14 @@ parser_expect (parse_ctx_t pctx, quotelevel_t ql, lextype_t expected_lt,
 /*
  * parser_expect_oneof
  *
- * Common routine for parsing one of a set of lexeme types.
+ * Common routine for parsing one of a set of lexeme types.                // Parenthesize the parameter value if it's non-null, because we're
+ // doing lexical substitution and this could be used in an expression
+ // that is expecting it to be a single operand.
+ if (lexseq_length(&seq) > 0) {
+ lexseq_inshead(&seq, lexeme_create(lctx, LEXTYPE_DELIM_LPAR, &leftparen));
+ lexseq_instail(&seq, lexeme_create(lctx, LEXTYPE_DELIM_RPAR, &rightparen));
+ }
+
  * The matching lexeme can be returned, if desired.  Callers can
  * use LEXTYPE_NONE to put "holes" in the array that won't match.
  *
@@ -1583,7 +1598,7 @@ parse_msgfunc (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
                 log_print(pctx->logctx, pos, text->ptr, text->len);
                 break;
             case LEXTYPE_LXF_MESSAGE:
-                log_signal(pctx->logctx, pos, STC__MESSAGE, text);
+                log_print(pctx->logctx, pos, text->ptr, text->len);
                 break;
             case LEXTYPE_LXF_ERROR:
                 log_signal(pctx->logctx, pos, STC__USRERR, text);

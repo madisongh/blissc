@@ -51,6 +51,10 @@ static strdesc_t leftparen = STRDEF("(");
 static strdesc_t rightparen = STRDEF(")");
 static strdesc_t dot = STRDEF(".");
 static strdesc_t zero = STRDEF("0");
+static namedef_t mynames[] = {
+    NAMEDEF("%FIELDEXPAND", LEXTYPE_LXF_FIELDEXPAND, NAME_M_RESERVED),
+    NAMEDEF("%SIZE", LEXTYPE_LXF_SIZE, NAME_M_RESERVED)
+};
 
 /*
  * The following definitions are used in the initialization
@@ -391,7 +395,7 @@ predeclare_structures (void *myctx, char *buf, size_t bufsiz, size_t *lenp)
  * predeclared structures.
  */
 void
-structures_init (expr_ctx_t ctx)
+structures_init (expr_ctx_t ctx, scopectx_t kwdscope)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     namectx_t namectx = expr_namectx(ctx);
@@ -402,6 +406,9 @@ structures_init (expr_ctx_t ctx)
     nametype_vectors_t vec;
     int i;
 
+    for (i = 0; i < sizeof(mynames)/sizeof(mynames[0]); i++) {
+        name_declare(kwdscope, &mynames[i], 0, 0, 0, 0);
+    }
     expr_dispatch_register(ctx, LEXTYPE_NAME_STRUCTURE, structure_bind);
     parser_lexfunc_register(pctx, ctx, LEXTYPE_LXF_FIELDEXPAND, parse_FIELDEXPAND);
     parser_lexfunc_register(pctx, ctx, LEXTYPE_LXF_SIZE, parse_SIZE);
@@ -885,6 +892,13 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
             if (lexseq_length(&seq) == 0) {
                 macparam_lookup(lctx, stru->acctbl, pname, &seq);
             }
+            // Parenthesize the parameter value if it's non-null, because we're
+            // doing lexical substitution and this could be used in an expression
+            // that is expecting it to be a single operand.
+            if (lexseq_length(&seq) > 0) {
+                lexseq_inshead(&seq, lexeme_create(lctx, LEXTYPE_DELIM_LPAR, &leftparen));
+                lexseq_instail(&seq, lexeme_create(lctx, LEXTYPE_DELIM_RPAR, &rightparen));
+            }
             macparam_special(myscope, pname, &seq);
             lexseq_free(lctx, &seq);
         }
@@ -908,6 +922,13 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
                 }
                 if (lexseq_length(&seq) == 0) {
                     macparam_lookup(lctx, stru->allotbl, pname, &seq);
+                }
+                // Parenthesize the parameter value if it's non-null, because we're
+                // doing lexical substitution and this could be used in an expression
+                // that is expecting it to be a single operand.
+                if (lexseq_length(&seq) > 0) {
+                    lexseq_inshead(&seq, lexeme_create(lctx, LEXTYPE_DELIM_LPAR, &leftparen));
+                    lexseq_instail(&seq, lexeme_create(lctx, LEXTYPE_DELIM_RPAR, &rightparen));
                 }
                 macparam_special(myscope, pname, &seq);
             }

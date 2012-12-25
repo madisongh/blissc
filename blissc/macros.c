@@ -13,7 +13,11 @@
  *
  *		Some of the facilities here are used by the structures
  *		module, since structures are implemented essentially as
- *		simple macros.
+ *		simple macros.  In particular, structures use the MAC_PARAM
+ *      name type for structure parameters, and those get parsed
+ *      in the normal way, unlike real macro parameters, which
+ *      get stashed in a private table and bound manually during
+ *      the prepare_body() phase of macro expansion.
  *
  *	Author:		M. Madison
  *				Copyright © 2012, Matthew Madison
@@ -45,6 +49,26 @@ struct macrodecl_s {
     scopectx_t ptable;
 };
 
+struct expansion_s {
+    struct expansion_s  *next;
+    name_t              *curmacro;
+    scopectx_t           expscope;
+    lexseq_t             remaining;
+    long                 count;
+    long                 nactuals;
+    lexeme_t            *sep, *closer;
+};
+typedef struct expansion_s expansion_t;
+
+typedef enum { EXP_NORMAL, EXP_EXITITER, EXP_EXITMACRO, EXP_ERRORMACRO } expstate_t;
+
+struct macroctx_s {
+    expr_ctx_t           ectx;
+    expstate_t           state;
+    expansion_t         *curexp;
+    expansion_t         *freeexps;
+};
+
 static namedef_t macro_names[] = {
     NAMEDEF("KEYWORDMACRO", LEXTYPE_DCL_KEYWORDMACRO, NAME_M_RESERVED),
     NAMEDEF("MACRO", LEXTYPE_DCL_MACRO, NAME_M_RESERVED),
@@ -61,9 +85,53 @@ static lextype_t openers[] = { LEXTYPE_DELIM_LPAR, LEXTYPE_DELIM_LBRACK,
 static lextype_t closers[] = { LEXTYPE_DELIM_RPAR, LEXTYPE_DELIM_RBRACK,
                                LEXTYPE_DELIM_RANGLE };
 
-static int macro_expand(expr_ctx_t ctx, name_t *macroname,
+static int prepare_body(macroctx_t mctx, expansion_t *curexp, lexseq_t *result);
+static int macro_expand(macroctx_t ctx, name_t *macroname,
                         lexseq_t *result);
 
+/*
+ * expansion_alloc
+ *
+ * Allocate an expansion context.
+ */
+static expansion_t *
+expansion_alloc (macroctx_t mctx)
+{
+    expansion_t *e;
+    if (mctx->freeexps == 0) {
+        e = malloc(sizeof(expansion_t));
+    } else {
+        e = mctx->freeexps;
+        mctx->freeexps = e->next;
+    }
+    if (e != 0) {
+        memset(e, 0, sizeof(expansion_t));
+    }
+
+    return e;
+
+} /* expansion_alloc */
+
+/*
+ * expansion_free
+ *
+ * Free an expansion context.
+ */
+void
+expansion_free (macroctx_t mctx, expansion_t *e)
+{
+    lexctx_t lctx = expr_lexmemctx(mctx->ectx);
+
+    lexeme_free(lctx, e->sep);
+    lexseq_free(lctx, &e->remaining);
+    if (e->expscope != 0) {
+        scope_end(e->expscope);
+    }
+    memset(e, 0x29, sizeof(expansion_t));
+    e->next = mctx->freeexps;
+    mctx->freeexps = e;
+
+} /* expansion_free */
 /*
  * macro_bind
  *
@@ -74,10 +142,10 @@ static int
 macro_bind (lexctx_t lctx, void *vctx, quotelevel_t ql, quotemodifier_t qm,
             lextype_t lt, condstate_t cs, lexeme_t *lex, lexseq_t *result)
 {
-    expr_ctx_t ctx = vctx;
+    macroctx_t ctx = vctx;
     name_t *np = lexeme_ctx_get(lex);
 
-    if (cs == COND_CWA || cs == COND_AWC) {
+    if (cs == COND_CWA || cs == COND_AWC || ql == QL_MACROSKIP) {
         lexeme_free(lctx, lex);
         return 1;
     }
@@ -109,6 +177,60 @@ macro_bind (lexctx_t lctx, void *vctx, quotelevel_t ql, quotemodifier_t qm,
 } /* macro_bind */
 
 /*
+ * macroend_bind
+ *
+ * Lexical binding for the special MACROEND lexeme type.  No quotelevel/quotemodifier/cond
+ * checks here.
+ */
+static int
+macroend_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
+               lextype_t lt, condstate_t cs, lexeme_t *lex, lexseq_t *result)
+{
+    macroctx_t mctx = ctx;
+    expansion_t *cur = mctx->curexp;
+    expr_ctx_t ectx = mctx->ectx;
+    parse_ctx_t pctx = expr_parse_ctx(ectx);
+    struct macrodecl_s *curmac;
+
+    lexeme_free(lctx, lex);
+
+    if (cur == 0) {
+        expr_signal(mctx->ectx, STC__INTCMPERR, "macroend_bind");
+        return 1;
+    }
+
+    curmac = name_extraspace(cur->curmacro);
+
+    switch (mctx->state) {
+        case EXP_EXITMACRO:
+            lexseq_free(lctx, &cur->remaining);
+            // FALLTHROUGH
+        case EXP_EXITITER:
+        case EXP_NORMAL:
+            if (curmac->type == MACRO_ITER && lexseq_length(&cur->remaining) > 0) {
+                if (cur->sep != 0) {
+                    lexseq_instail(result, lexeme_copy(lctx, cur->sep));
+                }
+                return prepare_body(mctx, cur, result);
+            }
+            if (curmac->type == MACRO_ITER && cur->closer != 0) {
+                lexseq_instail(result, cur->closer);
+            }
+            // FALLTHROUGH
+        case EXP_ERRORMACRO:
+            mctx->curexp = cur->next;
+            expansion_free(mctx, cur);
+            if (mctx->state != EXP_ERRORMACRO || mctx->curexp == 0) {
+                parser_skipmode_set(pctx, 0);
+            }
+            break;
+    }
+
+    mctx->state = EXP_NORMAL;
+    return 1;
+
+} /* macroend_bind */
+/*
  * macparam_bind
  *
  * Lexical binding for macro parameters.  Invoked via lexeme_bind
@@ -121,7 +243,7 @@ macparam_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
     name_t *np = lexeme_ctx_get(lex);
     lexseq_t tmpseq;
 
-    if (cs == COND_CWA || cs == COND_AWC) {
+    if (cs == COND_CWA || cs == COND_AWC || ql == QL_MACROSKIP) {
         lexeme_free(lctx, lex);
         return 1;
     }
@@ -193,6 +315,7 @@ static int
 macparam_copydata (void *vctx, name_t *dst, void *dp, name_t *src, void *sp)
 {
     lexctx_t lctx = expr_lexmemctx(vctx);
+    lexseq_free(lctx, dp);
     lexseq_copy(lctx, dp, sp);
     return 1;
 
@@ -289,17 +412,112 @@ macro_copydata (void *vctx, name_t *dst, void *dp, name_t *src, void *sp)
 
 } /* macro_copydata */
 
+/*
+ * handle_specials
+ */
+int
+handle_specials (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
+{
+    macroctx_t ctx = vctx;
+    strdesc_t *str;
+    lexseq_t result;
+
+    if (ctx->curexp == 0) {
+        log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__INVMACFUN);
+        return 1;
+    }
+    switch (curlt) {
+        case LEXTYPE_LXF_COUNT:
+            // our internal counter is 1-based; %COUNT is zero-based.
+            str = string_printf(parser_strctx(pctx), 0, "%ld", ctx->curexp->count-1);
+            parser_insert(pctx, parser_lexeme_create(pctx, LEXTYPE_NUMERIC, str));
+            string_free(parser_strctx(pctx), str);
+            break;
+        case LEXTYPE_LXF_LENGTH:
+            str = string_printf(parser_strctx(pctx), 0, "%ld", ctx->curexp->nactuals);
+            parser_insert(pctx, parser_lexeme_create(pctx, LEXTYPE_NUMERIC, str));
+            string_free(parser_strctx(pctx), str);
+            break;
+        case LEXTYPE_LXF_REMAINING:
+            lexseq_init(&result);
+            lexseq_copy(parser_lexmemctx(pctx), &result, &ctx->curexp->remaining);
+            parser_insert_seq(pctx, &result);
+            break;
+        default:
+            break;
+    }
+
+    return 1;
+
+} /* handle_specials */
+
+/*
+ * handle_exits
+ */
+int
+handle_exits (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
+{
+    macroctx_t ctx = vctx;
+    expansion_t *cur = ctx->curexp;
+    struct macrodecl_s *macro;
+    lexeme_t *lex;
+
+    if (ctx->curexp == 0) {
+        expr_signal(ctx->ectx, STC__INTCMPERR, "handle_exits[1]");
+        return 1;
+    }
+
+    if (ctx->state != EXP_NORMAL) {
+        return 1;
+    }
+
+    macro = name_extraspace(cur->curmacro);
+
+    switch (curlt) {
+        case LEXTYPE_LXF_EXITITER:
+            if (macro->type != MACRO_ITER) {
+                expr_signal(ctx->ectx, STC__INVEXITER, name_string(cur->curmacro));
+                ctx->state = EXP_EXITMACRO;
+            }
+            parser_skipmode_set(pctx, 1);
+            ctx->state = EXP_EXITITER;
+            break;
+        case LEXTYPE_LXF_EXITMACRO:
+            parser_skipmode_set(pctx, 1);
+            ctx->state = EXP_EXITMACRO;
+            break;
+        case LEXTYPE_LXF_ERRORMACRO:
+            lex = parse_string_params(pctx, 0);
+            if (lex == 0) {
+                expr_signal(ctx->ectx, STC__SYNTAXERR);
+            } else {
+                expr_signal(ctx->ectx, STC__USRERR, lexeme_text(lex));
+                lexeme_free(expr_lexmemctx(ctx->ectx), lex);
+            }
+            parser_skipmode_set(pctx, 1);
+            ctx->state = EXP_ERRORMACRO;
+            break;
+        default:
+            expr_signal(ctx->ectx, STC__INTCMPERR, "handle_exits[2]");
+            break;
+    }
+
+    return 1;
+
+} /* handle_exits */
 
 /*
  * macros_init
  *
  * Module initialization routine.
  */
-void
+macroctx_t
 macros_init (scopectx_t kwdscope, expr_ctx_t ctx)
 {
     namectx_t namectx = scope_namectx(kwdscope);
     lexctx_t lctx = expr_lexmemctx(ctx);
+    parse_ctx_t pctx = expr_parse_ctx(ctx);
+    macroctx_t mctx = malloc(sizeof(struct macroctx_s));
     nametype_vectors_t vec;
     int i;
 
@@ -307,8 +525,18 @@ macros_init (scopectx_t kwdscope, expr_ctx_t ctx)
         name_declare(kwdscope, &macro_names[i], 0, 0, 0, 0);
     }
 
-    lextype_register(lctx, ctx, LEXTYPE_NAME_MACRO, macro_bind);
+    memset(mctx, 0, sizeof(struct macroctx_s));
+    mctx->ectx = ctx;
+    mctx->state = EXP_NORMAL;
+    lextype_register(lctx, mctx, LEXTYPE_NAME_MACRO, macro_bind);
     lextype_register(lctx, ctx, LEXTYPE_NAME_MAC_PARAM, macparam_bind);
+    lextype_register(lctx, mctx, LEXTYPE_MACROEND, macroend_bind);
+    parser_lexfunc_register(pctx, mctx, LEXTYPE_LXF_REMAINING, handle_specials);
+    parser_lexfunc_register(pctx, mctx, LEXTYPE_LXF_COUNT, handle_specials);
+    parser_lexfunc_register(pctx, mctx, LEXTYPE_LXF_LENGTH, handle_specials);
+    parser_lexfunc_register(pctx, mctx, LEXTYPE_LXF_EXITMACRO, handle_exits);
+    parser_lexfunc_register(pctx, mctx, LEXTYPE_LXF_EXITITER, handle_exits);
+    parser_lexfunc_register(pctx, mctx, LEXTYPE_LXF_ERRORMACRO, handle_exits);
     memset(&vec, 0, sizeof(vec));
     vec.typesize = sizeof(struct macrodecl_s);
     vec.typeinit = macro_initdata;
@@ -322,7 +550,36 @@ macros_init (scopectx_t kwdscope, expr_ctx_t ctx)
     vec.typecopy = macparam_copydata;
     nametype_dataop_register(namectx, LEXTYPE_NAME_MAC_PARAM, &vec, ctx);
 
+    return mctx;
+
 } /* macros_init */
+
+/*
+ * macros_finish
+ *
+ * Shutdown for this module.
+ */
+void
+macros_finish (macroctx_t mctx)
+{
+    expansion_t *e, *enext;
+
+    if (mctx == 0) {
+        return;
+    }
+    // Clean up any current expansions
+    for (e = mctx->curexp; e != 0; e = enext) {
+        enext = e->next;
+        expansion_free(mctx, e);
+    }
+    // Now release the memory
+    for (e = mctx->freeexps; e != 0; e = enext) {
+        enext = e->next;
+        free(e);
+    }
+    free(mctx);
+
+} /* macros_finish */
 
 /*
  * macparam_special
@@ -348,7 +605,7 @@ macparam_special (scopectx_t scope, strdesc_t *pname, lexseq_t *seqval)
  * macparam_lookup
  *
  * Looks up a macro parameter and optionally returns a copy of its lexeme
- * sequence value.
+ * sequence value.  Only succeeds if the name is defined in the specified scope.
  */
 name_t *
 macparam_lookup (lexctx_t lctx, scopectx_t scope, strdesc_t *pname, lexseq_t *value)
@@ -358,7 +615,7 @@ macparam_lookup (lexctx_t lctx, scopectx_t scope, strdesc_t *pname, lexseq_t *va
 
     np = name_search_typed(scope, pname->ptr, pname->len,
                            LEXTYPE_NAME_MAC_PARAM, &seq);
-    if (np != 0 && value != 0) {
+    if (np != 0 && name_scope(np) == scope && value != 0) {
         lexseq_copy(lctx, value, seq);
     }
 
@@ -477,6 +734,8 @@ macro_paramlist (expr_ctx_t ctx, scopectx_t curscope,
         parser_skip_to_delim(pctx, delims[0]);
         namereflist_free(namectx, plist);
         i = -1;
+    } else if (*ptable == 0) {
+        *ptable = pscope;
     }
 
     return i;
@@ -613,263 +872,64 @@ declare_macro (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
  * prepare_body
  *
  * Builds a lexeme sequence with the expansion of the body of
- * a macro.  The complexity here is with the handling of conditional
- * and iterative macros.  Iterative macros are handled within the
- * processing loop; conditional macros are handled with recursion.
+ * a macro.
  */
 static int
-prepare_body (expr_ctx_t ctx, scopectx_t expscope, struct macrodecl_s *macro,
-              unsigned int curdepth, unsigned int actcount, lexseq_t *remaining,
-              lexseq_t *result, int *errorout)
+prepare_body (macroctx_t mctx, expansion_t *curexp, lexseq_t *result)
 {
+    expr_ctx_t ctx = mctx->ectx;
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     lexctx_t lctx = parser_lexmemctx(pctx);
-    lexeme_t *lex, *bodynext, *closer, *separator;
+    struct macrodecl_s *macro = name_extraspace(curexp->curmacro);
+    lexeme_t *lex;
     name_t *np;
-    int do_exitmacro, do_exititer, do_errormacro, do_recursion;
+    static strdesc_t mend = STRDEF("<macro-end>");
 
-    do_recursion = do_exitmacro = do_exititer = do_errormacro = 0;
-
-	// Prepare the grouper and separator lexemes, in case
+    // Prepare the grouper and separator lexemes, in case
 	// they are needed (only applicable to iterative macros)
-    closer = separator = 0;
-    if (macro->type == MACRO_ITER) {
-        separator = parser_punct_separator(pctx);
+    if (curexp->count == 0 && macro->type == MACRO_ITER) {
+        curexp->sep = parser_punct_separator(pctx);
         lex = parser_punct_grouper(pctx, 0);
         if (lex != 0) {
             lexseq_instail(result, lex);
         }
-        closer = parser_punct_grouper(pctx, 1);
+        curexp->closer = parser_punct_grouper(pctx, 1);
     }
 
-	// Outer loop for handling iterations
-
-    while (1) {
-
-        // Associate the iterative-formals with any actuals
-        if (macro->type == MACRO_ITER) {
-            nameref_t *iformal;
-            lextype_t lt, terms[1] = { LEXTYPE_DELIM_COMMA };
-
-            for (iformal = namereflist_head(&macro->ilist); iformal != 0;
-                 iformal = iformal->tq_next) {
-                strdesc_t *namestr = name_string(iformal->np);
-                np = macparam_special(expscope, namestr, 0);
-                parse_lexeme_seq(pctx, remaining, QL_MACRO, terms, 1,
-                                 macparam_lexseq(np), &lt);
-            }
-        }
-
-        // Copy the body text, checking for recursion.
-
-        for (lex = lexseq_head(&macro->body); lex != 0; lex = bodynext) {
-            lextype_t lt;
-            bodynext = lexeme_next(lex);
-            lex = lexeme_copy(lctx, lex);
-            lt = lexeme_boundtype(lex);
-            if (lt == LEXTYPE_NAME) {
-                lextype_t nlt;
-                np = name_search(expscope, lex->text.ptr, lex->text.len, &nlt);
-                if (np != 0) {
-                    struct macrodecl_s *mp = name_extraspace(np);
-                    if (nlt == LEXTYPE_NAME_MACRO && mp == macro) {
-                        if (macro->type != MACRO_COND) {
-                            expr_signal(ctx, STC__ILLMRECUR);
-                            lexseq_free(lctx, result);
-                            return 0;
-                        }
-                        do_recursion = 1;
-                        lexeme_free(lctx, lex);
-                        lex = 0;
-                    } else if (name_scope(np) == expscope) {
-                        lexseq_t valcopy;
-                        lexeme_free(lctx, lex);
-                        lexseq_init(&valcopy);
-                        lexseq_copy(lctx, &valcopy, name_extraspace(np));
-                        lexseq_append(result, &valcopy);
-                        lex = 0;
-                    } else {
-                        lt = nlt;
-                    }
-                } /* if np != 0 */
-            } /* if (lt == LEXTYPE_NAME) */
-
-            // Now handle the macro-specific lexical functions
-
-            switch (lt) {
-                default:
-                    break;
-                case LEXTYPE_LXF_EXITMACRO:
-                    do_exitmacro = 1;
-                    lexeme_free(lctx, lex);
-                    lex = 0;
-                    break;
-                case LEXTYPE_LXF_EXITITER:
-                    do_exititer = 1;
-                    lexeme_free(lctx, lex);
-                    lex = 0;
-                    break;
-                case LEXTYPE_LXF_ERRORMACRO:
-                    lexeme_free(lctx, lex);
-                    // XXX need to process the arguments here and
-                    // emit the error message XXX
-                    lex = 0;
-                    do_errormacro = 1;
-                    break;
-                case LEXTYPE_LXF_REMAINING: {
-                    lexseq_t rcopy;
-                    lexseq_init(&rcopy);
-                    lexseq_copy(lctx, &rcopy, remaining);
-                    lexseq_append(result, &rcopy);
-                    lexeme_free(lctx, lex);
-                    lex = 0;
-                    break;
-                }
-                case LEXTYPE_LXF_COUNT:
-                case LEXTYPE_LXF_LENGTH: {
-                    strdesc_t * str;
-                    str = string_printf(expr_strctx(ctx), 0, "%u",
-                                        (lt == LEXTYPE_LXF_COUNT
-                                         ? curdepth : actcount));
-                    lexeme_free(lctx, lex);
-                    lex = parser_lexeme_create(pctx, LEXTYPE_NUMERIC, str);
-                    string_free(expr_strctx(ctx), str);
-                    break;
-                }
-            } /* switch (lt) */
-
-            if (do_exitmacro || do_exititer || do_errormacro) {
-                break;
-            }
-
-            if (lex != 0) {
-                lexseq_instail(result, lex);
-            }
-
-            // Handle recursion.  XXX - while the LRM doesn't
-            // specifically mention this, recursion invocations
-            // are typically of the form MACRONAME(%REMAINING)
-            // and that is the only thing we handle here -- no
-            // other arguments may be specified. - XXX
-            if (do_recursion) {
-                scopectx_t subscope;
-                nameref_t *cformal;
-                lextype_t lt;
-                lexseq_t newremain;
-                int which;
-
-                lex = bodynext;
-                if (lex == 0) {
-                    expr_signal(ctx, STC__SYNTAXERR);
-                    do_errormacro = 1;
-                    break;
-                }
-                bodynext = lexeme_next(lex);
-                lt = lexeme_boundtype(lex);
-                for (which = 0; which < 3 && lt != openers[which]; which++);
-                if (which >= 3) {
-                    do_errormacro = 1;
-                    break;
-                }
-                lex = bodynext;
-                if (lex == 0) {
-                    expr_signal(ctx, STC__SYNTAXERR);
-                    do_errormacro = 1;
-                    break;
-                }
-                bodynext = lexeme_next(lex);
-                if (lexeme_boundtype(lex) != LEXTYPE_LXF_REMAINING) {
-                    expr_signal(ctx, STC__EXPREMAIN);
-                    do_errormacro = 1;
-                    break;
-                }
-                lex = bodynext;
-                if (lex == 0) {
-                    expr_signal(ctx, STC__SYNTAXERR);
-                    do_errormacro = 1;
-                    break;
-                }
-                bodynext = lexeme_next(lex);
-                if (lexeme_boundtype(lex) != closers[which]) {
-                    expr_signal(ctx, STC__SYNTAXERR);
-                    do_errormacro = 1;
-                    break;
-                }
-				// OK, we've parsed the <bracket>%REMAINING<bracket> sequence.
-				// Prepare for the recursion, if %REMAINING is not empty.
-                lexseq_init(&newremain);
-                if (lexseq_length(remaining) > 0) {
-                    lextype_t terms[1] = { LEXTYPE_DELIM_COMMA };
-                    lexseq_t rresult;
-                    int ok;
-
-                    lexseq_init(&rresult);
-                    cformal = namereflist_head(&macro->plist);
-                    lexseq_copy(lctx, &newremain, remaining);
-                    subscope = scope_copy(expscope, 0);
-
-                    while (cformal != 0) {
-                        strdesc_t *cfname = name_string(cformal->np);
-                        np = name_search(subscope, cfname->ptr, cfname->len, 0);
-                        if (np == 0) {
-                            expr_signal(ctx, STC__INTCMPERR, "prepare_body");
-                        }
-                        lexseq_free(lctx, name_extraspace(np));
-                        if (lexseq_length(&newremain) != 0) {
-                            lexseq_t *val = name_extraspace(np);
-                            parse_lexeme_seq(pctx, &newremain, QL_MACRO,
-                                             terms, 1, val, &lt);
-                        }
-                        cformal = cformal->tq_next;
-                    } /* walk the formals */
-                    // Hook the name table into the hierarchy and recurse.
-                    scope_setparent(subscope, scope_getparent(expscope));
-                    ok = prepare_body(ctx, subscope, macro, curdepth+1,
-                                      actcount-namereflist_length(&macro->plist),
-                                      &newremain, &rresult, &do_errormacro);
-                    scope_end(subscope);
-                    lexseq_free(lctx, &newremain);
-                    if (ok) {
-                        lexseq_append(result, &rresult);
-                    } else {
-                        lexseq_free(lctx, &rresult);
-                    }
-
-                } /* %REMAINING is non-null */
-
-            } /* if (do_recursion) */
-
-        } /* for-walk through the body */
-
-        if (do_exitmacro || do_errormacro ||
-            macro->type != MACRO_ITER ||
-            lexseq_length(remaining) == 0) {
-            break;
-        }
-
-        curdepth += 1;
-        if (separator != 0) {
-            lexseq_instail(result, lexeme_copy(lctx, separator));
-        }
-
-    } /* while-1 iteration loop */
-
-    if (do_errormacro) {
-        if (errorout != 0) {
-            *errorout = 1;
-        }
-        lexseq_free(lctx, result);
-        return 0;
-    }
-
+    // Associate the iterative-formals with any actuals
     if (macro->type == MACRO_ITER) {
-        if (closer != 0) {
-            lexseq_instail(result, closer);
-        }
-        if (separator != 0) {
-            lexeme_free(lctx, separator);
+        nameref_t *iformal;
+        lextype_t lt, terms[1] = { LEXTYPE_DELIM_COMMA };
+
+        for (iformal = namereflist_head(&macro->ilist); iformal != 0;
+             iformal = iformal->tq_next) {
+            strdesc_t *namestr = name_string(iformal->np);
+            np = macparam_special(curexp->expscope, namestr, 0);
+            parse_lexeme_seq(pctx, &curexp->remaining, QL_MACRO, terms, 1,
+                             macparam_lexseq(np), &lt);
         }
     }
+
+    // Expand the macro parameters here, instead of relying on the parser
+    // to do this while processing the expansion.  If we were to wait, we'd
+    // have to push a new scope on the parser's stack and remove it when we're
+    // done -- but the expansion could declare other names, and those would
+    // get declared in the scope we're removing.
+    for (lex = lexseq_head(&macro->body); lex != 0; lex = lexeme_next(lex)) {
+        if (curexp->expscope != 0 && lexeme_boundtype(lex) == LEXTYPE_NAME) {
+            lexseq_t seq;
+            lexseq_init(&seq);
+            if (macparam_lookup(lctx, curexp->expscope, lexeme_text(lex), &seq) != 0) {
+                lexseq_append(result, &seq);
+            } else {
+                lexseq_instail(result, lexeme_copy(lctx, lex));
+            }
+        } else {
+            lexseq_instail(result, lexeme_copy(lctx, lex));
+        }
+    }
+    lexseq_instail(result, lexeme_create(lctx, LEXTYPE_MACROEND, &mend));
+    curexp->count += 1;
 
     return 1;
 
@@ -881,31 +941,41 @@ prepare_body (expr_ctx_t ctx, scopectx_t expscope, struct macrodecl_s *macro,
  * Expands a macro.
  */
 static int
-macro_expand (expr_ctx_t ctx, name_t *macroname, lexseq_t *result)
+macro_expand (macroctx_t mctx, name_t *macroname, lexseq_t *result)
 {
     struct macrodecl_s *macro = name_extraspace(macroname);
+    expr_ctx_t ctx = mctx->ectx;
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     lexctx_t lctx = parser_lexmemctx(pctx);
+    expansion_t *curexp = expansion_alloc(mctx);
+    expansion_t *prev_exp;
     lextype_t lt;
     lexeme_t *lex;
     lexseq_t extras;
     name_t *np;
     scopectx_t expscope;
-    int which, ok;
+    int which;
     int nactuals;
     punctclass_t pcl;
     lextype_t psep;
     lextype_t terms[3];
     static strdesc_t comma = STRDEF(",");
 
-    if (macro == 0) {
+    if (macro == 0 || curexp == 0) {
         expr_signal(ctx, STC__INTCMPERR, "macro_expand");
         return 1;
     }
+    memset(curexp, 0, sizeof(struct expansion_s));
 
 	// We save the punctuation class here, since it will get
 	// munged by the parsing of the macro parameters.
     parser_punctclass_get(pctx, &pcl, &psep);
+
+    prev_exp = 0;
+    if (macro->type == MACRO_COND) {
+        for (prev_exp = mctx->curexp; prev_exp != 0 && prev_exp->curmacro != macroname;
+             prev_exp = prev_exp->next);
+    }
 
     nactuals = 0;
     lexseq_init(&extras);
@@ -913,7 +983,7 @@ macro_expand (expr_ctx_t ctx, name_t *macroname, lexseq_t *result)
     // Simple macros with no formal arguments get no processing
     // of parameter lists whatsoever.
     if (macro->type == MACRO_SIMPLE && namereflist_length(&macro->plist) == 0) {
-        expscope = scope_begin(scope_namectx(parser_scope_get(pctx)), 0);
+        expscope = 0;
         which = 3;
     } else {
         // For keyword macros, prime the scope with the declared
@@ -995,6 +1065,14 @@ macro_expand (expr_ctx_t ctx, name_t *macroname, lexseq_t *result)
                 break;
             }
 
+            // If we are recursively expanding a conditional macro and
+            // there are no parameters, we're done - no expansion.
+            if (prev_exp != 0 && lexseq_length(&val) == 0 && nactuals == 0) {
+                scope_end(expscope);
+                free(curexp);
+                return 1;
+            }
+
             if (np == 0) {
                 if (lexseq_length(&extras) > 0) {
                     lexseq_instail(&extras,
@@ -1053,18 +1131,16 @@ macro_expand (expr_ctx_t ctx, name_t *macroname, lexseq_t *result)
 	// class to what it was before we parsed the actuals, and
 	// generate the expansion sequence.
 
-    scope_setparent(expscope, parser_scope_get(pctx));
     parser_punctclass_set(pctx, pcl, psep);
 
-    ok = prepare_body(ctx, expscope, macro, 0, nactuals,
-                      &extras, result, 0);
+    curexp->count = (prev_exp == 0 ? 0 : prev_exp->count);
+    curexp->expscope = expscope;
+    curexp->curmacro = macroname;
+    curexp->next = mctx->curexp;
+    curexp->nactuals = nactuals;
+    lexseq_append(&curexp->remaining, &extras);
+    mctx->curexp = curexp;
 
-    if (!ok) {
-        lexseq_free(lctx, result);
-    }
-
-    scope_end(expscope);
-
-    return 1;
+    return prepare_body(mctx, curexp, result);
 
 } /* macro_expand */

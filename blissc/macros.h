@@ -16,7 +16,10 @@
 #include "parser.h"
 #include "lexeme.h"
 
-void macros_init(scopectx_t scope, expr_ctx_t ctx);
+struct macroctx_s;
+typedef struct macroctx_s *macroctx_t;
+
+macroctx_t macros_init(scopectx_t scope, expr_ctx_t ctx);
 int macro_paramlist(expr_ctx_t ctx, scopectx_t curscope, int assign_allowed,
                     int for_macro, lextype_t closers[], int nclosers,
                     scopectx_t *ptable, namereflist_t *plist);
