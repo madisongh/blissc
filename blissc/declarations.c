@@ -1916,6 +1916,7 @@ declare_module (expr_ctx_t ctx)
         return 0;
     }
     listing_mainscope_set(expr_lstgctx(ctx), scope);
+    listing_name_set(expr_lstgctx(ctx), text);
     np = modsym_declare(scope, text, pos);
     if (np == 0) {
         expr_signal(ctx, STC__INTCMPERR, "declare_module");

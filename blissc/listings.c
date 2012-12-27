@@ -56,8 +56,11 @@ struct lstgctx_s {
     unsigned int pagenum;
     unsigned int nlines;
     int          require_depth;
+    int          haveabuf;
+    size_t       linelen;
     char         header1[132];
     char         header2[132];
+    char         linebuf[132];
 };
 
 static strdesc_t loptswitch[LISTOPT_COUNT] = {
@@ -271,20 +274,27 @@ printline (lstgctx_t ctx, const char *buf, size_t len)
 {
     if (ctx->outf == 0) return 1;
 
-    if (ctx->nlines >= LINESPERPAGE) {
-        char pagenumstr[PAGENO_LEN-4];
-        if (ctx->pagenum > 0) file_writeline(ctx->outf, "\f", 1);
-        ctx->pagenum += 1;
-        if (snprintf(pagenumstr, sizeof(pagenumstr), "%*u", PAGENO_LEN-5, ctx->pagenum) > 0) {
-            memcpy(ctx->header1+PAGENO_POS+5, pagenumstr, PAGENO_LEN-5);
+    if (ctx->haveabuf) {
+        if (ctx->nlines >= LINESPERPAGE) {
+            char pagenumstr[PAGENO_LEN-4];
+            if (ctx->pagenum > 0) file_writeline(ctx->outf, "\f", 1);
+            ctx->pagenum += 1;
+            if (snprintf(pagenumstr, sizeof(pagenumstr), "%*u", PAGENO_LEN-5, ctx->pagenum) > 0) {
+                memcpy(ctx->header1+PAGENO_POS+5, pagenumstr, PAGENO_LEN-5);
+            }
+            file_writeline(ctx->outf, ctx->header1, sizeof(ctx->header1));
+            file_writeline(ctx->outf, ctx->header2, sizeof(ctx->header2));
+            file_writeline(ctx->outf, "", 0);
+            ctx->nlines = 3;
         }
-        file_writeline(ctx->outf, ctx->header1, sizeof(ctx->header1));
-        file_writeline(ctx->outf, ctx->header2, sizeof(ctx->header2));
-        file_writeline(ctx->outf, "", 0);
-        ctx->nlines = 3;
+        file_writeline(ctx->outf, ctx->linebuf, ctx->linelen);
+        ctx->nlines += 1;
     }
-    file_writeline(ctx->outf, buf, len);
-    ctx->nlines += 1;
+    if (buf != 0) {
+        ctx->linelen = (len > sizeof(ctx->linebuf) ? sizeof(ctx->linebuf) : len);
+        memcpy(ctx->linebuf, buf, ctx->linelen);
+        ctx->haveabuf = 1;
+    }
 
     return 1;
 
@@ -386,6 +396,11 @@ listings_finish (lstgctx_t ctx)
     if (ctx == 0) {
         return;
     }
+
+    if (ctx->haveabuf) {
+        printline(ctx, 0, 0);
+    }
+    
     for (l = ctx->cur_state; l != 0 && l != &ctx->main_state; l = lnext) {
         lnext = l->next;
         free(l);
@@ -420,3 +435,7 @@ void listing_ident_set (lstgctx_t ctx, strdesc_t *str) {
     int len = (str->len > IDENT_LEN ? IDENT_LEN : str->len);
     memcpy(ctx->header2+IDENT_POS, str->ptr, len);
     memset(ctx->header2+(IDENT_POS+len), ' ', IDENT_LEN-len); }
+void listing_name_set (lstgctx_t ctx, strdesc_t *str) {
+    int len = (str->len > NAME_LEN ? NAME_LEN : str->len);
+    memcpy(ctx->header1+NAME_POS, str->ptr, len);
+    memset(ctx->header1+(NAME_POS+len), ' ', NAME_LEN-len); }

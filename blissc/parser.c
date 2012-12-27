@@ -79,7 +79,8 @@ struct parse_ctx_s {
     DODEF(DECLARED, parse_DECLARED) \
     DODEF(PRINT, parse_msgfunc) \
     DODEF(INFORM, parse_msgfunc) DODEF(ERROR, parse_msgfunc) \
-    DODEF(WARN, parse_msgfunc) DODEF(MESSAGE, parse_msgfunc)
+    DODEF(WARN, parse_msgfunc) DODEF(MESSAGE, parse_msgfunc) \
+    DODEF(TITLE, parse_titlefunc) DODEF(SBTTL, parse_titlefunc)
 
 // Forward declarations for the routines; fortunately, multiple forward
 // declarations aren't a problem.
@@ -1652,3 +1653,30 @@ parse_msgfunc (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
     return 1;
 
 } /* parse_msg_func */
+
+/*
+ * parse_titlefunc
+ *
+ * %TITLE quoted-string
+ * %SBTTL quoted-string
+ */
+int
+parse_titlefunc (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
+{
+    lexeme_t *lex;
+
+    if (!parser_expect(pctx, ql, LEXTYPE_STRING, &lex, 1)) {
+        log_signal(pctx->logctx, pctx->curpos, STC__STRINGEXP);
+    } else {
+        strdesc_t *str = string_copy(pctx->strctx, 0, lexeme_text(lex));
+        lexeme_free(pctx->lmemctx, lex);
+        if (curlt == LEXTYPE_LXF_SBTTL) {
+            listing_subtitle_set(pctx->lstgctx, str);
+        } else {
+            listing_title_set(pctx->lstgctx, str);
+        }
+    }
+
+    return 1;
+    
+} /* parse_titlefunc */

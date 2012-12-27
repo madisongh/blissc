@@ -34,6 +34,7 @@ typedef enum {
 lstgctx_t listings_init(scopectx_t kwdscope, logctx_t logctx);
 void listings_finish(lstgctx_t ctx);
 void listing_mainscope_set(lstgctx_t ctx, scopectx_t scope);
+void listing_name_set(lstgctx_t ctx, strdesc_t *str);
 void listing_title_set(lstgctx_t ctx, strdesc_t *str);
 void listing_subtitle_set(lstgctx_t ctx, strdesc_t *str);
 void listing_compilerid_set(lstgctx_t ctx, strdesc_t *str);
