@@ -95,10 +95,8 @@ fileio_finish (fioctx_t fio)
 /*
  * file_open
  *
- * Opens a file with the specified name, replacing the
- * suffix of the original name with the specified suffix.  If
- * the original name does not have a suffix, the specified
- * suffix is simply appended.
+ * Opens a file with the specified name, appending the
+ * specified suffix if the filename does not have one.
  */
 static filectx_t
 file_open (fioctx_t fio, const char *fname, size_t fnlen,
@@ -311,12 +309,12 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
  *      >-1: length of line written (without linemark)
  */
 int
-file_writeline (filectx_t ctx, char *buf, size_t buflen)
+file_writeline (filectx_t ctx, const char *buf, size_t buflen)
 {
     ssize_t n;
     struct iovec iov[2];
 
-    iov[0].iov_base = buf;
+    iov[0].iov_base = (void *)buf;
     iov[0].iov_len = buflen;
     iov[1].iov_base = "\n";
     iov[1].iov_len = 1;

@@ -16,6 +16,8 @@
 
 struct scanctx_s;
 typedef struct scanctx_s *scanctx_t;
+struct streamctx_s;
+typedef struct streamctx_s *streamctx_t;
 
 typedef enum {
     SCANTYPE_IDENTIFIER,
@@ -44,15 +46,17 @@ typedef int (*scan_list_fn)(void *ctx, char *buf, size_t len,
                             unsigned int lineno, char lexcode);
 typedef void (*scan_close_fn)(void *ctx);
 
-scanctx_t scan_init(strctx_t strctx, logctx_t logctx);
+scanctx_t scan_init(strctx_t strctx, logctx_t logctx, void *fioctx);
 void scan_listfuncs_set(scanctx_t sctx, scan_list_fn lfunc,
                         scan_close_fn cfunc, void *ctx);
-int scan_fopen(scanctx_t ctx, const char *fname, size_t fnlen,
+streamctx_t scan_fopen(scanctx_t ctx, const char *fname, size_t fnlen,
                const char *suffix, char **actnamep);
-int scan_popen(scanctx_t ctx, scan_input_fn infn, void *fnctx);
-scantype_t scan_getnext(scanctx_t ctx, unsigned int flags,
+streamctx_t scan_popen(scanctx_t ctx, scan_input_fn infn, void *fnctx);
+scantype_t scan_getnext(streamctx_t ctx, unsigned int flags,
                         strdesc_t **tok, unsigned int *lineno,
                         unsigned int *column);
+strdesc_t *scan_curline_get(streamctx_t ctx);
+void scan_close(streamctx_t ctx);
 void scan_finish(scanctx_t ctx);
 
 #endif /* scanner_h__ */

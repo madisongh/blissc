@@ -34,7 +34,7 @@ typedef struct liststate_s liststate_t;
 #define TITLE_LEN   47
 #define COMPID_POS  65
 #define COMPID_LEN  57 // 67 - length of " Page nnnn"
-#define PAGENO_POS  123
+#define PAGENO_POS  122
 #define PAGENO_LEN  10
 
 #define IDENT_POS   0
@@ -49,13 +49,13 @@ typedef struct liststate_s liststate_t;
 struct lstgctx_s {
     fioctx_t    fio;
     filectx_t   outf;
-    char        *main_input;
-    char        *cur_input;
+    char        main_input[FNAME_LEN];
     liststate_t *cur_state;
     liststate_t  main_state;
     unsigned int blockdepth;
     unsigned int pagenum;
     unsigned int nlines;
+    int          require_depth;
     char         header1[132];
     char         header2[132];
 };
@@ -75,8 +75,14 @@ static int
 listopt_handler (parse_ctx_t pctx, void *vctx, int togidx, lextype_t dtype, name_t *togname)
 {
     lstgctx_t ctx = vctx;
+    int set_on = (name_type(togname) == LEXTYPE_NAME_TOGGLE_ON);
 
-    ctx->cur_state->listopts[togidx] = (name_type(togname) == LEXTYPE_NAME_TOGGLE_ON);
+    ctx->cur_state->listopts[togidx] = set_on;
+    // If we aren't putting source in the listing, tell
+    // the logging module to print the source line
+    if (togidx == LISTOPT_SRC) {
+        log_logsrctolst_set(parser_logctx(pctx), !set_on);
+    }
     return 1;
 
 } /* listopt_handler */
@@ -186,8 +192,9 @@ listing_endblock (lstgctx_t ctx, scopectx_t this_scope)
 void
 listing_require_begin (lstgctx_t ctx, char *fname)
 {
-    ctx->cur_input = fname;
+    if (ctx->outf == 0) return;
 
+    ctx->require_depth += 1;
     if (ctx->cur_state->listopts[LISTOPT_REQ]) {
         size_t len = strlen(fname);
         if (len > FNAME_LEN) len = FNAME_LEN;
@@ -202,7 +209,7 @@ listing_require_begin (lstgctx_t ctx, char *fname)
  * listing_file_close
  *
  * Called when a file is closed, through a hook in the scanner.
- * If cur_input is non-null, we've just closed a REQUIRE file.
+ * If require_depth > 0, we've just closed a REQUIRE file.
  * Otherwise, we're closing the main file, and should finish up
  * the source listing output, if there is any pending.
  */
@@ -211,16 +218,14 @@ listing_file_close (void *vctx)
 {
     lstgctx_t ctx = vctx;
 
-    if (ctx->cur_input != 0) {
-        ctx->cur_input = 0;
-        if (ctx->cur_state->listopts[LISTOPT_REQ]) {
-            size_t len = strlen(ctx->main_input);
-
-
-            if (len > FNAME_LEN) len = FNAME_LEN;
-            memcpy(ctx->header2+FNAME_POS, ctx->main_input, len);
-            memset(ctx->header2+(FNAME_POS+len), ' ', FNAME_LEN-len);
-            ctx->nlines = LINESPERPAGE;
+    if (ctx->outf == 0) return;
+    if (ctx->require_depth > 0) {
+        ctx->require_depth -= 1;
+        if (ctx->require_depth == 0) {
+            if (ctx->cur_state->listopts[LISTOPT_REQ]) {
+                memcpy(ctx->header2+FNAME_POS, ctx->main_input, FNAME_LEN);
+                ctx->nlines = LINESPERPAGE;
+            }
         }
     }
 
@@ -233,35 +238,46 @@ listing_file_close (void *vctx)
  * a listing file.
  */
 int
-listing_open (lstgctx_t ctx, char *mainfile)
+listing_open (lstgctx_t ctx, const char *mainfile)
 {
-    size_t len = strlen(mainfile);
-    ctx->outf = file_open_output(ctx->fio, mainfile, len, ".lis");
-    ctx->main_input = mainfile;
+    const char *cp;
+    size_t llen, len;
+    llen = len = strlen(mainfile);
+    for (cp = mainfile+(len-1); cp >= mainfile && *cp != '.'; cp--);
+    if (cp >= mainfile) llen = (cp - mainfile);
+    ctx->outf = file_open_output(ctx->fio, mainfile, llen, ".lis");
+    if (ctx->outf == 0) {
+        return 0;
+    }
     if (len > FNAME_LEN) len = FNAME_LEN;
-    memcpy(ctx->header2+FNAME_POS, mainfile, len);
-    memset(ctx->header2+(FNAME_POS+len), ' ', FNAME_LEN-len);
+    memcpy(ctx->main_input, mainfile, len);
+    memset(ctx->main_input+len, ' ', FNAME_LEN-len);
+    memcpy(ctx->header2+FNAME_POS, ctx->main_input, FNAME_LEN);
+    ctx->nlines = LINESPERPAGE;
 
-    return (ctx->outf != 0);
+    return 1;
 
 } /* listing_open */
 
 
 /*
- * printline
+ * listing_printline
  *
  * Handles the page formatting.  All output should go through
- * this routine.  'len' is expected to be <= printed page width (132).
+ * this routine.  len is expected to be <= page width.
  */
-int
-printline (lstgctx_t ctx, char *buf, size_t len)
+static int
+printline (lstgctx_t ctx, const char *buf, size_t len)
 {
     if (ctx->outf == 0) return 1;
 
     if (ctx->nlines >= LINESPERPAGE) {
+        char pagenumstr[PAGENO_LEN-4];
         if (ctx->pagenum > 0) file_writeline(ctx->outf, "\f", 1);
         ctx->pagenum += 1;
-        snprintf(ctx->header1+PAGENO_POS, PAGENO_LEN, "%*u", PAGENO_LEN, ctx->pagenum);
+        if (snprintf(pagenumstr, sizeof(pagenumstr), "%*u", PAGENO_LEN-5, ctx->pagenum) > 0) {
+            memcpy(ctx->header1+PAGENO_POS+5, pagenumstr, PAGENO_LEN-5);
+        }
         file_writeline(ctx->outf, ctx->header1, sizeof(ctx->header1));
         file_writeline(ctx->outf, ctx->header2, sizeof(ctx->header2));
         file_writeline(ctx->outf, "", 0);
@@ -275,6 +291,27 @@ printline (lstgctx_t ctx, char *buf, size_t len)
 } /* printline */
 
 /*
+ * listing_printline
+ *
+ * General print routine or use by hooks in other modules.
+ */
+void
+listing_printline (void *ctx, const char *buf, size_t len, int align_with_source)
+{
+    char outbuf[132];
+    if (align_with_source) {
+        if (len > 132-16) len = 132-16;
+        memset(outbuf, ' ', 16);
+        memcpy(outbuf+16, buf, len);
+        printline(ctx, outbuf, len+16);
+    } else {
+        if (len > 132) len = 132;
+        printline(ctx, buf, len);
+    }
+
+} /* listing_printline */
+
+/*
  * listing_printsrc
  *
  * Called for printing a source line (via hook in the scanner)
@@ -286,11 +323,11 @@ listing_printsrc (void *vctx, char *buf, size_t len, unsigned int lineno, char l
     char outbuf[132];
     int n;
 
-    if (!ctx->cur_state->listopts[LISTOPT_SRC]) return 1;
-    if (ctx->cur_input != 0 && !ctx->cur_state->listopts[LISTOPT_REQ]) return 1;
+    if (ctx->outf == 0 || !ctx->cur_state->listopts[LISTOPT_SRC]) return 1;
+    if (ctx->require_depth > 0 && !ctx->cur_state->listopts[LISTOPT_REQ]) return 1;
     if (len > 132-16) len = 132-16;
     n = snprintf(outbuf, sizeof(outbuf), "; %c%c %5u %2u   %-*.*s",
-                 lexcode, (ctx->cur_input == 0 ? ' ' : 'R'), lineno, ctx->blockdepth,
+                 lexcode, (ctx->require_depth == 0 ? ' ' : 'R'), lineno, ctx->blockdepth,
                  (int)len, (int)len, buf);
     if (n < 0) {
         return 0;
@@ -317,7 +354,9 @@ listings_init (scopectx_t kwdscope, logctx_t logctx)
         ctx->cur_state = &ctx->main_state;
         ctx->fio = fileio_init(logctx);
         memset(ctx->header1, ' ', sizeof(ctx->header1));
+        memcpy(ctx->header1+PAGENO_POS, "Page", 4);
         memset(ctx->header2, ' ', sizeof(ctx->header2));
+        ctx->main_state.listopts[LISTOPT_SRC] = 1;
     }
 
     for (i = 0; i < sizeof(loptswitch)/sizeof(loptswitch[0]); i++) {

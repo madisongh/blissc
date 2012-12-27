@@ -716,6 +716,9 @@ expr_finish (expr_ctx_t ctx)
         return;
     }
 
+    parser_finish(ctx->pctx);
+    storage_finish(ctx->stg);
+
     for (e = ctx->extents; e != 0; e = enext) {
         enext = e->next;
         free(e);
@@ -870,6 +873,7 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
         }
     }
 
+    listing_endblock(ctx->lstgctx, scope);
 	// Check for the degenerate cases:
 	//	1. empty block ==  NOOP
 	//	2. block with single primary expression
@@ -893,7 +897,6 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
             exprseq_inshead(&seq, exp);
         }
     }
-    listing_endblock(ctx->lstgctx, scope);
     if (scope != 0) {
         parser_scope_pop(pctx);
         sym_check_dangling_forwards(scope, parser_curpos(pctx));

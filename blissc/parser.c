@@ -329,7 +329,7 @@ select_punctclass (parse_ctx_t pctx, lextype_t lt)
  */
 parse_ctx_t
 parser_init (strctx_t strctx, namectx_t namectx, machinedef_t *mach,
-             scopectx_t *kwdscopep, logctx_t logctx)
+             scopectx_t *kwdscopep, logctx_t logctx, void *fioctx)
 {
     parse_ctx_t pctx;
     scopectx_t kwdscope;
@@ -356,7 +356,7 @@ parser_init (strctx_t strctx, namectx_t namectx, machinedef_t *mach,
             *kwdscopep = kwdscope;
         }
         pctx->curscope = scope_begin(namectx, kwdscope);
-        pctx->lexctx = lexer_init(strctx, pctx->kwdscope, logctx);
+        pctx->lexctx = lexer_init(strctx, pctx->kwdscope, logctx, fioctx);
         if (pctx->lexctx != 0) {
             pctx->lmemctx = lexer_lexctx(pctx->lexctx);
         }
@@ -392,10 +392,10 @@ parser_init (strctx_t strctx, namectx_t namectx, machinedef_t *mach,
 void
 parser_finish (parse_ctx_t pctx)
 {
+    scope_end(pctx->curscope);
     if (pctx->lexctx != 0) {
         lexer_finish(pctx->lexctx);
     }
-    scope_end(pctx->curscope);
     free(pctx);
 
 } /* parser_finish */
@@ -459,11 +459,34 @@ parser_lexfunc_register (parse_ctx_t pctx, void *ctx, lextype_t lt, lexfunc_t fn
  */
 int
 parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen,
-              const char *suffix)
+              const char *suffix, char **actnamep)
 {
-    return lexer_fopen(pctx->lexctx, fname, fnlen, suffix);
+    return lexer_fopen(pctx->lexctx, fname, fnlen, suffix, actnamep);
 
 } /* parser_fopen */
+
+/*
+ * parser_fopen_main
+ *
+ * Open the main module.
+ */
+int
+parser_fopen_main (parse_ctx_t pctx, const char *fname, size_t fnlen,
+                   const char *suffix, int do_listing, const char *listfname)
+{
+    char *actname;
+
+    if (!lexer_fopen(pctx->lexctx, fname, fnlen, suffix, &actname)) {
+        return 0;
+    }
+    if (do_listing) {
+        listing_open(pctx->lstgctx, (listfname == 0 ? actname : listfname));
+        scan_listfuncs_set(lexer_scanctx(pctx->lexctx),
+                           listing_printsrc, listing_file_close, pctx->lstgctx);
+        log_lstgprintfn_set(pctx->logctx, listing_printline, pctx->lstgctx);
+    }
+    return 1;
+}
 
 /*
  * parser_popen
@@ -1518,6 +1541,7 @@ parse_REQUIRE (parse_ctx_t pctx, void * ctx, quotelevel_t ql, lextype_t curlt)
 {
     lexeme_t *lex = parse_string_params(pctx, 0);
     strdesc_t *str;
+    char *fname;
 
     if (lexeme_boundtype(lex) != LEXTYPE_STRING) {
         log_signal(pctx->logctx, pctx->curpos, STC__INVSTRLIT);
@@ -1525,8 +1549,10 @@ parse_REQUIRE (parse_ctx_t pctx, void * ctx, quotelevel_t ql, lextype_t curlt)
         return 1;
     }
     str = lexeme_text(lex);
-    if (!parser_fopen(pctx, str->ptr, str->len, ".req")) {
+    if (!parser_fopen(pctx, str->ptr, str->len, ".req", &fname)) {
         log_signal(pctx->logctx, pctx->curpos, STC__REQFILERR, str);
+    } else {
+        listing_require_begin(pctx->lstgctx, fname);
     }
     lexeme_free(pctx->lmemctx, lex);
     return 1;
@@ -1599,11 +1625,10 @@ parse_msgfunc (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
         strdesc_t *text = lexeme_text(lex);
         switch (curlt) {
             case LEXTYPE_LXF_PRINT:
-                // XXX this should be a listing function XXX
-                log_print(pctx->logctx, pos, text->ptr, text->len);
+                listing_printline(pctx->lstgctx, text->ptr, text->len, 0);
                 break;
             case LEXTYPE_LXF_MESSAGE:
-                log_print(pctx->logctx, pos, text->ptr, text->len);
+                log_message(pctx->logctx, text->ptr, text->len);
                 break;
             case LEXTYPE_LXF_ERROR:
                 log_signal(pctx->logctx, pos, STC__USRERR, text);

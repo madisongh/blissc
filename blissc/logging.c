@@ -34,11 +34,17 @@
 struct logctx_s {
     jmp_buf             retenv;
     filename_fetch_fn   fetchfn;
+    line_fetch_fn       linefetchfn;
+    lstg_print_fn       listprintfn;
     void                *ffctx;
+    void                *lfctx;
+    void                *lpctx;
     unsigned int        maxerrs;
     unsigned int        infocount;
     unsigned int        warncount;
     unsigned int        errcount;
+    int                 logtoterm;
+    int                 logsrctolst;
 };
 
 /*
@@ -56,6 +62,7 @@ logging_init (jmp_buf retenv)
         memset(ctx, 0, sizeof(struct logctx_s));
         memcpy(ctx->retenv, retenv, sizeof(jmp_buf));
         ctx->maxerrs = LOG_MAXERRS_DEFAULT;
+        ctx->logtoterm = 1;
     }
     return ctx;
 
@@ -83,6 +90,48 @@ unsigned int log_warncount(logctx_t ctx) { return ctx->warncount; }
 unsigned int log_errcount(logctx_t ctx) { return ctx->errcount; }
 void log_fetchfn_set(logctx_t ctx, filename_fetch_fn ffn, void *ffctx) {
     ctx->fetchfn = ffn; ctx->ffctx = ffctx; }
+void log_linefetchfn_set(logctx_t ctx, line_fetch_fn lfn, void *lfctx) {
+    ctx->linefetchfn = lfn; ctx->lfctx = lfctx; }
+void log_lstgprintfn_set(logctx_t ctx, lstg_print_fn lpfn, void *lpctx) {
+    ctx->listprintfn = lpfn; ctx->lpctx = lpctx; }
+void log_logterm_set (logctx_t ctx, int val) { ctx->logtoterm = val; }
+void log_logsrctolst_set (logctx_t ctx, int val) { ctx->logsrctolst = val; }
+
+/*
+ * Print to both listing file and terminal
+ */
+static void
+doprint (logctx_t ctx, const char *buf, size_t buflen, int align_with_source)
+{
+    if (ctx->listprintfn != 0) {
+        (*ctx->listprintfn)(ctx->lpctx, buf, buflen, align_with_source);
+    }
+    if (ctx->logtoterm) {
+        fprintf(stderr, "%-*.*s\n", (int) buflen, (int) buflen, buf);
+    }
+}
+static void
+doprintsrc (logctx_t ctx, const char *buf, size_t buflen)
+{
+    if (ctx->logsrctolst && ctx->listprintfn != 0) {
+        (*ctx->listprintfn)(ctx->lpctx, buf, buflen, 0);
+    }
+    if (ctx->logtoterm) {
+        fprintf(stderr, "%-*.*s\n", (int) buflen, (int) buflen, buf);
+    }
+}
+
+/*
+ * log_message
+ *
+ * Issue a message to the terminal (for %MESSAGE)
+ */
+void
+log_message (logctx_t ctx, const char *buf, size_t buflen)
+{
+    fprintf(stderr, "%% %-*.*s\n", (int) buflen, (int) buflen, buf);
+
+} /* log_message */
 
 /*
  * log_vsignal
@@ -99,23 +148,45 @@ log_vsignal (logctx_t ctx, textpos_t pos, statcode_t code, va_list ap)
     int len;
     unsigned int sev = stc_severity(code);
 
-    len = stc_msg_vformat(code, logbuf, sizeof(logbuf)-1, ap);
-    logbuf[len] = '\0';
-    fprintf(stderr, "%s\n", logbuf);
-    if (pos != 0 && ctx->fetchfn != 0) {
-        strdesc_t *fname = ctx->fetchfn(ctx->ffctx, textpos_fileno(pos));
-        if (fname != 0) {
-            fprintf(stderr, "-  at %-*.*s:%u:%u\n",
-                    fname->len, fname->len, fname->ptr,
-                    textpos_lineno(pos), textpos_colnum(pos));
+    if (sev == STC_K_FATAL) {
+        ctx->logtoterm = 1;
+    }
+
+    if (ctx->listprintfn != 0 || ctx->logtoterm) {
+        int fileno = textpos_fileno(pos);
+        unsigned int lineno = textpos_lineno(pos);
+        unsigned int colno  = textpos_colnum(pos);
+        if (ctx->linefetchfn != 0) {
+            strdesc_t *curline = (*ctx->linefetchfn)(ctx->lfctx, fileno, lineno);
+            if (curline != 0) {
+                doprintsrc(ctx, curline->ptr, curline->len);
+                if (curline->len < sizeof(logbuf) && colno < curline->len) {
+                    memset(logbuf, '.', colno);
+                    logbuf[colno] = '|';
+                    doprint(ctx, logbuf, colno+1, !ctx->logsrctolst);
+                }
+            }
+        }
+        len = stc_msg_vformat(code, logbuf, sizeof(logbuf)-1, ap);
+        doprint(ctx, logbuf, len, 0);
+        if (pos != 0 && ctx->fetchfn != 0) {
+            strdesc_t *fname = ctx->fetchfn(ctx->ffctx, fileno);
+            if (fname != 0)  {
+                len = snprintf(logbuf, sizeof(logbuf)-1, "-  at %-*.*s:%u:%u",
+                               fname->len, fname->len, fname->ptr, lineno, colno+1);
+                if (len > 0) doprint(ctx, logbuf, len, 0);
+            }
         }
     }
     switch (sev) {
         case STC_K_ERROR:
             ctx->errcount += 1;
             if (ctx->errcount < ctx->maxerrs) break;
-            fprintf(stderr, "%%BLISS-F-TOOMANYERRS, "
-            	    "maximum number of errors exceeded, aborting\n");
+            // Force this error message to the terminal
+            ctx->logtoterm = 1;
+            len = snprintf(logbuf, sizeof(logbuf)-1, "%%BLISS-F-TOOMANYERRS, "
+                           "maximum number of errors exceeded, aborting");
+            if (len > 0) doprint(ctx, logbuf, len, 0);
             // FALLTHROUGH
         case STC_K_FATAL:
             fflush(stderr);
@@ -147,15 +218,3 @@ log_signal (logctx_t ctx, textpos_t pos, statcode_t code, ...)
     va_end(ap);
 
 } /* log_signal */
-
-/*
- * log_print
- *
- * XXX this function should be moved to the listing module.
- */
-void
-log_print (logctx_t ctx, textpos_t pos, const char *s, size_t len)
-{
-    printf("%% %-*.*s\n", (int)len, (int)len, s);
-
-} /* log_print */

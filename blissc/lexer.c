@@ -42,14 +42,15 @@ struct saved_filename_s {
  * into the parsing stream.  When lexical processing adds
  * or replaces lexemes in the stream, they are prepended to
  * the linked list pointed to by 'head'.  When files are
- * opened (e.g., REQUIRE), the scanner context is maintained
- * in 'sctx'.
+ * opened (e.g., REQUIRE), the scanner stream context is
+ * maintained in 'strm'.
  */
 struct lexchain_s {
     struct lexchain_s   *nextchain;
     lexseq_t             seq;
-    scanctx_t            sctx;
+    streamctx_t          strm;
     int                  filename_index;
+    unsigned int         curline;
 };
 typedef struct lexchain_s lexchain_t;
 
@@ -67,8 +68,11 @@ struct lexer_ctx_s {
     logctx_t                 logctx;
     strctx_t                 strctx;
     lexctx_t                 lexctx;
+    void                    *fioctx;
+    scanctx_t                scnctx;
     struct saved_filename_s *saved_filenames;
     lexchain_t              *chain;
+    lexchain_t              *freechains;
     int                      filename_count;
     int                      atend;
     int                      signok;
@@ -133,9 +137,15 @@ static namedef_t operator_names[] = {
  * Allocate a new lexchain_t.
  */
 static lexchain_t *
-lexchain_alloc (void)
+lexchain_alloc (lexer_ctx_t ctx)
 {
-    lexchain_t *chain = malloc(sizeof(struct lexchain_s));
+    lexchain_t *chain;
+    if (ctx->freechains == 0) {
+        chain = malloc(sizeof(struct lexchain_s));
+    } else {
+        chain = ctx->freechains;
+        ctx->freechains = chain->nextchain;
+    }
     if (chain != 0) {
         memset(chain, 0, sizeof(struct lexchain_s));
         lexseq_init(&chain->seq);
@@ -148,18 +158,18 @@ lexchain_alloc (void)
  * lexchain_free
  *
  * Frees a lexchain_t, along with all of the lexemes on
- * its linked list, and closing the scanner context.
+ * its linked list.  Scanner stream should be closed prior
+ * to calling this.
  */
 static void
-lexchain_free (lexctx_t lexctx, lexchain_t *chain)
+lexchain_free (lexer_ctx_t ctx, lexchain_t *chain)
 {
     if (chain != 0) {
-        lexseq_free(lexctx, &chain->seq);
-        if (chain->sctx != 0) {
-            scan_finish(chain->sctx);
-        }
-        free(chain);
+        lexseq_free(ctx->lexctx, &chain->seq);
+        chain->nextchain = ctx->freechains;
+        ctx->freechains = chain;
     }
+
 } /* lexchain_free */
 
 /*
@@ -200,44 +210,6 @@ filename_lookup (lexer_ctx_t lctx, const char *name, size_t len,
 
 } /* filename_lookup */
 
-/* --- Public API --- */
-
-/*
- * lexer_init
- *
- * One-time lexer initialization, to register the operator names and
- * the filename fetcher for the logger.  The lexeme module initialization
- * is performed here as well.
- */
-lexer_ctx_t
-lexer_init (strctx_t strctx, scopectx_t kwdscope, logctx_t logctx)
-{
-    lexer_ctx_t ctx;
-    int i;
-
-    for (i = 0; i < sizeof(operator_names)/sizeof(operator_names[0]); i++) {
-        name_declare(kwdscope, &operator_names[i], 0, 0, 0, 0);
-    }
-
-    ctx = malloc(sizeof(struct lexer_ctx_s));
-    if (ctx != 0) {
-        memset(ctx, 0, sizeof(struct lexer_ctx_s));
-        ctx->strctx = strctx;
-        ctx->logctx = logctx;
-        log_fetchfn_set(logctx, (filename_fetch_fn) lexer_filename, ctx);
-        ctx->signok = 1;
-        ctx->lexctx = lexeme_init(strctx, logctx);
-    }
-
-    return ctx;
-
-} /* lexer_init */
-
-/*
- * Getter/setters for lexer context
- */
-lexctx_t lexer_lexctx(lexer_ctx_t lctx) { return lctx->lexctx; }
-
 /*
  * lexer_filename
  *
@@ -245,9 +217,10 @@ lexctx_t lexer_lexctx(lexer_ctx_t lctx) { return lctx->lexctx; }
  * return the relevant filename.  This is invoked through
  * the 'filename_fetch' function pointer by the logger.
  */
-strdesc_t *
-lexer_filename (lexer_ctx_t lctx, int filename_index)
+static strdesc_t *
+lexer_filename (void *vctx, int filename_index)
 {
+    lexer_ctx_t lctx = vctx;
     struct saved_filename_s *sf;
     static strdesc_t internalsrc = STRDEF("<Internal source>");
 
@@ -265,34 +238,96 @@ lexer_filename (lexer_ctx_t lctx, int filename_index)
 } /* lexer_filename */
 
 /*
+ * lexer_getline
+ *
+ * If the specified filename index and line number match the current
+ * ones, calls the scanner to return the current line.
+ * Invoked via the logger's line-fetch hook.
+ */
+static strdesc_t *
+lexer_getline (void *vctx, int fileno, unsigned int lineno)
+{
+    lexer_ctx_t lctx = vctx;
+    lexchain_t *chain = lctx->chain;
+
+    if (chain == 0 || chain->strm == 0) return 0;
+    if (fileno == chain->filename_index && chain->curline == lineno) {
+        return scan_curline_get(chain->strm);
+    }
+    return 0;
+
+} /* lexer_getline */
+
+
+/* --- Public API --- */
+
+/*
+ * lexer_init
+ *
+ * One-time lexer initialization, to register the operator names and
+ * the filename fetcher for the logger.  The lexeme module initialization
+ * is performed here as well.
+ */
+lexer_ctx_t
+lexer_init (strctx_t strctx, scopectx_t kwdscope, logctx_t logctx, void *fioctx)
+{
+    lexer_ctx_t ctx;
+    int i;
+
+    for (i = 0; i < sizeof(operator_names)/sizeof(operator_names[0]); i++) {
+        name_declare(kwdscope, &operator_names[i], 0, 0, 0, 0);
+    }
+
+    ctx = malloc(sizeof(struct lexer_ctx_s));
+    if (ctx != 0) {
+        memset(ctx, 0, sizeof(struct lexer_ctx_s));
+        ctx->scnctx = scan_init(strctx, logctx, fioctx);
+        if (ctx->scnctx == 0) {
+            free(ctx);
+            return 0;
+        }
+        ctx->strctx = strctx;
+        ctx->logctx = logctx;
+        log_fetchfn_set(logctx, lexer_filename, ctx);
+        log_linefetchfn_set(logctx, lexer_getline, ctx);
+        ctx->signok = 1;
+        ctx->lexctx = lexeme_init(strctx, logctx);
+    }
+
+    return ctx;
+
+} /* lexer_init */
+
+/*
+ * Getter/setters for lexer context
+ */
+lexctx_t lexer_lexctx(lexer_ctx_t lctx) { return lctx->lexctx; }
+scanctx_t lexer_scanctx(lexer_ctx_t lctx) { return lctx->scnctx; }
+
+/*
  * lexer_fopen
  * Insert a new file at the front of the stream.
  */
 int
 lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen,
-             const char *suffix)
+             const char *suffix, char **actnamep)
 {
-    lexchain_t *chain = lexchain_alloc();
+    lexchain_t *chain = lexchain_alloc(ctx);
     char *actname;
 
     if (chain == 0) {
         log_signal(ctx->logctx, 0, STC__OUTOFMEM, "lexer_fopen");
         return 0;
     }
-    chain->sctx = scan_init(ctx->strctx, ctx->logctx);
-    if (chain->sctx == 0) {
-        lexchain_free(ctx->lexctx, chain);
-        return 0;
-    }
-    if (!scan_fopen(chain->sctx, fname, fnlen, suffix, &actname)) {
-        scan_finish(chain->sctx);
-        chain->sctx = 0;
-        lexchain_free(ctx->lexctx, chain);
+    chain->strm = scan_fopen(ctx->scnctx, fname, fnlen, suffix, &actname);
+    if (chain->strm == 0) {
+        lexchain_free(ctx, chain);
         return 0;
     }
     chain->filename_index = filename_lookup(ctx, actname, strlen(actname), 0);
     chain->nextchain = ctx->chain;
     ctx->chain = chain;
+    if (actnamep != 0) *actnamep = actname;
     return 1;
 
 } /* lexer_fopen */
@@ -304,21 +339,15 @@ lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen,
 int
 lexer_popen (lexer_ctx_t ctx, scan_input_fn infn, void *fnctx)
 {
-    lexchain_t *chain = lexchain_alloc();
+    lexchain_t *chain = lexchain_alloc(ctx);
 
     if (chain == 0) {
         log_signal(ctx->logctx, 0, STC__OUTOFMEM, "lexer_popen");
         return 0;
     }
-    chain->sctx = scan_init(ctx->strctx, ctx->logctx);
-    if (chain->sctx == 0) {
-        lexchain_free(ctx->lexctx, chain);
-        return 0;
-    }
-    if (!scan_popen(chain->sctx, infn, fnctx)) {
-        scan_finish(chain->sctx);
-        chain->sctx = 0;
-        lexchain_free(ctx->lexctx, chain);
+    chain->strm = scan_popen(ctx->scnctx, infn, fnctx);
+    if (chain->strm == 0) {
+        lexchain_free(ctx, chain);
         return 0;
     }
     chain->filename_index = -1;
@@ -331,17 +360,29 @@ lexer_popen (lexer_ctx_t ctx, scan_input_fn infn, void *fnctx)
 /*
  * lexer_finish
  *
- * Shuts down the lexer, freeing up all of the lexchains.
+ * Shuts down the lexer.
  */
 void
 lexer_finish (lexer_ctx_t ctx)
 {
-    while (ctx->chain != 0) {
-        lexchain_t *chain = ctx->chain;
-        ctx->chain = chain->nextchain;
-        lexchain_free(ctx->lexctx, chain);
+    lexchain_t *chain, *nextchain;
+    struct saved_filename_s *sf, *sfnext;
+
+    for (chain = ctx->chain; chain != 0; chain = nextchain) {
+        nextchain = chain->nextchain;
+        scan_close(chain->strm);
+        lexchain_free(ctx, chain);
+    }
+    for (chain = ctx->freechains; chain != 0; chain = nextchain) {
+        nextchain = chain->nextchain;
+        free(chain);
+    }
+    for (sf = ctx->saved_filenames; sf != 0; sf = sfnext) {
+        sfnext = sf->next;
+        free(sf);
     }
     lexeme_finish(ctx->lexctx);
+    scan_finish(ctx->scnctx);
     free(ctx);
 
 } /* lexer_finish */
@@ -365,7 +406,7 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek, textpos_t *posp)
     lexeme_t *lex = 0;
     lextype_t lextype;
     strdesc_t *tok;
-    unsigned int lineno, column;
+    unsigned int column;
     char *cp;
 
     if (ctx == 0) {
@@ -378,19 +419,19 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek, textpos_t *posp)
 
     while (ctx->chain != 0) {
         lexchain_t *chain = ctx->chain;
-        lex = (peek ? lexseq_head(&chain->seq) :lexseq_remhead(&chain->seq));
+        lex = (peek ? lexseq_head(&chain->seq) : lexseq_remhead(&chain->seq));
         if (lex != 0) {
             break;
         }
-        if (chain->sctx != 0) {
+        if (chain->strm != 0) {
             scantype_t type;
             unsigned int sflags;
 
             sflags = (erroneof ? SCAN_M_ERRONEOF : 0) |
                      (ctx->signok ? SCAN_M_SIGNOK : 0);
 
-            type = scan_getnext(chain->sctx, sflags, &tok,
-                                &lineno, &column);
+            type = scan_getnext(chain->strm, sflags, &tok,
+                                &chain->curline, &column);
             if (!scan_ok(type)) {
                 log_signal(ctx->logctx, 0, STC__INTCMPERR, "lexer___next");
                 lex = &errlex;
@@ -398,13 +439,13 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek, textpos_t *posp)
                 break;
             }
             if (!peek && posp != 0) {
-                *posp = textpos_create(chain->filename_index, lineno, column);
+                *posp = textpos_create(chain->filename_index, chain->curline, column);
             }
             if (type == SCANTYPE_END) {
-                scan_finish(chain->sctx);
-                chain->sctx = 0;
+                scan_close(chain->strm);
+                chain->strm = 0;
                 ctx->chain = chain->nextchain;
-                lexchain_free(ctx->lexctx, chain);
+                lexchain_free(ctx, chain);
                 if (ctx->chain == 0) {
                     lex = &endlex;
                     ctx->atend = 1;
@@ -452,7 +493,7 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek, textpos_t *posp)
             break;
         } else {
             ctx->chain = chain->nextchain;
-            lexchain_free(ctx->lexctx, chain);
+            lexchain_free(ctx, chain);
             if (ctx->chain == 0) {
                 lex = &endlex;
                 ctx->atend = 1;
@@ -505,7 +546,7 @@ lexer_insert (lexer_ctx_t ctx, lexeme_t *lex)
     }
 
     if (chain == 0) {
-        chain = lexchain_alloc();
+        chain = lexchain_alloc(ctx);
         if (chain == 0) {
             log_signal(ctx->logctx, 0, STC__OUTOFMEM, "lexer_insert");
             return;
@@ -531,7 +572,7 @@ lexer_insert_seq (lexer_ctx_t ctx, lexseq_t *seq)
         return;
     }
     if (chain == 0) {
-        chain = lexchain_alloc();
+        chain = lexchain_alloc(ctx);
         if (chain == 0) {
             log_signal(ctx->logctx, 0, STC__OUTOFMEM, "lexer_insert_seq");
             return;

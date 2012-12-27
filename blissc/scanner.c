@@ -40,18 +40,21 @@
 
 // Structure for tracking an input stream and
 // the current line of text being scanned.
-struct bufctx_s {
-    filectx_t       fctx;
-    scan_input_fn   inpfn;
-    void            *fnctx;
-    char            linebuf[SCAN_LINESIZE];
-    size_t          linelen;
-    size_t          curpos;
-    unsigned int    curline;
+struct streamctx_s {
+    struct streamctx_s *next;
+    struct scanctx_s   *scanctx;
+    filectx_t           fctx;
+    scan_input_fn       inpfn;
+    void               *fnctx;
+    size_t              linelen;
+    size_t              curpos;
+    unsigned int        curline;
+    strdesc_t           linedsc;
+    char                linebuf[SCAN_LINESIZE];
+    char                tokbuf[SCAN_LINESIZE];
 };
 
-// Structure for tracking the current scanner
-// context.
+// Module context structure.
 struct scanctx_s {
     strctx_t        strctx;
     logctx_t        logctx;
@@ -59,9 +62,7 @@ struct scanctx_s {
     void           *lstctx;
     scan_list_fn    listfn;
     scan_close_fn   closefn;
-    struct bufctx_s bufstack[SCAN_MAXFILES];
-    int             curbuf;
-    char            tokbuf[SCAN_LINESIZE];
+    streamctx_t     freestreams;
 };
 
 // States for the scanner's state machine.
@@ -97,24 +98,59 @@ const static char valid_ident_char[256] = {
 };
 
 /*
+ * Memory management
+ *
+ */
+static streamctx_t
+stream_alloc (scanctx_t ctx)
+{
+    streamctx_t s;
+
+    if (ctx->freestreams == 0) {
+        s = malloc(sizeof(struct streamctx_s));
+    } else {
+        s = ctx->freestreams;
+        ctx->freestreams = s->next;
+    }
+    if (s != 0) {
+        memset(s, 0, sizeof(struct streamctx_s));
+        s->scanctx = ctx;
+    }
+    return s;
+
+} /* stream_alloc */
+
+static void
+stream_free (streamctx_t s)
+{
+    if (s == 0) return;
+    s->next = s->scanctx->freestreams;
+    s->scanctx->freestreams = s;
+
+} /* stream_free */
+
+/*
  * scan_init
  *
  * Initializes the scanner.
  */
 scanctx_t
-scan_init (strctx_t strctx, logctx_t logctx)
+scan_init (strctx_t strctx, logctx_t logctx, void *fioctx)
 {
     scanctx_t ctx = malloc(sizeof(struct scanctx_s));
     if (ctx != 0) {
         memset(ctx, 0, sizeof(struct scanctx_s));
         ctx->strctx = strctx;
         ctx->logctx = logctx;
-        ctx->curbuf = -1;
-        ctx->fioctx = fileio_init(logctx);
+        ctx->fioctx = fioctx;
     }
     return ctx;
 
 } /* scan_init */
+
+void scan_listfuncs_set (scanctx_t ctx, scan_list_fn lf, scan_close_fn cf, void *lstctx) {
+    ctx->listfn = lf; ctx->closefn = cf; ctx->lstctx = lstctx;
+}
 
 /*
  * scan_finish
@@ -124,9 +160,10 @@ scan_init (strctx_t strctx, logctx_t logctx)
 void
 scan_finish (scanctx_t ctx)
 {
-    int i;
-    for (i = 0; i <= ctx->curbuf; i++) {
-        file_close(ctx->bufstack[i].fctx);
+    streamctx_t s, snext;
+    for (s = ctx->freestreams; s != 0; s = snext) {
+        snext = s->next;
+        free(s);
     }
     free(ctx);
 }
@@ -139,27 +176,21 @@ scan_finish (scanctx_t ctx)
  * pushed on the buffer stack, and will be returned to
  * after the new input stream reaches its end.
  */
-int
+streamctx_t
 scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen,
             const char *suffix, char **actnamep)
 {
-    int i = ctx->curbuf;
-    if (i >= (SCAN_MAXFILES-1)) {
-        log_signal(ctx->logctx, 0, STC__EXCFILCNT, SCAN_MAXFILES);
+    streamctx_t s = stream_alloc(ctx);
+    if (s == 0) {
         return 0;
     }
-    i = i + 1;
-    ctx->bufstack[i].fctx = file_open_input(ctx->fioctx, fname, fnlen, suffix);
-    if (ctx->bufstack[i].fctx == 0) {
+    s->fctx = file_open_input(ctx->fioctx, fname, fnlen, suffix);
+    if (s->fctx == 0) {
+        stream_free(s);
         return 0;
     }
-    ctx->bufstack[i].inpfn = 0;
-    ctx->bufstack[i].curline = 0;
-    ctx->bufstack[i].curpos = 0;
-    ctx->bufstack[i].linelen = 0;
-    ctx->curbuf = i;
-    if (actnamep) *actnamep = file_getname(ctx->bufstack[i].fctx);
-    return 1;
+    if (actnamep) *actnamep = file_getname(s->fctx);
+    return s;
 
 } /* scan_fopen */
 
@@ -170,25 +201,39 @@ scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen,
  * provides a callback function to obtain the next line of
  * input.
  */
-int
+streamctx_t
 scan_popen (scanctx_t ctx, scan_input_fn infn, void *fnctx)
 {
-    int i = ctx->curbuf;
-    if (i >= (SCAN_MAXFILES-1)) {
-        log_signal(ctx->logctx, 0, STC__EXCFILCNT, SCAN_MAXFILES);
+    streamctx_t s = stream_alloc(ctx);
+    if (s == 0) {
         return 0;
     }
-    i = i + 1;
-    ctx->bufstack[i].fctx = 0;
-    ctx->bufstack[i].inpfn = infn;
-    ctx->bufstack[i].fnctx = fnctx;
-    ctx->bufstack[i].curline = 0;
-    ctx->bufstack[i].curpos = 0;
-    ctx->bufstack[i].linelen = 0;
-    ctx->curbuf = i;
-    return 1;
+    s->inpfn = infn;
+    s->fnctx = fnctx;
+    return s;
 
 } /* scan_popen */
+
+/*
+ * scan_close
+ *
+ * Closes an open stream.
+ */
+void
+scan_close (streamctx_t s)
+{
+    scanctx_t ctx;
+    if (s == 0) return;
+    ctx = s->scanctx;
+    if (s->fctx) {
+        if (ctx->closefn != 0) {
+            (*ctx->closefn)(ctx->lstctx);
+        }
+        file_close(s->fctx);
+    }
+    stream_free(s);
+
+} /* scan_close */
 
 /*
  * scan_getnext
@@ -204,78 +249,64 @@ scan_popen (scanctx_t ctx, scan_input_fn infn, void *fnctx)
  * LRM).
  */
 scantype_t
-scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
+scan_getnext (streamctx_t strm, unsigned int flags, strdesc_t **tok,
               unsigned int *lineno, unsigned int *column)
 {
+    scanctx_t ctx = strm->scanctx;
     char *cp, *outp, ch;
     size_t remain, bufsiz, len;
     scanstate_t curstate = STATE_INIT;
     scantype_t rettype = SCANTYPE_END;
 
-    outp = ctx->tokbuf;
-    bufsiz = sizeof(ctx->tokbuf);
-    while (ctx->curbuf >= 0) {
-        struct bufctx_s *curbuf = &ctx->bufstack[ctx->curbuf];
-
-		// If we're at the end of the current line, get another
-
-        while (curbuf->curpos >= curbuf->linelen) {
+    outp = strm->tokbuf;
+    bufsiz = sizeof(strm->tokbuf);
+    while (1) {
+        while (strm->curpos >= strm->linelen) {
             int rc;
-            curbuf->curpos = 0;
-            if (curbuf->inpfn != 0) {
-                rc = (curbuf->inpfn)(curbuf->fnctx, curbuf->linebuf,
-                                     sizeof(curbuf->linebuf), &curbuf->linelen);
+            strm->curpos = 0;
+            if (strm->inpfn != 0) {
+                rc = (strm->inpfn)(strm->fnctx, strm->linebuf,
+                                   sizeof(strm->linebuf), &strm->linelen);
             } else {
-                rc = file_readline(curbuf->fctx, curbuf->linebuf,
-                                   sizeof(curbuf->linebuf), &curbuf->linelen);
+                rc = file_readline(strm->fctx, strm->linebuf,
+                                   sizeof(strm->linebuf), &strm->linelen);
             }
-            if (rc <= 0) {
-                if (curbuf->inpfn == 0) {
-                    file_close(curbuf->fctx);
-                }
-                ctx->curbuf -= 1;
-                if (rc < 0) {
-                    log_signal(ctx->logctx, 0, STC__FIOERR,
-                               (curbuf->inpfn == 0 ? file_getname(curbuf->fctx)
-                                : "(internal stream)"));
-                    len = outp - ctx->tokbuf;
-                    *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
-                    *lineno = curbuf->curline;
-                    *column = 0;
-                    return SCANTYPE_ERR_FIO;
-                }
-                // Not an error, but EOF...
-				// If curbuf went negative, we reached the end
-				// of the original input stream, so we're done.
-                if (ctx->curbuf < 0) {
-                    len = outp - ctx->tokbuf;
-                    *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
-                    *lineno = curbuf->curline;
-                    *column = 0;
-                    return SCANTYPE_END;
-                }
+            if (rc < 0) {
+                log_signal(ctx->logctx, 0, STC__FIOERR,
+                           (strm->inpfn == 0 ? file_getname(strm->fctx)
+                            : "(internal stream)"));
+                len = outp - strm->tokbuf;
+                *tok = string_from_chrs(ctx->strctx, 0, strm->tokbuf, len);
+                *lineno = strm->curline;
+                *column = 0;
+                return SCANTYPE_ERR_FIO;
+            } else if (rc == 0) {
                 if ((flags & SCAN_M_ERRONEOF) != 0) {
                     log_signal(ctx->logctx, 0, STC__EOFERR,
-                               (curbuf->inpfn == 0 ? file_getname(curbuf->fctx)
+                               (strm->inpfn == 0 ? file_getname(strm->fctx)
                                 : "(internal stream)"));
-                    len = outp - ctx->tokbuf;
-                    *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
-                    *lineno = curbuf->curline;
-                    *column = 0;
-                    return SCANTYPE_ERR_EOF;
                 }
-                curbuf = &ctx->bufstack[ctx->curbuf];
+                len = outp - strm->tokbuf;
+                *tok = string_from_chrs(ctx->strctx, 0, strm->tokbuf, len);
+                *lineno = strm->curline;
+                *column = 0;
+                return (flags & SCAN_M_ERRONEOF) ? SCANTYPE_ERR_EOF : SCANTYPE_END;
             } else {
-                curbuf->curline += 1;
+                strm->curline += 1;
+                if (ctx->listfn != 0) {
+                    (*ctx->listfn)(ctx->lstctx, strm->linebuf, strm->linelen, strm->curline,
+                                   (curstate == STATE_IN_EMBEDDED_COMMENT ? 'C' : ' '));
+                }
             }
-        }
 
-        cp = &curbuf->linebuf[curbuf->curpos];
-        remain = curbuf->linelen - curbuf->curpos;
+        } /* while needing to fetch another line */
+
+        cp = &strm->linebuf[strm->curpos];
+        remain = strm->linelen - strm->curpos;
         while (remain > 0) {
             switch (curstate) {
                 case STATE_INIT:
-                	// skip whitespace
+                    // skip whitespace
                     if (*cp == ' ' || *cp == '\t' || *cp == '\013' || *cp == '\014') {
                         break;
                     }
@@ -294,8 +325,8 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                     }
                     // If we get here, we know we're staring a
                     // real token, so record its starting position
-                    *lineno = curbuf->curline;
-                    *column = (unsigned int)(cp - &curbuf->linebuf[0]);
+                    *lineno = strm->curline;
+                    *column = (unsigned int)(cp - &strm->linebuf[0]);
                     // Apostrophe introduces a quoted-string literal
                     if (*cp == '\'') {
                         curstate = STATE_IN_QSTRING;
@@ -306,13 +337,13 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                     if (isdigit(*cp) ||
                         ((flags & SCAN_M_SIGNOK) &&
                          (*cp == '+' || *cp == '-') && isdigit(*(cp+1)))) {
-                        if (bufsiz > 0) {
-                            *outp++ = *cp;
-                            bufsiz -= 1;
+                            if (bufsiz > 0) {
+                                *outp++ = *cp;
+                                bufsiz -= 1;
+                            }
+                            curstate = STATE_IN_DECLIT;
+                            break;
                         }
-                        curstate = STATE_IN_DECLIT;
-                        break;
-                    }
                     // See if we have something that looks like a name.
                     // The '%' character can be used in a name (typically
                     // as the first character), but only if it is immediately
@@ -391,7 +422,7 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                             bufsiz -= 1;
                         }
                     } else if (valid_ident_char[*cp] ||
-                        (remain > 1 && *cp == '%' && valid_ident_char[*(cp+1)])) {
+                               (remain > 1 && *cp == '%' && valid_ident_char[*(cp+1)])) {
                         rettype = SCANTYPE_ERR_INVLIT;
                         curstate = STATE_ERRSKIP;
                     } else {
@@ -429,17 +460,17 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
                         cp++;
                         remain--;
                     }
-                    curbuf->curpos = cp - &curbuf->linebuf[0];
-                    len = outp - ctx->tokbuf;
-                    *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
+                    strm->curpos = cp - &strm->linebuf[0];
+                    len = outp - strm->tokbuf;
+                    *tok = string_from_chrs(ctx->strctx, 0, strm->tokbuf, len);
                     return rettype;
 
                 case STATE_EXIT:
                     // normal exit state, expects rettype to be
                     // set correctly before entry
-                    curbuf->curpos = cp - &curbuf->linebuf[0];
-                    len = outp - ctx->tokbuf;
-                    *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
+                    strm->curpos = cp - &strm->linebuf[0];
+                    len = outp - strm->tokbuf;
+                    *tok = string_from_chrs(ctx->strctx, 0, strm->tokbuf, len);
                     return rettype;
 
             } /* switch */
@@ -448,36 +479,48 @@ scan_getnext (scanctx_t ctx, unsigned int flags, strdesc_t **tok,
             remain -= 1;
 
         } /* while remain > 0 */
-
+        
         // OK, hit end of line (linemark), possibly before
         // identifying a complete token.  Complete that work
         // here.
-
-        curbuf->curpos = cp - &curbuf->linebuf[0];
+        
+        strm->curpos = cp - &strm->linebuf[0];
         switch (curstate) {
             case STATE_IN_DECLIT:
-                len = outp - ctx->tokbuf;
-                *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
+                len = outp - strm->tokbuf;
+                *tok = string_from_chrs(ctx->strctx, 0, strm->tokbuf, len);
                 return SCANTYPE_DECLITERAL;
             case STATE_IN_IDENTIFIER:
-                len = outp - ctx->tokbuf;
-                *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
+                len = outp - strm->tokbuf;
+                *tok = string_from_chrs(ctx->strctx, 0, strm->tokbuf, len);
                 return SCANTYPE_IDENTIFIER;
             case STATE_IN_QSTRING:
                 return SCANTYPE_ERR_QSTR;
             case STATE_EXIT:
-                len = outp - ctx->tokbuf;
-                *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
+                len = outp - strm->tokbuf;
+                *tok = string_from_chrs(ctx->strctx, 0, strm->tokbuf, len);
                 return rettype;
             default:
                 break;
         }
+    }
 
-
-    } /* while ctx->curbuf >= 0 */
-
-    len = outp - ctx->tokbuf;
-    *tok = string_from_chrs(ctx->strctx, 0, ctx->tokbuf, len);
+    len = outp - strm->tokbuf;
+    *tok = string_from_chrs(ctx->strctx, 0, strm->tokbuf, len);
     return rettype;
 
 } /* scan_getnext */
+
+/*
+ * scan_curline_get
+ *
+ * Returns the current line.  Use for error messages.
+ */
+strdesc_t *
+scan_curline_get (streamctx_t strm)
+{
+    if (strm == 0) return 0;
+    strdesc_init(&strm->linedsc, strm->linebuf, strm->linelen);
+    return &strm->linedsc;
+
+} /* scan_curline_get */

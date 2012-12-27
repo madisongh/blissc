@@ -19,6 +19,7 @@
 #include "declarations.h"
 #include "listings.h"
 #include "logging.h"
+#include "fileio.h"
 
 int test_scanner(int argc, const char *argv[]);
 int test_parser(int argc, const char *argv[]);
@@ -63,6 +64,8 @@ test_scanner (int argc, const char *argv[])
     jmp_buf retenv;
     strctx_t strctx = 0;
     logctx_t logctx = 0;
+    fioctx_t fioctx = 0;
+    streamctx_t sctx = 0;
     strdesc_t *tok;
     scantype_t toktype;
     unsigned int sflags = SCAN_M_SIGNOK;
@@ -72,17 +75,18 @@ test_scanner (int argc, const char *argv[])
     if (setjmp(retenv)) goto finish;
     strctx = strings_init();
     logctx =logging_init(retenv);
-    ctx = scan_init(strctx, logctx);
+    fioctx = fileio_init(logctx);
+    ctx = scan_init(strctx, logctx, fioctx);
 
     if (ctx == 0) {
         return 999;
     }
-    if (!scan_fopen(ctx, argv[0], strlen(argv[0]), ".bli", 0)) {
+    if (!(sctx = scan_fopen(ctx, argv[0], strlen(argv[0]), ".bli", 0))) {
         fprintf(stderr, "scan_fopen failed for %s\n", argv[0]);
         return 998;
     }
     while (keepgoing) {
-        toktype = scan_getnext(ctx, sflags, &tok, &lno, &cno);
+        toktype = scan_getnext(sctx, sflags, &tok, &lno, &cno);
         if (scan_ok(toktype)) {
             printf("<%u:%u> ", lno, cno);
             switch (toktype) {
@@ -177,6 +181,7 @@ test_parser (int argc, const char *argv[])
     scopectx_t kwdscope;
     jmp_buf retenv;
     strctx_t strctx = 0;
+    fioctx_t fioctx = 0;
     logctx_t logctx = 0;
     lexctx_t lctx;
 //    stgctx_t stg;
@@ -189,10 +194,11 @@ test_parser (int argc, const char *argv[])
     if (setjmp(retenv)) goto finish;
     strctx = strings_init();
     logctx = logging_init(retenv);
+    fioctx = fileio_init(logctx);
 //    stg = storage_init(&machdef);
-    pctx = parser_init(strctx, 0, &machdef, &kwdscope, logctx);
+    pctx = parser_init(strctx, 0, &machdef, &kwdscope, logctx, fioctx);
     lctx = parser_lexmemctx(pctx);
-    if (!parser_fopen(pctx, argv[0], strlen(argv[0]), ".bli")) {
+    if (!parser_fopen(pctx, argv[0], strlen(argv[0]), ".bli", 0)) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
     }
@@ -227,6 +233,7 @@ test_expr (int argc, const char *argv[])
     stgctx_t stg;
     strctx_t strctx = 0;
     logctx_t logctx = 0;
+    fioctx_t fioctx = 0;
     expr_ctx_t  ectx;
     scopectx_t kwdscope;
     jmp_buf retenv;
@@ -243,10 +250,11 @@ test_expr (int argc, const char *argv[])
 
     strctx = strings_init();
     logctx = logging_init(retenv);
+    fioctx = fileio_init(logctx);
     stg = storage_init(strctx, &machdef);
-    pctx = parser_init(strctx, 0, &machdef, &kwdscope, logctx);
+    pctx = parser_init(strctx, 0, &machdef, &kwdscope, logctx, fioctx);
     ectx = expr_init(strctx, pctx, stg, kwdscope);
-    if (!parser_fopen(pctx, argv[0], strlen(argv[0]), ".bli")) {
+    if (!parser_fopen_main(pctx, argv[0], strlen(argv[0]), ".bli", 1, 0)) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
     }
@@ -257,8 +265,10 @@ test_expr (int argc, const char *argv[])
         printf("<<end of module>>\n");
     }
 finish:
-    parser_finish(pctx);
+    expr_finish(ectx);
     logging_finish(logctx);
+    fileio_finish(fioctx);
+    strings_finish(strctx);
     return 0;
 }
 

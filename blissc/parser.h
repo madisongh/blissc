@@ -33,11 +33,14 @@ typedef struct parse_ctx_s *parse_ctx_t;
 typedef int (*lexfunc_t)(parse_ctx_t pctx, void *ctx, quotelevel_t ql,
                          lextype_t curlt);
 parse_ctx_t parser_init(strctx_t strctx, namectx_t namectx, machinedef_t *mach,
-                        scopectx_t *kwdscopep, logctx_t logctx);
+                        scopectx_t *kwdscopep, logctx_t logctx, void *fioctx);
 void parser_lexfunc_register(parse_ctx_t pctx, void *ctx,
                              lextype_t lt, lexfunc_t fn);
+int parser_fopen_main(parse_ctx_t pctx, const char *fname, size_t fnlen,
+                      const char *suffix, int do_listing,
+                      const char *listfname);
 int parser_fopen(parse_ctx_t pctx, const char *fname, size_t fnlen,
-                 const char *suffix);
+                 const char *suffix, char **actnamep);
 int parser_popen(parse_ctx_t pctx, scan_input_fn infn, void *fnctx);
 void parser_finish(parse_ctx_t pctx);
 lexctx_t parser_lexmemctx(parse_ctx_t pctx);

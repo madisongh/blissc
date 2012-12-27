@@ -29,6 +29,6 @@ filectx_t file_open_output(fioctx_t fio, const char *fname,
 void file_close(filectx_t ctx);
 char *file_getname(filectx_t ctx);
 int file_readline(filectx_t ctx, char *buf, size_t bufsiz, size_t *len);
-int file_writeline(filectx_t ctx, char *buf, size_t buflen);
+int file_writeline(filectx_t ctx, const char *buf, size_t buflen);
 
 #endif /* fileio_h__ */

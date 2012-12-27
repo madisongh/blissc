@@ -75,6 +75,7 @@ static namedef_t decl_names[] = {
     NAMEDEF("BUILTIN", LEXTYPE_DCL_BUILTIN, NAME_M_RESERVED),
     NAMEDEF("UNDECLARE", LEXTYPE_DCL_UNDECLARE, NAME_M_RESERVED),
     NAMEDEF("REQUIRE", LEXTYPE_DCL_REQUIRE, NAME_M_RESERVED),
+    NAMEDEF("SWITCHES", LEXTYPE_DCL_SWITCHES, NAME_M_RESERVED),
     NAMEDEF("SIGNED", LEXTYPE_ATTR_SIGNED, NAME_M_RESERVED),
     NAMEDEF("UNSIGNED", LEXTYPE_ATTR_UNSIGNED, NAME_M_RESERVED),
     NAMEDEF("VOLATILE", LEXTYPE_ATTR_VOLATILE, NAME_M_RESERVED),
@@ -100,6 +101,19 @@ static namedef_t decl_names[] = {
 };
 
 static int parse_ASSIGN(parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t lt);
+
+/*
+ * toggle_errs
+ *
+ * Handler for the ERRS switch, to enable/disable error logging to the terminal.
+ */
+static int
+toggle_errs (parse_ctx_t pctx, void *ctx, int togidx, lextype_t dcltype, name_t *togname)
+{
+    log_logterm_set(parser_logctx(pctx), name_type(togname) != LEXTYPE_NAME_SW_TOGGLE_OFF);
+    return 1;
+
+} /* toggle_errs */
 
 /*
  * declare_compiletime
@@ -1544,6 +1558,7 @@ declare_require (parse_ctx_t pctx)
 {
     lexeme_t *lex;
     strdesc_t *str;
+    char *fname;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_STRING, &lex, 1)) {
         log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__STRINGEXP);
@@ -1552,7 +1567,9 @@ declare_require (parse_ctx_t pctx)
         log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__DELIMEXP, ";");
     }
     str = lexeme_text(lex);
-    parser_fopen(pctx, str->ptr, str->len, ".req"); // errors handled within
+    if (parser_fopen(pctx, str->ptr, str->len, ".req", &fname)) {
+        listing_require_begin(parser_lstgctx(pctx), fname);
+    }
     lexeme_free(parser_lexmemctx(pctx), lex);
     return 1;
 
@@ -1657,9 +1674,11 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
 {
     int i;
     literal_attr_t attr;
+    name_t *errson, *errsoff;
     static strdesc_t bpdsc[4] = {
         STRDEF("%BPUNIT"), STRDEF("%BPADDR"), STRDEF("%BPVAL"),
         STRDEF("%UPVAL") };
+    static strdesc_t errswitch = STRDEF("ERRS");
 
     for (i = 0; i < sizeof(decl_names)/sizeof(decl_names[0]); i++) {
         name_declare(kwdscope, &decl_names[i], 0, 0, 0, 0);
@@ -1682,6 +1701,7 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
     attr.value = machine_scalar_units(mach);
     litsym_declare(kwdscope, &bpdsc[3], SYMSCOPE_LOCAL, &attr, 0);
     structures_init(ctx, kwdscope);
+    switch_toggle_declare(kwdscope, &errswitch, toggle_errs, 0, 0, &errson, &errsoff);
 
 } /* declarations_init */
 
@@ -1784,6 +1804,9 @@ parse_declaration (expr_ctx_t ctx)
             break;
         case LEXTYPE_DCL_ROUTINE:
             status = declare_routine(ctx, scope, dtypes[which], 0);
+            break;
+        case LEXTYPE_DCL_SWITCHES:
+            status = parse_switches(pctx, lt, LEXTYPE_DELIM_SEMI);            
             break;
         default:
             expr_signal(ctx, STC__SYNTAXERR);
