@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/uio.h>
 #include "fileio.h"
 #include "logging.h"
 #include <errno.h>
@@ -39,6 +40,7 @@ struct filectx_s {
     struct filectx_s *next;
     fioctx_t          fio;
     int               fd;
+    int               is_output;
     size_t            fnlen;
     size_t            bufpos;
     size_t            buflen;
@@ -49,7 +51,7 @@ struct filectx_s {
 // Module context
 struct fioctx_s {
     logctx_t         logctx;
-    filectx_t        input_files;
+    filectx_t        open_files;
 };
 
 
@@ -80,7 +82,7 @@ fileio_finish (fioctx_t fio)
 {
     filectx_t ctx, cnext;
 
-    for (ctx = fio->input_files; ctx != 0; ctx = cnext) {
+    for (ctx = fio->open_files; ctx != 0; ctx = cnext) {
         cnext = ctx->next;
         close(ctx->fd);
         free(ctx);
@@ -91,16 +93,16 @@ fileio_finish (fioctx_t fio)
 } /* fileio_finish */
 
 /*
- * file_open_input
+ * file_open
  *
- * Opens an input file with the specified name, replacing the
+ * Opens a file with the specified name, replacing the
  * suffix of the original name with the specified suffix.  If
  * the original name does not have a suffix, the specified
  * suffix is simply appended.
  */
-filectx_t
-file_open_input (fioctx_t fio, const char *fname, size_t fnlen,
-                 const char *suffix)
+static filectx_t
+file_open (fioctx_t fio, const char *fname, size_t fnlen,
+           const char *suffix, int for_writing)
 {
     filectx_t ctx = malloc(sizeof(struct filectx_s));
     int add_suffix = 0;
@@ -136,7 +138,12 @@ file_open_input (fioctx_t fio, const char *fname, size_t fnlen,
         ctx->fname[fnlen] = '\0';
     }
     ctx->fnlen = fnlen + (add_suffix ? strlen(suffix) : 0);
-    ctx->fd = open(ctx->fname, O_RDONLY);
+    if (for_writing) {
+        ctx->fd = open(ctx->fname, O_CREAT|O_TRUNC|O_WRONLY, 0666);
+        ctx->is_output = 1;
+    } else {
+        ctx->fd = open(ctx->fname, O_RDONLY);
+    }
     if (ctx->fd < 0) {
         char errbuf[64];
         errbuf[0] = '\0';
@@ -145,14 +152,26 @@ file_open_input (fioctx_t fio, const char *fname, size_t fnlen,
         free(ctx);
         return 0;
     }
-    ctx->next = fio->input_files;
-    fio->input_files = ctx;
+    ctx->next = fio->open_files;
+    fio->open_files = ctx;
     ctx->bufpos = 0;
     ctx->buflen = 0;
     ctx->fio = fio;
     return ctx;
 
-} /* file_open_input */
+} /* file_open */
+
+filectx_t
+file_open_input (fioctx_t fio, const char *fname, size_t fnlen,
+                 const char *suffix) {
+    return file_open(fio, fname, fnlen, suffix, 0);
+}
+filectx_t
+file_open_output (fioctx_t fio, const char *fname, size_t fnlen,
+                  const char *suffix) {
+    return file_open(fio, fname, fnlen, suffix, 1);
+}
+
 
 /*
  * file_close
@@ -170,7 +189,7 @@ file_close (filectx_t ctx)
     }
     fio = ctx->fio;
     prev = 0;
-    for (cur = fio->input_files; cur != 0; cur = cur->next) {
+    for (cur = fio->open_files; cur != 0; cur = cur->next) {
         if (cur == ctx)
             break;
         prev = cur;
@@ -180,7 +199,7 @@ file_close (filectx_t ctx)
         return;
     }
     if (prev == 0) {
-        fio->input_files = cur->next;
+        fio->open_files = cur->next;
     } else {
         prev->next = cur->next;
     }
@@ -224,13 +243,19 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
     ssize_t ret;
     int status = 0;
 
+    if (ctx->is_output) {
+        log_signal(ctx->fio->logctx, 0, STC__RDOUTFILE, ctx->fname);
+        return -1;
+    }
+
     while (bufsiz > 0) {
         if (remain > 0) {
             cp = memchr(bp, '\n', remain);
             if (cp != 0) {
                 size_t count = cp - bp;
                 if (count > bufsiz) {
-                    log_signal(ctx->fio->logctx, 0, STC__LNTOOLONG, file_getname(ctx));
+                    log_signal(ctx->fio->logctx, 0, STC__LNTOOLONG,
+                               "input", file_getname(ctx));
                     status = -1;
                     break;
                 }
@@ -241,7 +266,8 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
                 break;
             }
             if (remain > bufsiz) {
-                log_signal(ctx->fio->logctx, 0, STC__LNTOOLONG, file_getname(ctx));
+                log_signal(ctx->fio->logctx, 0, STC__LNTOOLONG,
+                           "input", file_getname(ctx));
                 status = -1;
                 break;
             }
@@ -276,3 +302,33 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
     return status;
 
 } /* file_readline */
+
+/*
+ * file_writeline
+ *
+ * Returns:
+ *       -1: error
+ *      >-1: length of line written (without linemark)
+ */
+int
+file_writeline (filectx_t ctx, char *buf, size_t buflen)
+{
+    ssize_t n;
+    struct iovec iov[2];
+
+    iov[0].iov_base = buf;
+    iov[0].iov_len = buflen;
+    iov[1].iov_base = "\n";
+    iov[1].iov_len = 1;
+    n = writev(ctx->fd, iov, 2);
+    if (n < 0) {
+        char errbuf[64];
+        errbuf[0] = '\0';
+        strerror_r(errno, errbuf, sizeof(errbuf));
+        log_signal(ctx->fio->logctx, 0, STC__FIOERR, errbuf);
+        n = -1;
+    }
+
+    return (int)n - 1;
+
+} /* file_writeline */

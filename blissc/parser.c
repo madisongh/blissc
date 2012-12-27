@@ -26,12 +26,14 @@
 #include "lexer.h"
 #include "nametable.h"
 #include "strings.h"
+#include "listings.h"
 #include "logging.h"
 #include "machinedef.h"
 #include "utils.h"
 
 // Parser context structure
 struct parse_ctx_s {
+    lstgctx_t       lstgctx;
     strctx_t        strctx;
     namectx_t       namectx;
     scopectx_t      kwdscope, curscope;
@@ -345,6 +347,7 @@ parser_init (strctx_t strctx, namectx_t namectx, machinedef_t *mach,
     pctx = malloc(sizeof(struct parse_ctx_s));
     if (pctx != 0) {
         memset(pctx, 0, sizeof(struct parse_ctx_s));
+        pctx->lstgctx  = listings_init(kwdscope, logctx);
         pctx->strctx   = strctx;
         pctx->logctx   = logctx;
         pctx->namectx  = namectx;
@@ -412,6 +415,8 @@ void parser_punctclass_get (parse_ctx_t pctx, punctclass_t *clp, lextype_t *sepp
 void parser_incr_erroneof (parse_ctx_t pctx) { pctx->no_eof += 1; }
 void parser_decr_erroneof (parse_ctx_t pctx) { pctx->no_eof -= 1; }
 void parser_skipmode_set (parse_ctx_t pctx, int val) { pctx->macroskip = val; }
+scopectx_t parser_kwdscope (parse_ctx_t pctx) { return pctx->kwdscope; }
+lstgctx_t parser_lstgctx (parse_ctx_t pctx) { return pctx->lstgctx; }
 
 /*
  * parser_condstate_push

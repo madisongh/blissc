@@ -33,6 +33,7 @@
 #include "symbols.h"
 #include "storage.h"
 #include "parser.h"
+#include "listings.h"
 #include "nametable.h"
 #include "lexeme.h"
 #include "machinedef.h"
@@ -48,6 +49,7 @@ struct extenthdr_s {
 };
 
 struct expr_ctx_s {
+    lstgctx_t           lstgctx;
     strctx_t            strctx;
     parse_ctx_t         pctx;
     stgctx_t            stg;
@@ -660,6 +662,7 @@ expr_init (strctx_t strctx, parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope)
     ectx->mach = parser_get_machinedef(pctx);
     ectx->namectx = scope_namectx(kwdscope);
     ectx->logctx = parser_logctx(pctx);
+    ectx->lstgctx = parser_lstgctx(pctx);
     ectx->fake_label_ptr = (void *)0xffeeeeff;
 
     for (i = 0; i < sizeof(expr_names)/sizeof(expr_names[0]); i++) {
@@ -702,6 +705,7 @@ void expr_loopdepth_decr (expr_ctx_t ctx) { ctx->loopdepth -= 1; }
 int expr_loopdepth_get (expr_ctx_t ctx) { return ctx->loopdepth; }
 void *expr_fake_label_ptr (expr_ctx_t ctx) { return ctx->fake_label_ptr; }
 strctx_t expr_strctx(expr_ctx_t ctx) { return ctx->strctx; }
+lstgctx_t expr_lstgctx(expr_ctx_t ctx) { return ctx->lstgctx; }
 
 void
 expr_finish (expr_ctx_t ctx)
@@ -815,6 +819,7 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
         }
     }
 
+    listing_newblock(ctx->lstgctx);
     parser_punctclass_set(pctx, PUNCT_SEMISEP_NOGROUP, LEXTYPE_DELIM_SEMI);
     lt = parser_next(pctx, QL_NORMAL, &lex);
 
@@ -888,6 +893,7 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
             exprseq_inshead(&seq, exp);
         }
     }
+    listing_endblock(ctx->lstgctx, scope);
     if (scope != 0) {
         parser_scope_pop(pctx);
         sym_check_dangling_forwards(scope, parser_curpos(pctx));

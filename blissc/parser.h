@@ -15,6 +15,7 @@
 #include "nametable.h"
 #include "lexeme.h"
 #include "scanner.h"
+#include "listings.h"
 #include "machinedef.h"
 #include "logging.h"
 
@@ -66,6 +67,8 @@ int parser_expect_oneof(parse_ctx_t pctx, quotelevel_t ql,
 machinedef_t *parser_get_machinedef(parse_ctx_t pctx);
 strctx_t parser_strctx(parse_ctx_t pctx);
 textpos_t parser_curpos(parse_ctx_t pctx);
+scopectx_t parser_kwdscope(parse_ctx_t pctx);
+lstgctx_t parser_lstgctx(parse_ctx_t pctx);
 void parser_punctclass_set(parse_ctx_t pctx, punctclass_t cl, lextype_t lt);
 void parser_punctclass_get(parse_ctx_t pctx, punctclass_t *clp, lextype_t *ltp);
 lexeme_t *parser_punct_grouper(parse_ctx_t pctx, int docloser);

@@ -60,7 +60,7 @@ STATCODE(  7,W,USRWARN,   "!SD") \
 STATCODE(  8,E,USRERR,    "!SD") \
 STATCODE(  9,F,EXCFILCNT, "exceeded open file count maximum of !UI") \
 STATCODE( 10,F,INTCMPERR, "internal compiler error (!SZ)") \
-STATCODE( 11,E,LNTOOLONG, "input line too long in file !SZ") \
+STATCODE( 11,E,LNTOOLONG, "!SZ line too long, file !SZ") \
 STATCODE( 12,F,OUTOFMEM,  "out of memory error (!SZ)") \
 STATCODE( 13,E,NUMCNVERR, "numeric conversion error: !SL") \
 STATCODE( 14,E,REDECLARE, "name !SL is already declared") \
@@ -134,7 +134,16 @@ STATCODE( 81,W,UNDECUND,  "attempt to UNDECLARE unknown name !SD") \
 STATCODE( 82,W,FWDNOTDCL, "FORWARD name not declared: !SD") \
 STATCODE( 83,F,OPENERR,   "error opening file !SL: !SZ") \
 STATCODE( 84,E,INVMACFUN, "macro function encountered outside of macro expansion") \
-STATCODE( 85,E,INVEXITER, "%EXITITERATION encountered in non-iterative macro !SD")
+STATCODE( 85,E,INVEXITER, "%EXITITERATION encountered in non-iterative macro !SD") \
+STATCODE( 86,W,SWITCHEXP, "switch name expected") \
+STATCODE( 87,W,SWITCHUNS, "switch !SD not supported") \
+STATCODE( 88,E,NOMAIN,    "module main routine !SD not declared") \
+STATCODE( 89,E,MNTYPERR,  "module main routine !SD not local or global") \
+STATCODE( 90,W,UNEXPSWIT, "switch !SD not supported in this context") \
+STATCODE( 91,W,SWITCHDUP, "switch !SD already set") \
+STATCODE( 92,F,RDOUTFILE, "file_readline called on output file !SZ") \
+STATCODE( 93,F,WRTINFILE, "file_writeline called on input file !SZ") \
+STATCODE( 94,W,LSTOPTEXP, "listing option keyword expected")
 
 #define STATCODE(msg,typ,nam,txt) STC__##nam =  STC_CODE_##typ(msg),
 typedef enum {

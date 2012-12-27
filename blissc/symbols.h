@@ -85,9 +85,19 @@ name_t *rtnsym_declare(scopectx_t scope, strdesc_t *dsc,
                        symscope_t sc, routine_attr_t *attr,
                        textpos_t pos);
 int rtnsym_attr_update(name_t *np, routine_attr_t *attr);
+expr_node_t *rtnsym_expr(name_t *np);
 void rtnsym_expr_set(name_t *np, expr_node_t *exp);
+seg_t *rtnsym_seg(name_t *np);
 void rtnsym_seg_set(name_t *np, seg_t *seg);
 routine_attr_t *rtnsym_attr(name_t *np);
+
+name_t *modsym_declare(scopectx_t scope, strdesc_t *str, textpos_t pos);
+strdesc_t *modsym_ident(name_t *np);
+void modsym_ident_set(name_t *np, strdesc_t *str);
+strdesc_t *modsym_main(name_t *np);
+void modsym_main_set(name_t *np, strdesc_t *str);
+expr_node_t *modsym_block(name_t *np);
+void modsym_block_set(name_t *np, expr_node_t *blk);
 int sym_undeclare(scopectx_t scope, strdesc_t *dsc, textpos_t pos);
 int sym_addrs_comparable(name_t *np_a, name_t *np_b);
 void sym_check_dangling_forwards(scopectx_t scope, textpos_t pos);

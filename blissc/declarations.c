@@ -38,6 +38,8 @@
 #include "declarations.h"
 #include "structures.h"
 #include "macros.h"
+#include "switches.h"
+#include "listings.h"
 #include "storage.h"
 #include "logging.h"
 #include "strings.h"
@@ -1794,6 +1796,80 @@ parse_declaration (expr_ctx_t ctx)
 } /* parse_declaration */
 
 /*
+ * parse_ident
+ *
+ * Parses the IDENT module switch.
+ */
+static int
+parse_ident (parse_ctx_t pctx, void *vctx, lextype_t dcltype, lexeme_t *lex)
+{
+    name_t *modnp = vctx;
+    lexeme_t *idlex;
+    strdesc_t *id;
+
+    if (dcltype != LEXTYPE_DCL_MODULE) {
+        log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__UNEXPSWIT,
+                   lexeme_text(lex));
+        return 0;
+    }
+    if (modsym_ident(modnp) != 0) {
+        log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__SWITCHDUP,
+                   lexeme_text(lex));
+        return 0;
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 1)) {
+        log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__DELIMEXP, "=");
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_STRING, &idlex, 1)) {
+        log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__STRINGEXP);
+        return 0;
+    }
+    id = string_copy(parser_strctx(pctx), 0, lexeme_text(idlex));
+    modsym_ident_set(modnp, id);
+    id = string_copy(parser_strctx(pctx), 0, lexeme_text(idlex));
+    listing_ident_set(parser_lstgctx(pctx), id);
+    lexeme_free(parser_lexmemctx(pctx), idlex);
+    return 1;
+
+} /* parse_ident */
+
+/*
+ * parse_main
+ *
+ * Parses the MAIN module switch.
+ */
+static int
+parse_main (parse_ctx_t pctx, void *vctx, lextype_t dcltype, lexeme_t *lex)
+{
+    name_t *modnp = vctx;
+    lexeme_t *idlex;
+    strdesc_t *id;
+
+    if (dcltype != LEXTYPE_DCL_MODULE) {
+        log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__UNEXPSWIT,
+                   lexeme_text(lex));
+        return 0;
+    }
+    if (modsym_main(modnp) != 0) {
+        log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__SWITCHDUP,
+                   lexeme_text(lex));
+        return 0;
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 1)) {
+        log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__DELIMEXP, "=");
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NAME, &idlex, 1)) {
+        log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__NAMEEXP);
+        return 0;
+    }
+    id = string_copy(parser_strctx(pctx), 0, lexeme_text(idlex));
+    modsym_main_set(modnp, id);
+    lexeme_free(parser_lexmemctx(pctx), idlex);
+    return 1;
+
+} /* parse_main */
+
+/*
  * declare_module
  *
  * Parses a MODULE declaration.
@@ -1807,7 +1883,6 @@ declare_module (expr_ctx_t ctx)
     expr_node_t *blkexp;
     textpos_t pos;
     name_t *np;
-    namedef_t ndef;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DCL_MODULE, 0, 0)) {
         expr_signal(ctx, STC__MODDCLEXP);
@@ -1817,33 +1892,48 @@ declare_module (expr_ctx_t ctx)
         expr_signal(ctx, STC__NAMEEXP);
         return 0;
     }
-    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 0)) {
-        expr_signal(ctx, STC__OPEREXP, "=");
-        return 0;
-    }
-    memset(&ndef, 0, sizeof(ndef));
-    ndef.lt = LEXTYPE_NAME_MODULE;
-    ndef.flags = NAME_M_DECLARED;
-    ndef.name = text->ptr;
-    ndef.namelen = text->len;
-    np = name_declare(scope, &ndef, pos, 0, 0, 0);
-    string_free(expr_strctx(ctx), text);
+    listing_mainscope_set(expr_lstgctx(ctx), scope);
+    np = modsym_declare(scope, text, pos);
     if (np == 0) {
         expr_signal(ctx, STC__INTCMPERR, "declare_module");
         return 0;
     }
-
-    // XXX need to handle module-switches here
-
+    switch_special_declare(parser_kwdscope(pctx), LEXTYPE_SWITCH_IDENT, parse_ident, np);
+    switch_special_declare(parser_kwdscope(pctx), LEXTYPE_SWITCH_MAIN, parse_main, np);
+    if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
+        parse_switches(pctx, LEXTYPE_DCL_MODULE, LEXTYPE_DELIM_RPAR);
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 0)) {
+        expr_signal(ctx, STC__OPEREXP, "=");
+        return 0;
+    }
     if (!expr_parse_block(ctx, &blkexp)) {
         expr_signal(ctx, STC__SYNTAXERR);
         return 0;
     }
+    modsym_block_set(np, blkexp);
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DCL_ELUDOM, 0, 0)) {
         expr_signal(ctx, STC__KWDEXP, "ELUDOM");
     }
 
-    name_value_pointer_set(np, blkexp);
+    string_free(expr_strctx(ctx), text);
+    text = modsym_main(np);
+    if (text != 0) {
+        scopectx_t blkscope = expr_blk_scope(blkexp);
+        name_t *mainrtn = 0;
+        if (blkscope != 0) {
+            mainrtn = rtnsym_search(blkscope, text);
+            if (mainrtn != 0) {
+                if (rtnsym_expr(mainrtn) == 0) {
+                    expr_signal(ctx, STC__MNTYPERR, text);
+                }
+            }
+        }
+        if (mainrtn == 0) {
+            expr_signal(ctx, STC__NOMAIN, text);
+        }
+        string_free(expr_strctx(ctx), text);
+    }
 
     return 1;
 

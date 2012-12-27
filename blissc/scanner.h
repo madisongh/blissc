@@ -40,8 +40,13 @@ static inline int __unused scan_ok (scantype_t typ) {
 }
 
 typedef int (*scan_input_fn)(void *ctx, char *buf, size_t siz, size_t *len);
+typedef int (*scan_list_fn)(void *ctx, char *buf, size_t len,
+                            unsigned int lineno, char lexcode);
+typedef void (*scan_close_fn)(void *ctx);
 
 scanctx_t scan_init(strctx_t strctx, logctx_t logctx);
+void scan_listfuncs_set(scanctx_t sctx, scan_list_fn lfunc,
+                        scan_close_fn cfunc, void *ctx);
 int scan_fopen(scanctx_t ctx, const char *fname, size_t fnlen,
                const char *suffix, char **actnamep);
 int scan_popen(scanctx_t ctx, scan_input_fn infn, void *fnctx);

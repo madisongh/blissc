@@ -56,6 +56,9 @@ struct scanctx_s {
     strctx_t        strctx;
     logctx_t        logctx;
     fioctx_t        fioctx;
+    void           *lstctx;
+    scan_list_fn    listfn;
+    scan_close_fn   closefn;
     struct bufctx_s bufstack[SCAN_MAXFILES];
     int             curbuf;
     char            tokbuf[SCAN_LINESIZE];

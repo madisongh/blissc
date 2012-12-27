@@ -17,6 +17,7 @@
 #include "machinedef.h"
 #include "expression.h"
 #include "declarations.h"
+#include "listings.h"
 #include "logging.h"
 
 int test_scanner(int argc, const char *argv[]);
@@ -225,9 +226,9 @@ test_expr (int argc, const char *argv[])
     parse_ctx_t pctx = 0;
     stgctx_t stg;
     strctx_t strctx = 0;
+    logctx_t logctx = 0;
     expr_ctx_t  ectx;
     scopectx_t kwdscope;
-    logctx_t logctx = 0;
     jmp_buf retenv;
 //    lexeme_t *lex;
 //   lextype_t lt;

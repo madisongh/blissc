@@ -72,6 +72,13 @@ struct sym_routine_s {
 };
 typedef struct sym_routine_s sym_routine_t;
 
+struct sym_module_s {
+    strdesc_t       *ident;
+    strdesc_t       *mainrtn;
+    expr_node_t     *modblock;
+};
+typedef struct sym_module_s sym_module_t;
+
 /*
  * Context structure for this module.
  */
@@ -84,8 +91,9 @@ struct symctx_s {
 };
 typedef struct symctx_s *symctx_t;
 
-static const lextype_t symtype[3] = {
-    LEXTYPE_NAME_LITERAL, LEXTYPE_NAME_DATA, LEXTYPE_NAME_ROUTINE
+static const lextype_t symtype[4] = {
+    LEXTYPE_NAME_LITERAL, LEXTYPE_NAME_DATA,
+    LEXTYPE_NAME_ROUTINE, LEXTYPE_NAME_MODULE
 };
 
 /*
@@ -138,6 +146,47 @@ data_copy (void *vctx, name_t *dnp, void *dp, name_t *snp, void *sp)
     }
     return 1;
 }
+
+/*
+ * module_free
+ *
+ * Frees up a module cell.
+ */
+static void
+module_free (void *vctx, name_t *np, void *p)
+{
+    expr_ctx_t ctx = vctx;
+    sym_module_t *m = p;
+
+    if (m->ident != 0) string_free(expr_strctx(ctx), m->ident);
+    if (m->mainrtn != 0) string_free(expr_strctx(ctx), m->mainrtn);
+
+} /* module_free */
+
+/*
+ * module_copy
+ *
+ * Copy-constructor for a module cell.
+ */
+static int
+module_copy (void *vctx, name_t *dnp, void *dp, name_t *snp, void *sp)
+{
+    expr_ctx_t ctx = vctx;
+    sym_module_t *dm = dp;
+    sym_module_t *sm = sp;
+
+    if (sm->ident != 0) {
+        dm->ident = string_copy(expr_strctx(ctx), 0, sm->ident);
+        if (dm->ident ==  0) return 0;
+    }
+    if (sm->mainrtn != 0) {
+        dm->mainrtn = string_copy(expr_strctx(ctx), 0, sm->mainrtn);
+        if (dm->mainrtn == 0) return 0;
+    }
+
+    return 1;
+
+} /* module_copy */
 
 /*
  * bind_compiletime
@@ -287,10 +336,11 @@ symbols_init (expr_ctx_t ctx)
     lexctx_t lctx = expr_lexmemctx(ctx);
     machinedef_t *mach = expr_machinedef(ctx);
 
-    static nametype_vectors_t symvec[3] = {
+    static nametype_vectors_t symvec[4] = {
         { sizeof(sym_literal_t), 0, 0, 0, 0 },
         { sizeof(sym_data_t), 0, 0, data_free, data_copy },
-        { sizeof(sym_routine_t), 0, 0, 0, 0 }
+        { sizeof(sym_routine_t), 0, 0, 0, 0 },
+        { sizeof(sym_module_t), 0, 0, module_free, module_copy }
     };
 
     memset(symctx, 0, sizeof(struct symctx_s));
@@ -882,6 +932,62 @@ rtnsym_expr_set (name_t *np, expr_node_t *exp)
         gsym->rtnexp = exp;
     }
 }
+/*
+ * modsym_declare
+ *
+ * Declares a module symbol.
+ */
+name_t *
+modsym_declare (scopectx_t scope, strdesc_t *dsc, textpos_t pos)
+{
+    namedef_t ndef;
+
+    memset(&ndef, 0, sizeof(ndef));
+    ndef.lt = LEXTYPE_NAME_MODULE;
+    ndef.flags = NAME_M_DECLARED;
+    ndef.name = dsc->ptr;
+    ndef.namelen = dsc->len;
+    ndef.flags = 0;
+
+    return name_declare(scope, &ndef, pos, 0, 0, 0);
+
+} /* modsym_declare */
+
+/*
+ * Getters/setters for module symbols
+ */
+strdesc_t *modsym_ident (name_t *np) {
+    sym_module_t *m = name_extraspace(np);
+    return name_type(np) == LEXTYPE_NAME_MODULE ? m->ident : 0;
+}
+void modsym_ident_set (name_t *np, strdesc_t *str) {
+    if (name_type(np) == LEXTYPE_NAME_MODULE) {
+        sym_module_t *m = name_extraspace(np);
+        m->ident = str;
+    }
+}
+strdesc_t *modsym_main (name_t *np) {
+    sym_module_t *m = name_extraspace(np);
+    return name_type(np) == LEXTYPE_NAME_MODULE ? m->mainrtn : 0;
+}
+void modsym_main_set (name_t *np, strdesc_t *str) {
+    if (name_type(np) == LEXTYPE_NAME_MODULE) {
+        sym_module_t *m = name_extraspace(np);
+        m->mainrtn = str;
+    }
+}
+expr_node_t *modsym_block (name_t *np) {
+    sym_module_t *m = name_extraspace(np);
+    return name_type(np) == LEXTYPE_NAME_MODULE ? m->modblock : 0;
+}
+void modsym_block_set (name_t *np, expr_node_t *blk) {
+    if (name_type(np) == LEXTYPE_NAME_MODULE) {
+        sym_module_t *m = name_extraspace(np);
+        m->modblock = blk;
+    }
+}
+
+
 
 /*
  * psect_declare
