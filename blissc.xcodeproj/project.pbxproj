@@ -26,6 +26,8 @@
 		7AD8D0FF1666B7EA002AB41D /* structures.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AD8D0FE1666B7E9002AB41D /* structures.c */; };
 		7ADCC897167E23CF00D09FA4 /* statcodes.c in Sources */ = {isa = PBXBuildFile; fileRef = 7ADCC896167E23CF00D09FA4 /* statcodes.c */; };
 		7ADCC89C167E422A00D09FA4 /* logging.c in Sources */ = {isa = PBXBuildFile; fileRef = 7ADCC89B167E422900D09FA4 /* logging.c */; };
+		7AF501C2168A52450057D7CF /* listings.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AF501C1168A52450057D7CF /* listings.c */; };
+		7AF501C4168A60440057D7CF /* switches.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AF501C3168A60440057D7CF /* switches.c */; };
 		7AF573D9164936EE005C965F /* macros.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AF573D8164936EE005C965F /* macros.c */; };
 /* End PBXBuildFile section */
 
@@ -124,12 +126,16 @@
 		7AC12EC41659303B009C84F5 /* storage.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = storage.h; sourceTree = "<group>"; };
 		7AC12EC516593429009C84F5 /* declarations.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = declarations.h; sourceTree = "<group>"; };
 		7AC12EC6165944B4009C84F5 /* storage.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = storage.c; sourceTree = "<group>"; };
+		7AD2C0E4168B905200B2B399 /* listings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = listings.h; sourceTree = "<group>"; };
 		7AD8D0FE1666B7E9002AB41D /* structures.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; path = structures.c; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.c; };
 		7ADC81891649CD660056600E /* macros.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = macros.h; sourceTree = "<group>"; };
 		7ADCC896167E23CF00D09FA4 /* statcodes.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = statcodes.c; sourceTree = "<group>"; };
 		7ADCC899167E23E200D09FA4 /* statcodes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = statcodes.h; sourceTree = "<group>"; };
 		7ADCC89A167E421A00D09FA4 /* logging.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = logging.h; sourceTree = "<group>"; };
 		7ADCC89B167E422900D09FA4 /* logging.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = logging.c; sourceTree = "<group>"; };
+		7AF501C1168A52450057D7CF /* listings.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = listings.c; sourceTree = "<group>"; };
+		7AF501C3168A60440057D7CF /* switches.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = switches.c; sourceTree = "<group>"; };
+		7AF501C5168A64F60057D7CF /* switches.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = switches.h; sourceTree = "<group>"; };
 		7AF573D8164936EE005C965F /* macros.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = macros.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -177,6 +183,8 @@
 				7A7FD5181636C65200B2D7FC /* lexeme.h */,
 				7A7FD5141636C29C00B2D7FC /* lexer.c */,
 				7A7FD5171636C2A700B2D7FC /* lexer.h */,
+				7AF501C1168A52450057D7CF /* listings.c */,
+				7AD2C0E4168B905200B2B399 /* listings.h */,
 				7ADCC89B167E422900D09FA4 /* logging.c */,
 				7ADCC89A167E421A00D09FA4 /* logging.h */,
 				7AC12EC316591C0A009C84F5 /* machinedef.h */,
@@ -197,6 +205,8 @@
 				7A95BCEE1641E17C002F851E /* strings.h */,
 				7AD8D0FE1666B7E9002AB41D /* structures.c */,
 				7A9854EC1660FE7600828371 /* structures.h */,
+				7AF501C3168A60440057D7CF /* switches.c */,
+				7AF501C5168A64F60057D7CF /* switches.h */,
 				7AB8A9AC16722B3500B91750 /* symbols.c */,
 				7AB8A9AF16722B4000B91750 /* symbols.h */,
 				7AA04DA01682CDB500A2D348 /* bliss11 */,
@@ -333,6 +343,8 @@
 				7ADCC897167E23CF00D09FA4 /* statcodes.c in Sources */,
 				7ADCC89C167E422A00D09FA4 /* logging.c in Sources */,
 				7A02B3B01688900300E273AC /* expr_control.c in Sources */,
+				7AF501C2168A52450057D7CF /* listings.c in Sources */,
+				7AF501C4168A60440057D7CF /* switches.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
