@@ -26,6 +26,7 @@
 		7AD8D0FF1666B7EA002AB41D /* structures.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AD8D0FE1666B7E9002AB41D /* structures.c */; };
 		7ADCC897167E23CF00D09FA4 /* statcodes.c in Sources */ = {isa = PBXBuildFile; fileRef = 7ADCC896167E23CF00D09FA4 /* statcodes.c */; };
 		7ADCC89C167E422A00D09FA4 /* logging.c in Sources */ = {isa = PBXBuildFile; fileRef = 7ADCC89B167E422900D09FA4 /* logging.c */; };
+		7AE1E624168DDD810085DFF5 /* gencode_llvm.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AE1E623168DDD810085DFF5 /* gencode_llvm.c */; };
 		7AF501C2168A52450057D7CF /* listings.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AF501C1168A52450057D7CF /* listings.c */; };
 		7AF501C4168A60440057D7CF /* switches.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AF501C3168A60440057D7CF /* switches.c */; };
 		7AF573D9164936EE005C965F /* macros.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AF573D8164936EE005C965F /* macros.c */; };
@@ -133,6 +134,8 @@
 		7ADCC899167E23E200D09FA4 /* statcodes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = statcodes.h; sourceTree = "<group>"; };
 		7ADCC89A167E421A00D09FA4 /* logging.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = logging.h; sourceTree = "<group>"; };
 		7ADCC89B167E422900D09FA4 /* logging.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = logging.c; sourceTree = "<group>"; };
+		7AE1E623168DDD810085DFF5 /* gencode_llvm.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = gencode_llvm.c; sourceTree = "<group>"; };
+		7AE1E625168DDF260085DFF5 /* gencode.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gencode.h; sourceTree = "<group>"; };
 		7AF501C1168A52450057D7CF /* listings.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = listings.c; sourceTree = "<group>"; };
 		7AF501C3168A60440057D7CF /* switches.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = switches.c; sourceTree = "<group>"; };
 		7AF501C5168A64F60057D7CF /* switches.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = switches.h; sourceTree = "<group>"; };
@@ -179,6 +182,8 @@
 				7A02B3AF1688900300E273AC /* expr_control.c */,
 				7A9D4CA61635A93A0013AE09 /* fileio.c */,
 				7A9D4CA81635ACCA0013AE09 /* fileio.h */,
+				7AE1E623168DDD810085DFF5 /* gencode_llvm.c */,
+				7AE1E625168DDF260085DFF5 /* gencode.h */,
 				7A995E0C163C2286003BEAC7 /* lexeme.c */,
 				7A7FD5181636C65200B2D7FC /* lexeme.h */,
 				7A7FD5141636C29C00B2D7FC /* lexer.c */,
@@ -345,6 +350,7 @@
 				7A02B3B01688900300E273AC /* expr_control.c in Sources */,
 				7AF501C2168A52450057D7CF /* listings.c in Sources */,
 				7AF501C4168A60440057D7CF /* switches.c in Sources */,
+				7AE1E624168DDD810085DFF5 /* gencode_llvm.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -407,6 +413,21 @@
 		7A9D4CA41635A88F0013AE09 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				HEADER_SEARCH_PATHS = "/opt/local/libexec/llvm-3.2/include";
+				LIBRARY_SEARCH_PATHS = "/opt/local/libexec/llvm-3.2/lib";
+				OTHER_CFLAGS = (
+					"-D__STDC_CONSTANT_MACROS",
+					"-D__STDC_FORMAT_MACROS",
+					"-D__STDC_LIMIT_MACROS",
+				);
+				OTHER_LDFLAGS = (
+					"-lLLVMCore",
+					"-lLLVMSupport",
+					"-lstdc++",
+					"-lpthread",
+					"-lffi",
+					"-lm",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -414,6 +435,21 @@
 		7A9D4CA51635A88F0013AE09 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				HEADER_SEARCH_PATHS = "/opt/local/libexec/llvm-3.2/include";
+				LIBRARY_SEARCH_PATHS = "/opt/local/libexec/llvm-3.2/lib";
+				OTHER_CFLAGS = (
+					"-D__STDC_CONSTANT_MACROS",
+					"-D__STDC_FORMAT_MACROS",
+					"-D__STDC_LIMIT_MACROS",
+				);
+				OTHER_LDFLAGS = (
+					"-lLLVMCore",
+					"-lLLVMSupport",
+					"-lstdc++",
+					"-lpthread",
+					"-lffi",
+					"-lm",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
