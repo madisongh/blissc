@@ -675,7 +675,7 @@ litsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
         name_t *gnp = 0;
         sym_literal_t *gsym;
         scopectx_t gscope = nametables_globalscope(namectx);
-        gnp = name_search_typed(scope, dsc->ptr, dsc->len,
+        gnp = name_search_typed(gscope, dsc->ptr, dsc->len,
                                 LEXTYPE_NAME_LITERAL, &gsym);
         if (gnp != 0) {
             if (gsym->attr.width != attrp->width ||
@@ -688,7 +688,7 @@ litsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
         if (gnp == 0) {
             gnp = name_declare(gscope, &ndef, pos, 0, 0, &gsym);
             if (gnp == 0) {
-                log_signal(symctx->logctx, pos, STC__INTCMPERR, "listsym_declare");
+                log_signal(symctx->logctx, pos, STC__INTCMPERR, "litsym_declare");
             }
             if (gsym != 0) memcpy(&gsym->attr, attrp, sizeof(literal_attr_t));
         }

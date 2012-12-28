@@ -885,6 +885,21 @@ name_is_declared (scopectx_t curscope, const char *id, size_t len)
 } /* name_is_declared */
 
 /*
+ * sym_globalname
+ *
+ * Returns the name_t pointer in the global symbol
+ * table for global/external symbols.
+ */
+name_t *
+name_globalname (namectx_t namectx, name_t *np)
+{
+    strdesc_t *ndsc = name_string(np);
+
+    return name_search_typed(namectx->globalscope, ndsc->ptr, ndsc->len, name_type(np), 0);
+
+} /* name_globalname */
+
+/*
  * name_insert
  *
  * Inserts the name_t structure into the hash table.

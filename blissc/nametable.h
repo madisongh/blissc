@@ -116,6 +116,7 @@ void name_value_pointer_set(name_t *np, void *ptr);
 void name_value_signed_set(name_t *np, long val);
 void name_value_unsigned_set(name_t *np, unsigned long val);
 int name_is_declared(scopectx_t scope, const char *id, size_t len);
+name_t *name_globalname(namectx_t namectx, name_t *np);
 scopectx_t name_scope(name_t *np);
 lexeme_t *name_to_lexeme(lexctx_t lctx, name_t *np);
 strdesc_t *name_string(name_t *np);
