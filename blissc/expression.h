@@ -12,6 +12,7 @@
  *--
  */
 #include "parser.h"
+#include "gencode.h"
 #include "storage.h"
 #include "nametable.h"
 #include "lexeme.h"
@@ -172,6 +173,7 @@ struct expr_exit_s { // also used for RETURN
 #define EXPR_M_LTCE   (1<<2)
 struct expr_node_s {
 	TQ_ENT_FIELDS(struct expr_node_s)
+    void               *genref;
     exprtype_t          type;
     textpos_t           textpos;
     unsigned int        flags;
@@ -225,6 +227,8 @@ siu int expr_is_ctrl(expr_node_t *node) {
 // Common fields
 siu expr_node_t *expr_next(expr_node_t *node) { return node->tq_next; }
 siu void expr_next_set(expr_node_t *node, expr_node_t *next) { node->tq_next = next; }
+siu void *expr_genref(expr_node_t *node) { return node->genref; }
+siu void expr_genref_set(expr_node_t *node, void *ref) { node->genref = ref; }
 siu exprtype_t expr_type(expr_node_t *node) { return node->type; }
 siu void expr_type_set(expr_node_t *node, exprtype_t type) { node->type = type; }
 siu void *expr_data(expr_node_t *node) { return &node->data; }
@@ -455,7 +459,7 @@ void exprseq_free(expr_ctx_t ctx, exprseq_t *seq);
 void exprseq_copy(expr_ctx_t ctx, exprseq_t *dst, exprseq_t *src);
 
 expr_ctx_t expr_init (strctx_t strctx, parse_ctx_t pctx,
-                      stgctx_t stg, scopectx_t kwdscope);
+                      stgctx_t stg, gencodectx_t gctx, scopectx_t kwdscope);
 void expr_finish(expr_ctx_t ctx);
 int expr_parse_expr(expr_ctx_t ctx, expr_node_t **expp);
 int expr_parse_ctce(expr_ctx_t ctx, lexeme_t **lex, long *valp);
@@ -466,6 +470,7 @@ parse_ctx_t expr_parse_ctx(expr_ctx_t ctx);
 void *expr_decl_ctx(expr_ctx_t ctx);
 void expr_decl_ctx_set(expr_ctx_t ctx, void *d);
 stgctx_t expr_stg_ctx(expr_ctx_t);
+gencodectx_t expr_gencodectx(expr_ctx_t);
 machinedef_t *expr_machinedef(expr_ctx_t);
 namectx_t expr_namectx(expr_ctx_t);
 lexctx_t expr_lexmemctx(expr_ctx_t);

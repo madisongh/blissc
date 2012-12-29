@@ -58,7 +58,7 @@ struct routine_attr_s {
 };
 typedef struct routine_attr_s routine_attr_t;
 
-void symbols_init(expr_ctx_t ctx);
+void symbols_init(expr_ctx_t ctx, gencodectx_t gctx);
 name_t *datasym_search(scopectx_t scope, strdesc_t *namedsc,
                        data_attr_t *attrp);
 unsigned long datasym_segsize(name_t *np);
@@ -67,6 +67,8 @@ name_t *datasym_declare(scopectx_t scope, strdesc_t *dsc,
                         textpos_t pos);
 seg_t *datasym_seg(name_t *np);
 void datasym_seg_set(name_t *np, seg_t *seg);
+void *datasym_genref(name_t *np);
+void datasym_genref_set(name_t *np, void *ref);
 int datasym_attr_update(name_t *np, data_attr_t *attr);
 data_attr_t *datasym_attr(name_t *np);
 name_t *compiletime_declare(scopectx_t scope, strdesc_t *dsc,
@@ -78,6 +80,9 @@ name_t *litsym_search(scopectx_t scope, strdesc_t *dsc, unsigned long *valp);
 name_t *litsym_declare(scopectx_t scope, strdesc_t *dsc,
                        symscope_t sc, literal_attr_t *attr,
                        textpos_t pos);
+void *litsym_genref(name_t *np);
+void litsym_genref_set(name_t *np, void *ref);
+literal_attr_t *litsym_attr(name_t *np);
 name_t *litsym_special(scopectx_t scope, strdesc_t *dsc,
                        unsigned long value);
 name_t *rtnsym_search(scopectx_t scope, strdesc_t *dsc);
@@ -90,6 +95,8 @@ void rtnsym_expr_set(name_t *np, expr_node_t *exp);
 seg_t *rtnsym_seg(name_t *np);
 void rtnsym_seg_set(name_t *np, seg_t *seg);
 routine_attr_t *rtnsym_attr(name_t *np);
+void *rtnsym_genref(name_t *np);
+void rtnsym_genref_set(name_t *np, void *ref);
 
 name_t *modsym_declare(scopectx_t scope, strdesc_t *str, textpos_t pos);
 strdesc_t *modsym_ident(name_t *np);

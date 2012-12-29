@@ -27,6 +27,7 @@
  */
 #include <stdlib.h>
 #include <stdio.h>
+#include "gencode.h"
 #include "expression.h"
 #include "execfuncs.h"
 #include "declarations.h"
@@ -50,6 +51,7 @@ struct extenthdr_s {
 
 struct expr_ctx_s {
     lstgctx_t           lstgctx;
+    gencodectx_t        gctx;
     strctx_t            strctx;
     parse_ctx_t         pctx;
     stgctx_t            stg;
@@ -645,7 +647,8 @@ lookup_dispatcher (expr_ctx_t ctx, lextype_t lt)
  * Module initialization.
  */
 expr_ctx_t
-expr_init (strctx_t strctx, parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope)
+expr_init (strctx_t strctx, parse_ctx_t pctx, stgctx_t stg,
+           gencodectx_t gctx, scopectx_t kwdscope)
 {
     expr_ctx_t ectx;
     int i;
@@ -656,6 +659,7 @@ expr_init (strctx_t strctx, parse_ctx_t pctx, stgctx_t stg, scopectx_t kwdscope)
     }
     memset(ectx, 0, sizeof(struct expr_ctx_s));
     ectx->strctx = strctx;
+    ectx->gctx = gctx;
     ectx->pctx = pctx;
     ectx->lctx = parser_lexmemctx(pctx);
     ectx->stg = stg;
@@ -706,6 +710,7 @@ int expr_loopdepth_get (expr_ctx_t ctx) { return ctx->loopdepth; }
 void *expr_fake_label_ptr (expr_ctx_t ctx) { return ctx->fake_label_ptr; }
 strctx_t expr_strctx(expr_ctx_t ctx) { return ctx->strctx; }
 lstgctx_t expr_lstgctx(expr_ctx_t ctx) { return ctx->lstgctx; }
+gencodectx_t expr_gencodectx(expr_ctx_t ctx) { return ctx->gctx; }
 
 void
 expr_finish (expr_ctx_t ctx)
@@ -801,6 +806,7 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
              strdesc_t *codecomment, namereflist_t *labels) {
 
     parse_ctx_t pctx = ctx->pctx;
+    gencodectx_t gctx = ctx->gctx;
     lextype_t lt;
     lexeme_t *lex;
     nameref_t *ref;

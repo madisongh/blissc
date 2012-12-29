@@ -40,6 +40,7 @@
 #include "structures.h"
 #include "nametable.h"
 #include "lexeme.h"
+#include "gencode.h"
 #include "expression.h"
 #include "storage.h"
 #include "strings.h"
@@ -51,6 +52,7 @@
  * to the types of symbols tracked here.
  */
 struct sym_literal_s {
+    void           *genref;
     literal_attr_t attr;
 };
 typedef struct sym_literal_s sym_literal_t;
@@ -58,6 +60,7 @@ typedef struct sym_literal_s sym_literal_t;
 struct sym_data_s {
     name_t          *globalsym;
     seg_t           *seg;
+    void            *genref;
     data_attr_t      attr;
 };
 typedef struct sym_data_s sym_data_t;
@@ -67,6 +70,7 @@ struct sym_routine_s {
     expr_node_t     *rtnexp;
     frame_t         *stack;
     seg_t           *seg;
+    void            *genref;
     scopectx_t       argscope;
     routine_attr_t   attr;
 };
@@ -75,6 +79,7 @@ typedef struct sym_routine_s sym_routine_t;
 struct sym_module_s {
     strdesc_t       *ident;
     strdesc_t       *mainrtn;
+    void            *genref;
     expr_node_t     *modblock;
 };
 typedef struct sym_module_s sym_module_t;
@@ -84,6 +89,7 @@ typedef struct sym_module_s sym_module_t;
  */
 struct symctx_s {
     logctx_t        logctx;
+    gencodectx_t    gctx;
     stgctx_t        stg;
     data_attr_t     data_defaults;
     routine_attr_t  routine_defaults;
@@ -131,6 +137,7 @@ data_copy (void *vctx, name_t *dnp, void *dp, name_t *snp, void *sp)
 
     dsym->globalsym = ssym->globalsym;
     dsym->seg = ssym->seg;
+    dsym->genref = ssym->genref;
     memcpy(&dsym->attr, &ssym->attr, sizeof(data_attr_t));
     dsym->attr.struscope = scope_copy(ssym->attr.struscope, 0);
     namereflist_init(&dsym->attr.fields);
@@ -184,6 +191,8 @@ module_copy (void *vctx, name_t *dnp, void *dp, name_t *snp, void *sp)
         if (dm->mainrtn == 0) return 0;
     }
 
+    dm->genref = sm->genref;
+    
     return 1;
 
 } /* module_copy */
@@ -327,7 +336,7 @@ bind_routine (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
  * and registers the lexical and expression binding functions.
  */
 void
-symbols_init (expr_ctx_t ctx)
+symbols_init (expr_ctx_t ctx, gencodectx_t gctx)
 {
 
     int i;
@@ -345,6 +354,7 @@ symbols_init (expr_ctx_t ctx)
 
     memset(symctx, 0, sizeof(struct symctx_s));
     symctx->logctx = expr_logctx(ctx);
+    symctx->gctx = gctx;
     symctx->data_defaults.units = machine_scalar_units(mach);
     symctx->literal_defaults.width = machine_scalar_bits(mach);
     symctx->stg = expr_stg_ctx(ctx);
@@ -474,6 +484,9 @@ datasym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
         if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
             sym->globalsym = gnp;
         }
+        if (!(attrp->flags & SYM_M_PENDING) && symctx->gctx != 0) {
+            gencode_datasym(symctx->gctx, np);
+        }
     }
 
     return np;
@@ -491,6 +504,8 @@ datasym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
 int
 datasym_attr_update (name_t *np, data_attr_t *attrp)
 {
+
+    symctx_t symctx = nametables_symctx_get(scope_namectx(name_scope(np)));
     sym_data_t *sym = name_extraspace(np);
     sym_data_t *gsym = 0;
 
@@ -507,6 +522,9 @@ datasym_attr_update (name_t *np, data_attr_t *attrp)
     if (gsym != 0 && (gsym->attr.flags & SYM_M_PENDING)) {
         memcpy(&gsym->attr, attrp, sizeof(data_attr_t));
     }
+    if (!(attrp->flags & SYM_M_PENDING) && symctx->gctx != 0) {
+        gencode_datasym(symctx->gctx, np);
+    }
     return 1;
 
 } /* datasym_attr_update */
@@ -514,64 +532,18 @@ datasym_attr_update (name_t *np, data_attr_t *attrp)
 /*
  * Getter/setter routines for data symbols
  *
- * datasym_attr
- *
- * Returns the full set of attributes for a symbol.
  */
-data_attr_t *
-datasym_attr (name_t *np) {
-    sym_data_t *sym = name_extraspace(np);
-    return &sym->attr;
-} /* datasym_attr */
-
-/*
- * datasym_segsize
- *
- * Returns the size of any storage allocated
- * for the symbol.
- */
-unsigned long
-datasym_segsize (name_t *np)
-{
-    sym_data_t *sym = name_extraspace(np);
-    if (sym->seg == 0) {
-        return 0;
-    } else {
-        return seg_size(sym->seg);
-    }
-} /* datasym_segsize */
-
-/*
- * datasym_seg
- *
- * Returns a pointer to the storage-tracking
- * structure for a data symbol.
- */
-seg_t *
-datasym_seg (name_t *np)
-{
-    sym_data_t *sym = name_extraspace(np);
-    return sym->seg;
-
-} /* datasym_seg */
-
-/*
- * datasym_seg_set
- *
- * Sets the storage-tracking structure
- * for a data symbol.
- */
-void
-datasym_seg_set (name_t *np, seg_t *seg)
-{
-    sym_data_t *sym = name_extraspace(np);
-    sym->seg = seg;
-    if (sym->globalsym != 0) {
-        sym_data_t *gsym = name_extraspace(sym->globalsym);
-        if (gsym->seg == 0) gsym->seg = seg;
-    }
-
-} /* datasym_seg_set */
+data_attr_t *datasym_attr (name_t *np) { sym_data_t *sym = name_extraspace(np);
+    return &sym->attr; }
+unsigned long datasym_segsize (name_t *np) { sym_data_t *sym = name_extraspace(np);
+    return (sym->seg == 0 ? 0 : seg_size(sym->seg)); }
+seg_t * datasym_seg (name_t *np) { sym_data_t *sym = name_extraspace(np); return sym->seg; }
+void datasym_seg_set (name_t *np, seg_t *seg) { sym_data_t *sym = name_extraspace(np);
+    sym->seg = seg; if (sym->globalsym != 0) datasym_seg_set(sym->globalsym, seg); }
+void *datasym_genref (name_t *np) { sym_data_t *sym = name_extraspace(np);
+    return sym->genref; }
+void datasym_genref_set (name_t *np, void *ref) { sym_data_t *sym = name_extraspace(np);
+    sym->genref = ref; }
 
 /*
  * compiletime_declare
@@ -694,10 +666,22 @@ litsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
         }
     }
     np = name_declare(scope, &ndef, pos, 0, 0, &sym);
-    if (sym != 0) memcpy(&sym->attr, attrp, sizeof(literal_attr_t));
+    if (np != 0 && sym != 0) {
+        memcpy(&sym->attr, attrp, sizeof(literal_attr_t));
+        if (symctx->gctx != 0) {
+            gencode_litsym(symctx->gctx, np);
+        }
+    }
     return np;
 
 } /* litsym_declare */
+
+literal_attr_t *litsym_attr (name_t *np) { sym_literal_t *sym = name_extraspace(np);
+    return &sym->attr; }
+void *litsym_genref (name_t *np) { sym_literal_t *sym = name_extraspace(np);
+    return sym->genref; }
+void litsym_genref_set (name_t *np, void *ref) { sym_literal_t *sym = name_extraspace(np);
+    sym->genref = ref; }
 
 /*
  * litsym_special
@@ -819,6 +803,9 @@ rtnsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
         if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
             sym->globalsym = gnp;
         }
+        if (!(sym->attr.flags & SYM_M_PENDING) && symctx->gctx != 0) {
+            gencode_rtnsym(symctx->gctx, np);
+        }
     }
 
     return np;
@@ -837,6 +824,7 @@ rtnsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
 int
 rtnsym_attr_update (name_t *np, routine_attr_t *attrp)
 {
+    symctx_t symctx = nametables_symctx_get(scope_namectx(name_scope(np)));
     sym_routine_t *sym = name_extraspace(np);
     sym_routine_t *gsym = 0;
 
@@ -853,85 +841,31 @@ rtnsym_attr_update (name_t *np, routine_attr_t *attrp)
     if (gsym != 0 && (gsym->attr.flags & SYM_M_PENDING)) {
         memcpy(&gsym->attr, attrp, sizeof(routine_attr_t));
     }
+    if (!(sym->attr.flags & SYM_M_PENDING) && symctx->gctx != 0) {
+        gencode_rtnsym(symctx->gctx, np);
+    }
     return 1;
 
 } /* rtnsym_attr_update */
 
-/* Getter/setter functions for routine symbols
- *
- * rtnsym_attr
- *
- * Returns the entire attributes structure for a
- * routine symbol.
- */
-routine_attr_t *
-rtnsym_attr (name_t *np) {
-    sym_routine_t *sym = name_extraspace(np);
-    return &sym->attr;
-} /* rtnsym_attr */
-
 /*
- * rtnsym_seg
- *
- * Returns the storage structure pointer for
- * the routine symbol.
+ * Getter/setter functions for routine symbols
  */
-seg_t *
-rtnsym_seg (name_t *np)
-{
-    sym_routine_t *sym = name_extraspace(np);
-    return sym->seg;
+routine_attr_t * rtnsym_attr (name_t *np) { sym_routine_t *sym = name_extraspace(np);
+    return &sym->attr; }
+seg_t * rtnsym_seg (name_t *np) { sym_routine_t *sym = name_extraspace(np);
+    return sym->seg; }
+void rtnsym_seg_set (name_t *np, seg_t *seg) { sym_routine_t *sym = name_extraspace(np);
+    sym->seg = seg; if (sym->globalsym) rtnsym_seg_set(sym->globalsym, seg); }
+expr_node_t *rtnsym_expr (name_t *np) { sym_routine_t *sym = name_extraspace(np);
+    return sym->rtnexp; }
+void rtnsym_expr_set (name_t *np, expr_node_t *exp) { sym_routine_t *sym = name_extraspace(np);
+    sym->rtnexp = exp; if (sym->globalsym) rtnsym_expr_set(sym->globalsym, exp); }
+void * rtnsym_genref (name_t *np) { sym_routine_t *sym = name_extraspace(np);
+    return sym->genref; }
+void rtnsym_genref_set (name_t *np, void *ref) { sym_routine_t *sym = name_extraspace(np);
+    sym->genref = ref; }
 
-} /* rtnsym_seg */
-
-/*
- * rtnsym_seg_set
- *
- * Sets the storage structure pointer for the
- * routine symbol.
- */
-void
-rtnsym_seg_set (name_t *np, seg_t *seg)
-{
-    sym_routine_t *sym = name_extraspace(np);
-    sym->seg = seg;
-    if (sym->globalsym) {
-        sym_routine_t *gsym = name_extraspace(sym->globalsym);
-        gsym->seg = seg;
-    }
-
-} /* rtnsym_seg_set */
-
-/*
- * rtnsym_expr
- *
- * Returns the expression node pointer that
- * represents the routine's function.
- */
-expr_node_t *
-rtnsym_expr (name_t *np)
-{
-    sym_routine_t *sym = name_extraspace(np);
-    return sym->rtnexp;
-
-} /* rtnsym_expr */
-
-/*
- * rtnsym_expr_set
- *
- * Sets the expression node pointer for the
- * routine symbol.
- */
-void
-rtnsym_expr_set (name_t *np, expr_node_t *exp)
-{
-    sym_routine_t *sym = name_extraspace(np);
-    sym->rtnexp = exp;
-    if (sym->globalsym) {
-        sym_routine_t *gsym = name_extraspace(sym->globalsym);
-        gsym->rtnexp = exp;
-    }
-}
 /*
  * modsym_declare
  *
@@ -940,7 +874,9 @@ rtnsym_expr_set (name_t *np, expr_node_t *exp)
 name_t *
 modsym_declare (scopectx_t scope, strdesc_t *dsc, textpos_t pos)
 {
+    symctx_t symctx = nametables_symctx_get(scope_namectx(scope));
     namedef_t ndef;
+    name_t *np;
 
     memset(&ndef, 0, sizeof(ndef));
     ndef.lt = LEXTYPE_NAME_MODULE;
@@ -949,8 +885,10 @@ modsym_declare (scopectx_t scope, strdesc_t *dsc, textpos_t pos)
     ndef.namelen = dsc->len;
     ndef.flags = 0;
 
-    return name_declare(scope, &ndef, pos, 0, 0, 0);
+    np = name_declare(scope, &ndef, pos, 0, 0, 0);
 
+    return np;
+    
 } /* modsym_declare */
 
 /*
@@ -981,6 +919,7 @@ expr_node_t *modsym_block (name_t *np) {
     return name_type(np) == LEXTYPE_NAME_MODULE ? m->modblock : 0;
 }
 void modsym_block_set (name_t *np, expr_node_t *blk) {
+    symctx_t symctx = nametables_symctx_get(scope_namectx(name_scope(np)));
     if (name_type(np) == LEXTYPE_NAME_MODULE) {
         sym_module_t *m = name_extraspace(np);
         m->modblock = blk;

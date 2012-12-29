@@ -15,6 +15,7 @@
 #include "lexeme.h"
 #include "storage.h"
 #include "machinedef.h"
+#include "gencode.h"
 #include "expression.h"
 #include "declarations.h"
 #include "listings.h"
@@ -234,6 +235,7 @@ test_expr (int argc, const char *argv[])
     strctx_t strctx = 0;
     logctx_t logctx = 0;
     fioctx_t fioctx = 0;
+    gencodectx_t gctx = 0;
     expr_ctx_t  ectx = 0;
     scopectx_t kwdscope;
     jmp_buf retenv;
@@ -252,8 +254,9 @@ test_expr (int argc, const char *argv[])
     logctx = logging_init(retenv);
     fioctx = fileio_init(logctx);
     stg = storage_init(strctx, &machdef);
+    gctx = gencode_init(logctx, &machdef, stg);
     pctx = parser_init(strctx, 0, &machdef, &kwdscope, logctx, fioctx);
-    ectx = expr_init(strctx, pctx, stg, kwdscope);
+    ectx = expr_init(strctx, pctx, stg, gctx, kwdscope);
     if (!parser_fopen_main(pctx, argv[0], strlen(argv[0]), ".bli", 0, 0)) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;

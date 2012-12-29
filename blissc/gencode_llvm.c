@@ -27,9 +27,10 @@
 
 // Dispatch table for expression code generators
 
-typedef int (*exprgen_fn)(gencodectx_t, expr_node_t *);
+typedef int (*exprgen_fn)(gencodectx_t, LLVMBuilderRef, expr_node_t *);
 
-#define DOEXPTYPE(typ_) static int gencode_expr_##typ_(gencodectx_t gctx, expr_node_t *exp);
+#define DOEXPTYPE(typ_) \
+    static int gencode_expr_##typ_(gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *exp);
 DOEXPTYPES
 #undef DOEXPTYPE
 #define DOEXPTYPE(typ_) gencode_expr_##typ_,
@@ -43,11 +44,13 @@ static exprgen_fn exprgen_dispatch[] = {
 struct gencodectx_s {
     expr_ctx_t          ectx;
     stgctx_t            stg;
+    machinedef_t        *mach;
     name_t              *modnp;
     LLVMContextRef      llvmctx;
     LLVMModuleRef       module;
     LLVMTypeRef         novalue_type;
     LLVMTypeRef         fullword_type;
+    LLVMTypeRef         unit_type;
 };
 
 // Utility functions
@@ -67,14 +70,14 @@ namestring_from_dsc (char *buf, strdesc_t *dsc)
 }
 
 static int
-gencode_expr_NOOP (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_NOOP (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 
 } /* gencode_expr_NOOP */
 
 static int
-gencode_expr_PRIM_LIT (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_PRIM_LIT (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     machinedef_t *mach = expr_machinedef(gctx->ectx);
     strdesc_t *str;
@@ -87,84 +90,110 @@ gencode_expr_PRIM_LIT (gencodectx_t gctx, expr_node_t *node)
     } else {
         val = LLVMConstStringInContext(gctx->llvmctx, str->ptr, str->len, 1);
     }
+    expr_genref_set(node, val);
 
     return 1;
 
 } /* gencode_expr_PRIM_LIT */
 
 static int
-gencode_expr_PRIM_SEG (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_PRIM_SEG (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
+    name_t *np = expr_seg_name(node);
+    char namestr[NAME_SIZE];
+    LLVMValueRef val;
+
+    namestring_from_dsc(namestr, name_string(np));
+
+    switch (name_type(np)) {
+        case LEXTYPE_NAME_DATA: {
+            data_attr_t *attr = datasym_attr(np);
+            val = LLVMBuildLoad(builder, datasym_genref(np), namestr);
+            if (attr->flags & SYM_M_VOLATILE) {
+                LLVMSetVolatile(val, 1);
+            }
+            break;
+        }
+        case LEXTYPE_NAME_ROUTINE: {
+            val = LLVMBuildLoad(builder, rtnsym_genref(np), namestr);
+            break;
+        }
+        default:
+            expr_signal(gctx->ectx, STC__INTCMPERR, "gencode_expr_PRIM_SEG");
+            return 0;
+            break;
+    }
+    expr_genref_set(node, val);
     return 1;
 }
 
 static int
-gencode_expr_PRIM_FLDREF (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_PRIM_FLDREF (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 }
 static int
-gencode_expr_PRIM_RTNCALL (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_PRIM_RTNCALL (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 }
 static int
-gencode_expr_PRIM_STRUREF (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_PRIM_STRUREF (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 }
 static int
-gencode_expr_PRIM_BLK (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_PRIM_BLK (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 }
 static int
-gencode_expr_OPERATOR (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_OPERATOR (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 }
 static int
-gencode_expr_EXECFUN (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_EXECFUN (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 }
 static int
-gencode_expr_CTRL_COND (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_CTRL_COND (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 }
 static int
-gencode_expr_CTRL_CASE (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_CTRL_CASE (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 }
 static int
-gencode_expr_CTRL_EXIT (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_CTRL_EXIT (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 }
 static int
-gencode_expr_CTRL_RET (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_CTRL_RET (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 }
 static int
-gencode_expr_SELECTOR (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_SELECTOR (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 }
 static int
-gencode_expr_CTRL_SELECT (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_CTRL_SELECT (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 }
 static int
-gencode_expr_CTRL_LOOPWU (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_CTRL_LOOPWU (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 }
 static int
-gencode_expr_CTRL_LOOPID (gencodectx_t gctx, expr_node_t *node)
+gencode_expr_CTRL_LOOPID (gencodectx_t gctx, LLVMBuilderRef builder, expr_node_t *node)
 {
     return 1;
 }
@@ -176,24 +205,28 @@ gencode_expr_CTRL_LOOPID (gencodectx_t gctx, expr_node_t *node)
  * Module initialization.
  */
 gencodectx_t
-gencode_init (expr_ctx_t ectx, stgctx_t stg)
+gencode_init (logctx_t logctx, machinedef_t *mach, stgctx_t stg)
 {
-    machinedef_t *mach = expr_machinedef(ectx);
     gencodectx_t gctx = malloc(sizeof(struct gencodectx_s));
 
     if (gctx == 0) return 0;
     memset(gctx, 0, sizeof(struct gencodectx_s));
-    gctx->ectx = ectx;
     gctx->stg = stg;
+    gctx->mach = mach;
     gctx->llvmctx = LLVMContextCreate();
     if (gctx->llvmctx == 0) {
-        expr_signal(ectx, STC__INTCMPERR, "gencode_init");
+        log_signal(logctx, 0, STC__INTCMPERR, "gencode_init");
         free(gctx);
         return 0;
     }
 
     gctx->novalue_type = LLVMVoidTypeInContext(gctx->llvmctx);
     gctx->fullword_type = LLVMIntTypeInContext(gctx->llvmctx, machine_scalar_bits(mach));
+    if (machine_scalar_units(mach) == 1) {
+        gctx->unit_type = gctx->fullword_type;
+    } else {
+        gctx->unit_type = LLVMIntTypeInContext(gctx->llvmctx, machine_unit_bits(mach));
+    }
 
     return gctx;
     
@@ -214,15 +247,84 @@ gencode_expr_gen (gencodectx_t gctx, expr_node_t *node)
         return 0;
     }
 
-    return exprgen_dispatch[expr_type(node)](gctx, node);
+    return exprgen_dispatch[expr_type(node)](gctx, builder, node);
     
 } /* gencode_expr_gen */
 
 /*
- * gencode_routine
+ * gencode_routine_begin
  */
 int
-gencode_routine (gencodectx_t gctx, name_t *rnp)
+gencode_routine_begin (gencodectx_t gctx, name_t *np)
+{
+    return 1;
+}
+
+/*
+ * gencode_routine_end
+ */
+int
+gencode_routine_end (gencodectx_t gctx, name_t *np)
+{
+    return 1;
+}
+
+/*
+ * gencode_litsym
+ */
+int
+gencode_litsym (gencodectx_t gctx, name_t *np)
+{
+    literal_attr_t *attr = litsym_attr(np);
+    namectx_t namectx = scope_namectx(name_scope(np));
+    char namestr[NAME_SIZE];
+    name_t *gnp;
+    LLVMTypeRef mytype;
+    LLVMValueRef val;
+
+    namestring_from_dsc(namestr, name_string(np));
+
+    gnp = name_globalname(namectx, np);
+    if (gnp == 0 || litsym_genref(gnp) == 0) {
+        mytype = attr->width == machine_scalar_bits(gctx->mach) ? gctx->fullword_type
+                 : LLVMIntTypeInContext(gctx->llvmctx, attr->width);
+        val = LLVMConstInt(mytype, name_value_unsigned(np), (attr->flags & SYM_M_SIGNEXT) != 0);
+        litsym_genref_set(np, val);
+        if (gnp != 0) {
+            LLVMValueRef gval;
+            gval = LLVMAddGlobal(gctx->module, mytype, namestr);
+            LLVMSetInitializer(gval, val);
+            LLVMSetGlobalConstant(gval, 1);
+            litsym_genref_set(gnp, gval);
+        }
+    } else {
+        litsym_genref_set(np, litsym_genref(gnp));
+    }
+
+    return 1;
+
+} /* gencode_litsym */
+
+/*
+ * gencode_datasym
+ */
+int
+gencode_datasym (gencodectx_t gctx, name_t *np)
+{
+    data_attr_t *attr = datasym_attr(np);
+    char namestr[NAME_SIZE];
+    LLVMTypeRef mytype;
+
+    namestring_from_dsc(namestr, name_string(np));
+    return 1;
+    
+}
+
+/*
+ * gencode_rtnsym
+ */
+int
+gencode_rtnsym (gencodectx_t gctx, name_t *rnp)
 {
     routine_attr_t *attr = rtnsym_attr(rnp);
     char namestr[NAME_SIZE];
@@ -233,8 +335,8 @@ gencode_routine (gencodectx_t gctx, name_t *rnp)
     namestring_from_dsc(namestr, name_string(rnp));
     arglist = build_arglist(&attr->inargs);
     thisfntype = LLVMFunctionType((attr->flags & SYM_M_NOVALUE) ?
-                                gctx->novalue_type : gctx->fullword_type, arglist,
-                                namereflist_length(&attr->inargs), 1);
+                                  gctx->novalue_type : gctx->fullword_type, arglist,
+                                  namereflist_length(&attr->inargs), 1);
     if (thisfntype == 0) {
         return 0;
     }
@@ -247,20 +349,22 @@ gencode_routine (gencodectx_t gctx, name_t *rnp)
             LLVMSetLinkage(thisfn, LLVMInternalLinkage);
         }
     }
+    rtnsym_genref_set(rnp, thisfn);
 
     return 1;
 
-} /* gencode_routine */
+} /* gencode_rtnsym */
 
 /*
  * gencode_module_begin
  */
 int
-gencode_module_begin (gencodectx_t gctx, name_t *modnp)
+gencode_module_begin (gencodectx_t gctx, void *exprctx, name_t *modnp)
 {
     char modname[NAME_SIZE];
 
     gctx->modnp = modnp;
+    gctx->ectx = exprctx;
     namestring_from_dsc(modname, name_string(modnp));
     gctx->module = LLVMModuleCreateWithNameInContext(modname, gctx->llvmctx);
 
@@ -268,13 +372,16 @@ gencode_module_begin (gencodectx_t gctx, name_t *modnp)
 
 } /* gencode_module_begin */
 
-void
-gencode_module_end (gencodectx_t gctx)
+int
+gencode_module_end (gencodectx_t gctx, name_t *np)
 {
-    expr_node_t *modblk = modsym_block(gctx->modnp);
-
-    gencode_expr_gen(gctx, modblk);
+    if (np != gctx->modnp) {
+        expr_signal(gctx->ectx, STC__INTCMPERR, "gencode_module_end");
+    }
+    
     LLVMDisposeModule(gctx->module);
+
+    return 1;
 
 } /* gencode_module_end */
 

@@ -35,6 +35,7 @@
 #include "nametable.h"
 #include "lexeme.h"
 #include "expression.h"
+#include "gencode.h"
 #include "declarations.h"
 #include "structures.h"
 #include "macros.h"
@@ -637,6 +638,7 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
         strdesc_t plitname;
         memset(&attr, 0, sizeof(attr));
         attr.psect = psname;
+        attr.flags |= SYM_M_PENDING;
         strdesc_init(&plitname, pnbuf, pnlen);
         np = datasym_declare(parser_scope_get(pctx), &plitname,
                              SYMSCOPE_LOCAL, &attr, pos);
@@ -646,6 +648,8 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
         } else {
             seg_commit(stg, seg);
             datasym_seg_set(np, seg);
+            attr.flags &= ~SYM_M_PENDING;
+            datasym_attr_update(np, &attr);
         }
     }
 
@@ -1109,6 +1113,7 @@ declare_data (expr_ctx_t ctx, scopectx_t scope, lextype_t lt, decltype_t dt)
         }
         status = parser_expect_oneof(pctx, QL_NORMAL, delims, 2, 0, 1);
         if (status >= 0) {
+            seg_commit(stg, seg);
             attr.flags &= ~SYM_M_PENDING;
             if (!datasym_attr_update(np, &attr)) {
                 expr_signal(ctx, STC__INTCMPERR, "declare_data[2]");
@@ -1116,13 +1121,11 @@ declare_data (expr_ctx_t ctx, scopectx_t scope, lextype_t lt, decltype_t dt)
             }
         }
         if (status < 0) {
-            seg_free(stg, seg);
             string_free(expr_strctx(ctx), namestr);
             datasym_seg_set(np, 0);
             name_undeclare(scope, np, 0);
             break;
         }
-        seg_commit(stg, seg);
         string_free(expr_strctx(ctx), namestr);
     }
 
@@ -1210,8 +1213,8 @@ declare_bind (expr_ctx_t ctx, scopectx_t scope, decltype_t dt)
         }
         seg_commit(stg, seg);
         attr.flags &= ~SYM_M_PENDING;
-        datasym_attr_update(np, &attr);
         datasym_seg_set(np, seg);
+        datasym_attr_update(np, &attr);
         string_free(expr_strctx(ctx), namestr);
     }
 
@@ -1414,6 +1417,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     machinedef_t *mach = expr_machinedef(ctx);
+    gencodectx_t gctx = expr_gencodectx(ctx);
     stgctx_t stg = expr_stg_ctx(ctx);
     strdesc_t *namestr;
     textpos_t pos;
@@ -1451,6 +1455,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
             } else {
                 seg = seg_alloc_stack(stg, pos, 0);
             }
+            attr.flags |= SYM_M_REF;
         } else {
             seg = seg_alloc_static(stg, pos, psect);
         }
@@ -1474,7 +1479,6 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
             }
         }
         if (dt == DCL_FORWARD) attr.flags |= SYM_M_FORWARD;
-        attr.flags |= SYM_M_PENDING;
         np = rtnsym_declare(scope, namestr, sc, &attr, pos);
         if (is_bind || dt == DCL_NORMAL || dt == DCL_GLOBAL) {
             expr_node_t *exp;
@@ -1486,6 +1490,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
             }
             if (!is_bind) {
                 expr_push_routine(ctx, np);
+                if (gctx != 0) gencode_routine_begin(gctx, np);
                 // XXX Temporary until we are properly
                 //     handling linkages XXX
                 nameref_t *arg;
@@ -1517,8 +1522,10 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
                 if (attr.argscope != 0) {
                     parser_scope_pop(pctx);
                 }
+                expr_pop_routine(ctx);
                 frame_end(stg);
                 rtnsym_expr_set(np, exp);
+                if (gctx != 0) gencode_routine_end(gctx, np);
             }
         }
         if (seg != 0) {
@@ -1528,10 +1535,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
                 seg_commit(stg, seg);
             }
         }
-        if (np != 0) {
-            attr.flags &= ~SYM_M_PENDING;
-            rtnsym_attr_update(np, &attr);
-        }
+
         if (which == 0) { // the semicolon
             break;
         } else if (which == 1) { // the comma
@@ -1686,7 +1690,7 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
 
     parser_lexfunc_register(pctx, ctx, LEXTYPE_LXF_ASSIGN, parse_ASSIGN);
 
-    symbols_init(ctx);
+    symbols_init(ctx, expr_gencodectx(ctx));
     macros_init(kwdscope, ctx);
     psects_init(kwdscope, stg, mach);
 
@@ -1900,6 +1904,7 @@ parse_main (parse_ctx_t pctx, void *vctx, lextype_t dcltype, lexeme_t *lex)
 int
 declare_module (expr_ctx_t ctx)
 {
+    gencodectx_t gctx = expr_gencodectx(ctx);
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     scopectx_t scope = parser_scope_get(pctx);
     strdesc_t *text;
@@ -1927,6 +1932,9 @@ declare_module (expr_ctx_t ctx)
     if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
         parse_switches(pctx, LEXTYPE_DCL_MODULE, LEXTYPE_DELIM_RPAR);
     }
+
+    if (gctx != 0) gencode_module_begin(gctx, ctx, np);
+
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 0)) {
         expr_signal(ctx, STC__OPEREXP, "=");
         return 0;
@@ -1939,6 +1947,8 @@ declare_module (expr_ctx_t ctx)
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DCL_ELUDOM, 0, 0)) {
         expr_signal(ctx, STC__KWDEXP, "ELUDOM");
     }
+
+    if (gctx != 0) gencode_module_end(gctx, np);
 
     string_free(expr_strctx(ctx), text);
     text = modsym_main(np);
