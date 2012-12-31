@@ -806,7 +806,6 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
              strdesc_t *codecomment, namereflist_t *labels) {
 
     parse_ctx_t pctx = ctx->pctx;
-    gencodectx_t gctx = ctx->gctx;
     lextype_t lt;
     lexeme_t *lex;
     nameref_t *ref;

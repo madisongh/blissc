@@ -458,7 +458,7 @@ datasym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
 
     if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
         scopectx_t gscope = nametables_globalscope(namectx);
-        gnp = name_search_typed(scope, dsc->ptr, dsc->len,
+        gnp = name_search_typed(gscope, dsc->ptr, dsc->len,
                                 LEXTYPE_NAME_DATA, &gsym);
         if (gnp != 0 && gsym->seg != 0 && !(attrp->flags & SYM_M_PENDING)) {
             if (!compare_data_attrs(&gsym->attr, attrp)) {
@@ -777,7 +777,7 @@ rtnsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
 
     if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
         scopectx_t gscope = nametables_globalscope(namectx);
-        gnp = name_search_typed(scope, dsc->ptr, dsc->len,
+        gnp = name_search_typed(gscope, dsc->ptr, dsc->len,
                                 LEXTYPE_NAME_ROUTINE, &gsym);
         if (gnp != 0 && gsym->seg != 0 && !(attrp->flags & SYM_M_PENDING)) {
             if (!compare_routine_attrs(&gsym->attr, attrp)) {
@@ -793,12 +793,12 @@ rtnsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     np = name_declare(scope, &ndef, pos, 0, 0, &sym);
     if (np != 0) {
         // It is OK to redeclare EXTERNAL ROUTINEs, I guess
-        if ((sym->attr.flags & SYM_M_FORWARD) || sc == SYMSCOPE_EXTERNAL) {
-            if ((attrp->flags & SYM_M_PENDING) == 0 &&
-                       !compare_routine_attrs(&sym->attr, attrp)) {
-                log_signal(symctx->logctx, pos, STC__ATTRNCMPT, dsc);
-            }
-        }
+//        if ((sym->attr.flags & SYM_M_FORWARD) || sc == SYMSCOPE_EXTERNAL) {
+//           if ((attrp->flags & SYM_M_PENDING) == 0 &&
+//                       !compare_routine_attrs(&sym->attr, attrp)) {
+//                log_signal(symctx->logctx, pos, STC__ATTRNCMPT, dsc);
+//            }
+//        }
         memcpy(&sym->attr, attrp, sizeof(routine_attr_t));
         if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
             sym->globalsym = gnp;
@@ -874,7 +874,6 @@ void rtnsym_genref_set (name_t *np, void *ref) { sym_routine_t *sym = name_extra
 name_t *
 modsym_declare (scopectx_t scope, strdesc_t *dsc, textpos_t pos)
 {
-    symctx_t symctx = nametables_symctx_get(scope_namectx(scope));
     namedef_t ndef;
     name_t *np;
 
@@ -919,7 +918,6 @@ expr_node_t *modsym_block (name_t *np) {
     return name_type(np) == LEXTYPE_NAME_MODULE ? m->modblock : 0;
 }
 void modsym_block_set (name_t *np, expr_node_t *blk) {
-    symctx_t symctx = nametables_symctx_get(scope_namectx(name_scope(np)));
     if (name_type(np) == LEXTYPE_NAME_MODULE) {
         sym_module_t *m = name_extraspace(np);
         m->modblock = blk;

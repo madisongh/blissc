@@ -1110,6 +1110,9 @@ declare_data (expr_ctx_t ctx, scopectx_t scope, lextype_t lt, decltype_t dt)
             if (!status) {
                 expr_signal(ctx, STC__SYNTAXERR);
             }
+        } else {
+            attr.units = machine_scalar_units(expr_machinedef(ctx));
+            if (seg != 0) seg_size_set(stg, seg, attr.units);
         }
         status = parser_expect_oneof(pctx, QL_NORMAL, delims, 2, 0, 1);
         if (status >= 0) {
@@ -1416,7 +1419,7 @@ static int
 declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
-    machinedef_t *mach = expr_machinedef(ctx);
+//    machinedef_t *mach = expr_machinedef(ctx);
     gencodectx_t gctx = expr_gencodectx(ctx);
     stgctx_t stg = expr_stg_ctx(ctx);
     strdesc_t *namestr;
@@ -1491,18 +1494,18 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
             if (!is_bind) {
                 expr_push_routine(ctx, np);
                 if (gctx != 0) gencode_routine_begin(gctx, np);
-                // XXX Temporary until we are properly
-                //     handling linkages XXX
-                nameref_t *arg;
-                for (arg = namereflist_head(&attr.inargs); arg != 0;
-                     arg = arg->tq_next) {
-                    if (arg->np != 0) {
-                        seg_t *aseg = seg_alloc_stack(stg, pos, 0);
-                        seg_size_set(stg, aseg, machine_scalar_units(mach));
-                        seg_commit(stg, aseg);
-                        datasym_seg_set(arg->np, aseg);
-                    }
-                }
+//                // XXX Temporary until we are properly
+//                //     handling linkages XXX
+//                nameref_t *arg;
+//                for (arg = namereflist_head(&attr.inargs); arg != 0;
+//                     arg = arg->tq_next) {
+//                    if (arg->np != 0) {
+//                        seg_t *aseg = seg_alloc_stack(stg, pos, 0);
+//                        seg_size_set(stg, aseg, machine_scalar_units(mach));
+//                        seg_commit(stg, aseg);
+//                        datasym_seg_set(arg->np, aseg);
+//                    }
+//                }
                 if (attr.argscope != 0) {
                     parser_scope_push(pctx, attr.argscope);
                 }

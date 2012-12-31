@@ -704,28 +704,28 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
                 if (allowed_aus > 0) {
                     i = parser_expect_oneof(pctx, QL_NORMAL, aus,
                                             allowed_aus, 0, 1);
+                    if (i >= 0) {
+                        val = 1L << i;
+                    }
                 }
-                if (i >= 0) {
-                    val = 1L << i;
-                } else if (machine_signext_supported(mach)) {
+                if ((i < 0) && machine_signext_supported(mach)) {
                     i = parser_expect_oneof(pctx, QL_NORMAL, su, 2, 0, 1);
+                    if (i >= 0) {
+                        val = i;
+                    }
                 }
-                if (i >= 0) {
-                    val = i;
-                } else if (expr_parse_ctce(ctx, 0, (long *)&val)) {
+                if ((i < 0) && expr_parse_ctce(ctx, 0, (long *)&val)) {
                     np = litsym_special(myscope, alloname, val);
                     i = 0;
                 }
             }
             if (i < 0) {
                 np = litsym_search(myscope, alloname, &val);
+                if (np == 0) {
+                    val = 0;
+                }
             }
             if (np == 0) {
-                // No allocation-actual specified, and no default.
-                // Use zero as default value.  This is OK to do
-                // in contexts where no storage is being allocated
-                // for the structure (e.g., REFs).
-                val = 0;
                 np = litsym_special(myscope, alloname, val);
                 if (np == 0) {
                     expr_signal(ctx, STC__INTCMPERR, "structure_allocate[4]");
