@@ -4,10 +4,10 @@ BEGIN
 GLOBAL ROUTINE testrtn (p1) =
 BEGIN
     LOCAL
-        ghi;
+        ghi : WORD;
 
     ghi = 64;
-    .p1 + .ghi
+    .p1 + .ghi<0,8,0>
 END;
 
 END

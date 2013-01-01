@@ -243,7 +243,7 @@ test_expr (int argc, const char *argv[])
 //   lextype_t lt;
 //    int linewidth;
 //    char *delim;
-    machinedef_t machdef = { .bpunit=8, .bpval=64, .bpaddr=64,
+    machinedef_t machdef = { .bpunit=8, .bpval=32, .bpaddr=32,
         .signext_supported=1, .max_align=3, .reg_count = 16 };
 
     if (setjmp(retenv)) {
