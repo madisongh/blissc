@@ -1316,7 +1316,7 @@ parse_formals (expr_ctx_t ctx, scopectx_t curscope,
     while (1) {
         data_attr_t attr;
         memset(&attr, 0, sizeof(attr));
-        attr.flags = SYM_M_PENDING;
+        attr.flags = SYM_M_PENDING|SYM_M_ARG;
         if (parse_decl_name(pctx, &namestr, &pos)) {
             if (*argtable == 0) {
                 *argtable = scope_begin(expr_namectx(ctx), 0);

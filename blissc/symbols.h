@@ -31,6 +31,7 @@ typedef enum {
 #define SYM_M_RESERVED  (1<<6)
 #define SYM_M_PENDING   (1<<7)
 #define SYM_M_FORWARD   (1<<8)
+#define SYM_M_ARG       (1<<9)
 
 struct literal_attr_s {
     unsigned long value;
@@ -76,6 +77,12 @@ name_t *compiletime_declare(scopectx_t scope, strdesc_t *dsc,
 void compiletime_assign(name_t *np, long val);
 long compiletime_value(name_t *np);
 name_t *label_declare(scopectx_t scope, strdesc_t *dsc, textpos_t pos);
+expr_node_t *label_block(name_t *np);
+void label_block_set(name_t *np, expr_node_t *b);
+void *label_genref(name_t *np);
+void label_genref_set(name_t *np, void *p);
+void *label_exitpoint(name_t *np);
+void label_exitpoint_set(name_t *np, void *p);
 name_t *litsym_search(scopectx_t scope, strdesc_t *dsc, unsigned long *valp);
 name_t *litsym_declare(scopectx_t scope, strdesc_t *dsc,
                        symscope_t sc, literal_attr_t *attr,

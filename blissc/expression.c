@@ -224,7 +224,7 @@ oper_name (optype_t op) {
     return oper_names[op];
 } /* oper_name */
 
-static int op_is_unary (optype_t op) { return (operinfo[op].isr2l & 2) != 0; }
+int oper_is_unary (optype_t op) { return (operinfo[op].isr2l & 2) != 0; }
 static int op_is_r2l (optype_t op) { return (operinfo[op].isr2l & 1) != 0; }
 static int op_priority (optype_t op) { return operinfo[op].priority; }
 
@@ -813,7 +813,7 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
     expr_node_t *exp = 0;
     exprseq_t seq;
     expr_node_t *valexp;
-    namectx_t namectx = scope_namectx(parser_scope_get(pctx));
+    namereflist_t *labellist;
     textpos_t endpos;
     lextype_t closer = (curlt == LEXTYPE_EXP_DELIM_BEGIN ?
                         LEXTYPE_EXP_DELIM_END : LEXTYPE_DELIM_RPAR);
@@ -823,7 +823,7 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
     // to a block we are currently in the middle of parsing
     for (ref = namereflist_head(labels); ref != 0; ref = ref->tq_next) {
         if (ref->np != 0 && name_value_pointer(ref->np) == 0) {
-            name_value_pointer_set(ref->np, ctx->fake_label_ptr);
+            label_block_set(ref->np, ctx->fake_label_ptr);
         }
     }
 
@@ -913,14 +913,15 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
     expr_blk_valexp_set(exp, valexp);
     expr_has_value_set(exp, (valexp != 0));
     expr_blk_codecomment_set(exp, codecomment);
+    labellist = expr_blk_labels(exp);
     *expp = exp;
     // Now point the labels at us
     while ((ref = namereflist_remhead(labels))) {
-        if (ref->np == 0 || name_value_pointer(ref->np) != ctx->fake_label_ptr) {
+        if (ref->np == 0 || label_block(ref->np) != ctx->fake_label_ptr) {
             expr_signal(ctx, STC__INTCMPERR, "parse_block[2]");
         }
-        name_value_pointer_set(ref->np, exp);
-        nameref_free(namectx, ref);
+        label_block_set(ref->np, exp);
+        namereflist_instail(labellist, ref);
     }
 
     return 1;
@@ -1106,13 +1107,16 @@ parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
         if (expr_type(*expp) == EXPTYPE_PRIM_SEG &&
             expr_litval(pos) % machine_unit_bits(mach) == 0 &&
             expr_litval(size) == machine_scalar_bits(mach)) {
-            expr_seg_offset_set(*expp, expr_seg_offset(*expp) +
-                                expr_litval(pos) / machine_unit_bits(mach));
-            expr_seg_units_set(*expp, machine_scalar_units(mach));
-            expr_seg_signext_set(*expp, (signext != 0));
-            expr_node_free(ctx, pos);
-            expr_node_free(ctx, size);
-            return 1;
+            data_attr_t *attr = datasym_attr(expr_seg_name(*expp));
+            if ((attr->flags & SYM_M_ARG) == 0) {
+                expr_seg_offset_set(*expp, expr_seg_offset(*expp) +
+                                    expr_litval(pos) / machine_unit_bits(mach));
+                expr_seg_units_set(*expp, machine_scalar_units(mach));
+                expr_seg_signext_set(*expp, (signext != 0));
+                expr_node_free(ctx, pos);
+                expr_node_free(ctx, size);
+                return 1;
+            }
         }
     }
     exp = expr_node_alloc(ctx, EXPTYPE_PRIM_FLDREF, parser_curpos(pctx));
@@ -1332,7 +1336,7 @@ update_xtce_bits (expr_node_t *opexpr)
     }
     // For unary operators, inherit from the right-hand side only
     // (since LHS is null)
-    if (op_is_unary(op)) {
+    if (oper_is_unary(op)) {
         expr_is_ctce_set(opexpr, expr_is_ctce(expr_op_rhs(opexpr)));
         expr_is_ltce_set(opexpr, 0);
         return;
@@ -1454,7 +1458,7 @@ parse_op_expr (expr_ctx_t ctx, optype_t curop, expr_node_t *lhs, expr_node_t *rh
     int normal;
 
     if (expr_is_noop(lhs)) {
-        if (!op_is_unary(curop)) {
+        if (!oper_is_unary(curop)) {
             expr_signal(ctx, STC__INTCMPERR, "parse_op_expr[1]");
             expr_node_free(ctx, lhs);
             lhs = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(ctx->pctx));
@@ -1479,7 +1483,7 @@ parse_op_expr (expr_ctx_t ctx, optype_t curop, expr_node_t *lhs, expr_node_t *rh
 
     // It is invalid to have a unary operator on our right
     // that has lower priority.
-    if (expr_is_opexp(rhs) && op_is_unary(expr_op_type(rhs))) {
+    if (expr_is_opexp(rhs) && oper_is_unary(expr_op_type(rhs))) {
         if (op_priority(expr_op_type(rhs)) < op_priority(curop)) {
             expr_signal(ctx, STC__SYNTAXERR);
         }
@@ -1698,13 +1702,16 @@ reduce_op_expr (expr_ctx_t ctx, expr_node_t **nodep) {
                 return;
             }
             if (expr_type(rhs) == EXPTYPE_PRIM_SEG) {
-                expr_node_t *tmp = rhs;
-                expr_op_rhs_set(node, 0);
-                expr_seg_name_set(tmp, expr_seg_name(rhs));
-                expr_seg_offset_set(tmp, expr_seg_offset(tmp)+expr_litval(lhs));
-                expr_node_free(ctx, node);
-                *nodep = tmp;
-                return;
+                data_attr_t *attr = datasym_attr(expr_seg_name(rhs));
+                if ((attr->flags & SYM_M_ARG) == 0) {
+                    expr_node_t *tmp = rhs;
+                    expr_op_rhs_set(node, 0);
+                    expr_seg_name_set(tmp, expr_seg_name(rhs));
+                    expr_seg_offset_set(tmp, expr_seg_offset(tmp)+expr_litval(lhs));
+                    expr_node_free(ctx, node);
+                    *nodep = tmp;
+                    return;
+                }
             }
         }
         if (expr_type(rhs) == EXPTYPE_PRIM_LIT) {
@@ -1716,13 +1723,16 @@ reduce_op_expr (expr_ctx_t ctx, expr_node_t **nodep) {
                 return;
             }
             if (expr_type(lhs) == EXPTYPE_PRIM_SEG) {
-                expr_node_t *tmp = lhs;
-                expr_op_lhs_set(node, 0);
-                expr_seg_name_set(tmp, expr_seg_name(lhs));
-                expr_seg_offset_set(tmp, expr_seg_offset(tmp)+expr_litval(rhs));
-                expr_node_free(ctx, node);
-                *nodep = tmp;
-                return;
+                data_attr_t *attr = datasym_attr(expr_seg_name(lhs));
+                if ((attr->flags & SYM_M_ARG) == 0) {
+                    expr_node_t *tmp = lhs;
+                    expr_op_lhs_set(node, 0);
+                    expr_seg_name_set(tmp, expr_seg_name(lhs));
+                    expr_seg_offset_set(tmp, expr_seg_offset(tmp)+expr_litval(rhs));
+                    expr_node_free(ctx, node);
+                    *nodep = tmp;
+                    return;
+                }
             }
         }
     }

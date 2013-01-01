@@ -49,6 +49,7 @@
 		7A02B3AF1688900300E273AC /* expr_control.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = expr_control.c; sourceTree = "<group>"; };
 		7A13E03516775C9600C4F14D /* execfuncs.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = execfuncs.c; sourceTree = "<group>"; };
 		7A13E03816775CA100C4F14D /* execfuncs.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = execfuncs.h; sourceTree = "<group>"; };
+		7A28CF58169293DB00D24193 /* test_codegen.bli */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_codegen.bli; path = testfiles/test_codegen.bli; sourceTree = SOURCE_ROOT; };
 		7A2DD25A165009F1002CD078 /* declarations.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; path = declarations.c; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.c; };
 		7A5351E91656FE7B00BE4B99 /* test_decl.bli */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_decl.bli; path = testfiles/test_decl.bli; sourceTree = SOURCE_ROOT; };
 		7A548D681646E9E500A2A20F /* test_req.req */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_req.req; path = testfiles/test_req.req; sourceTree = SOURCE_ROOT; };
@@ -216,6 +217,7 @@
 				7AB8A9AF16722B4000B91750 /* symbols.h */,
 				7AA04DA01682CDB500A2D348 /* bliss11 */,
 				7A5351E91656FE7B00BE4B99 /* test_decl.bli */,
+				7A28CF58169293DB00D24193 /* test_codegen.bli */,
 				7ABCDDE7165D64E000E3A85C /* test_expr.bli */,
 				7ABF5680164DA2B10053480F /* test_macro.bli */,
 				7A8735071642CA6F006BFC30 /* test_parser.bli */,

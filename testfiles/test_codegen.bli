@@ -1,0 +1,14 @@
+! Codegen test module
+MODULE test =
+BEGIN
+GLOBAL ROUTINE testrtn (p1) =
+BEGIN
+    LOCAL
+        ghi;
+
+    ghi = 64;
+    .p1 + .ghi
+END;
+
+END
+ELUDOM

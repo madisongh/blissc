@@ -57,6 +57,13 @@ struct sym_literal_s {
 };
 typedef struct sym_literal_s sym_literal_t;
 
+struct sym_label_s {
+    expr_node_t     *block;
+    void            *genref;
+    void            *exitpoint;
+};
+typedef struct sym_label_s sym_label_t;
+
 struct sym_data_s {
     name_t          *globalsym;
     seg_t           *seg;
@@ -97,9 +104,10 @@ struct symctx_s {
 };
 typedef struct symctx_s *symctx_t;
 
-static const lextype_t symtype[4] = {
+static const lextype_t symtype[5] = {
     LEXTYPE_NAME_LITERAL, LEXTYPE_NAME_DATA,
-    LEXTYPE_NAME_ROUTINE, LEXTYPE_NAME_MODULE
+    LEXTYPE_NAME_ROUTINE, LEXTYPE_NAME_MODULE,
+    LEXTYPE_NAME_LABEL
 };
 
 /*
@@ -345,11 +353,12 @@ symbols_init (expr_ctx_t ctx, gencodectx_t gctx)
     lexctx_t lctx = expr_lexmemctx(ctx);
     machinedef_t *mach = expr_machinedef(ctx);
 
-    static nametype_vectors_t symvec[4] = {
+    static nametype_vectors_t symvec[5] = {
         { sizeof(sym_literal_t), 0, 0, 0, 0 },
         { sizeof(sym_data_t), 0, 0, data_free, data_copy },
         { sizeof(sym_routine_t), 0, 0, 0, 0 },
-        { sizeof(sym_module_t), 0, 0, module_free, module_copy }
+        { sizeof(sym_module_t), 0, 0, module_free, module_copy },
+        { sizeof(sym_label_t), 0, 0, 0, 0 }
     };
 
     memset(symctx, 0, sizeof(struct symctx_s));
@@ -594,6 +603,23 @@ label_declare (scopectx_t scope, strdesc_t *dsc, textpos_t pos)
     return name_declare(scope, &ndef, pos, 0, 0, 0);
 
 } /* label_declare */
+
+expr_node_t *label_block (name_t *np) { sym_label_t *lbl = name_extraspace(np);
+    return lbl->block;
+}
+void label_block_set (name_t *np, expr_node_t *exp) {
+    sym_label_t *lbl = name_extraspace(np); lbl->block = exp;
+}
+void *label_genref (name_t *np) { sym_label_t *lbl = name_extraspace(np);
+    return lbl->genref;
+}
+void label_genref_set (name_t *np, void *p) {
+    sym_label_t *lbl = name_extraspace(np); lbl->genref = p; }
+void *label_exitpoint (name_t *np) { sym_label_t *lbl = name_extraspace(np);
+    return lbl->exitpoint; }
+void label_exitpoint_set (name_t *np, void *p) {
+    sym_label_t *lbl = name_extraspace(np); lbl->exitpoint = p; }
+
 
 /*
  * litsym_search

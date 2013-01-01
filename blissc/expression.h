@@ -87,6 +87,7 @@ struct expr_blk_s {
     exprseq_t           blkseq;
     struct expr_node_s *blkval;
     scopectx_t          blkscope;
+    namereflist_t       labels;
     strdesc_t          *codecomment;
 };
 struct expr_struref_s {
@@ -204,6 +205,7 @@ expr_node_t *expr_node_alloc(expr_ctx_t ctx, exprtype_t type, textpos_t pos);
 void expr_node_free(expr_ctx_t ctx, expr_node_t *node);
 expr_node_t *expr_node_copy(expr_ctx_t ctx, expr_node_t *src);
 const char *oper_name(optype_t op);
+int oper_is_unary(optype_t op);
 
 /*
  * Getters/setters for the various expression objects
@@ -292,6 +294,8 @@ siu void expr_fldref_signext_set(expr_node_t *node, int val) {
 
 // PRIM_BLK
 siu exprseq_t *expr_blk_seq(expr_node_t *node) { return &node->data.blkdata.blkseq; }
+siu namereflist_t *expr_blk_labels(expr_node_t *node) {
+    return &node->data.blkdata.labels; }
 siu expr_node_t *expr_blk_valexp(expr_node_t *node) { return node->data.blkdata.blkval; }
 siu void expr_blk_valexp_set(expr_node_t *node, expr_node_t *val) {
     node->data.blkdata.blkval = val; }

@@ -587,7 +587,7 @@ parse_leave (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
     // a block we are currently parsing (and thus eligible to
     // be referenced in a LEAVE).
     lp = lexeme_ctx_get(lex);
-    if (lp == 0 || name_value_pointer(lp) != expr_fake_label_ptr(ctx)) {
+    if (lp == 0 || label_block(lp) != expr_fake_label_ptr(ctx)) {
         expr_signal(ctx, STC__INVLABEL, lexeme_text(lex));
     }
     valexp = 0;
