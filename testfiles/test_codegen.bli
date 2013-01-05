@@ -1,13 +1,41 @@
 ! Codegen test module
-MODULE test =
+MODULE test (MAIN=testme) =
 BEGIN
-GLOBAL ROUTINE testrtn (p1) =
+
+LITERAL
+    DSC$K_S_BLN     = 8;
+MACRO
+    DSC$W_LENGTH    = 0,0,16,0%,
+    DSC$B_DTYPE     = 0,16,8,0%,
+    DSC$B_CLASS     = 0,24,8,0%,
+    DSC$A_POINTER   = 4,0,32,0%;
+
+ROUTINE testrtn (p1) =
 BEGIN
     LOCAL
-        ghi : WORD;
+        ghi : WORD,
+        jkl;
 
-    ghi = 64;
-    .p1 + .ghi<0,8,0>
+    ghi<8,8,0> = 64;
+    jkl<8,8,0> = .p1<0,8,0>;
+    .p1<8,8,0> + .ghi<0,8,0>
+END;
+
+OWN farfel;
+
+GLOBAL ROUTINE testme : NOVALUE =
+BEGIN
+    LOCAL
+        dsc : BLOCK [DSC$K_S_BLN,BYTE],
+        buf : VECTOR [32,BYTE],
+        hello;
+    
+    hello = 0;
+    WHILE .hello LSS 7 DO
+    BEGIN
+        IF testrtn(.hello) THEN EXITLOOP 99;
+        hello = .hello + 1;
+    END;
 END;
 
 END

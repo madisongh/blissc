@@ -423,6 +423,14 @@
 					"-D__STDC_LIMIT_MACROS",
 				);
 				OTHER_LDFLAGS = (
+					"-lLLVMScalarOpts",
+					"-lLLVMInstCombine",
+					"-lLLVMTransformUtils",
+					"-lLLVMipa",
+					"-lLLVMAnalysis",
+					"-lLLVMTarget",
+					"-lLLVMMC",
+					"-lLLVMObject",
 					"-lLLVMCore",
 					"-lLLVMSupport",
 					"-lstdc++",
@@ -445,6 +453,14 @@
 					"-D__STDC_LIMIT_MACROS",
 				);
 				OTHER_LDFLAGS = (
+					"-lLLVMScalarOpts",
+					"-lLLVMInstCombine",
+					"-lLLVMTransformUtils",
+					"-lLLVMipa",
+					"-lLLVMAnalysis",
+					"-lLLVMTarget",
+					"-lLLVMMC",
+					"-lLLVMObject",
 					"-lLLVMCore",
 					"-lLLVMSupport",
 					"-lstdc++",
