@@ -636,6 +636,8 @@ symbols_init (expr_ctx_t ctx)
     symctx->expctx = ctx;
     symctx->mach = mach;
     symctx->namectx = namectx;
+    symctx->data_defaults.dclass = DCLASS_STKORREG;
+    symctx->data_defaults.sc = SYMSCOPE_LOCAL;
     symctx->data_defaults.units = machine_scalar_units(mach);
     symctx->literal_defaults.width = machine_scalar_bits(mach);
     symctx->data_defaults.alignment = log2(symctx->data_defaults.units);

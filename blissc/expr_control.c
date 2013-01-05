@@ -526,6 +526,7 @@ parse_incrdecr (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
     parser_scope_pop(pctx);
     exp = expr_node_alloc(ctx, EXPTYPE_CTRL_LOOPID, parser_curpos(pctx));
     expr_idloop_scope_set(exp, scope);
+    expr_idloop_index_set(exp, np);
     expr_idloop_init_set(exp, fromexp);
     expr_idloop_term_set(exp, toexp);
     expr_idloop_step_set(exp, byexp);

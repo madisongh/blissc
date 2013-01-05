@@ -120,6 +120,7 @@ struct expr_loopwu_s {
 };
 struct expr_loopid_s {
     scopectx_t          scope;
+    name_t              *loopindex;
     struct expr_node_s  *init;
     struct expr_node_s  *term;
     struct expr_node_s  *step;
@@ -362,6 +363,9 @@ siu void expr_wuloop_type_set(expr_node_t *node, looptesttype_t type) {
 siu scopectx_t expr_idloop_scope(expr_node_t *node) { return node->data.iddata.scope; }
 siu void expr_idloop_scope_set(expr_node_t *node, scopectx_t scope) {
     node->data.iddata.scope = scope; }
+siu name_t *expr_idloop_index(expr_node_t *node) { return node->data.iddata.loopindex; }
+siu void expr_idloop_index_set(expr_node_t *node, name_t *v) {
+    node->data.iddata.loopindex = v; }
 siu expr_node_t *expr_idloop_init(expr_node_t *node) { return node->data.iddata.init; }
 siu void expr_idloop_init_set(expr_node_t *node, expr_node_t *init) {
     node->data.iddata.init = init; }

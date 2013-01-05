@@ -1567,10 +1567,12 @@ reduce_op_expr (expr_ctx_t ctx, expr_node_t **nodep) {
     lhs = expr_op_lhs(node);
     if (expr_is_opexp(lhs)) {
         reduce_op_expr(ctx, &lhs);
+        expr_op_rhs_set(node, lhs);
     }
     rhs = expr_op_rhs(node);
     if (expr_is_opexp(rhs)) {
         reduce_op_expr(ctx, &rhs);
+        expr_op_rhs_set(node, rhs);
     }
     // Check for unary +/- of a CTCE
     if (expr_is_noop(lhs)) {
