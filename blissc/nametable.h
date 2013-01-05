@@ -78,7 +78,6 @@ typedef int (*name_datacopy_fn)(void *ctx, name_t *dst, void *dp, name_t *src, v
 
 struct nametype_vectors_s {
     size_t              typesize;
-    void               *typectx;
     name_datainit_fn    typeinit;
     name_datafree_fn    typefree;
     name_datacopy_fn    typecopy;
@@ -120,6 +119,7 @@ name_t *name_globalname(namectx_t namectx, name_t *np);
 scopectx_t name_scope(name_t *np);
 lexeme_t *name_to_lexeme(lexctx_t lctx, name_t *np);
 strdesc_t *name_string(name_t *np);
+char *name_azstring(name_t *np);
 namectx_t nametables_init(logctx_t logctx);
 void nametables_finish(namectx_t ctx);
 scopectx_t nametables_globalscope(namectx_t ctx);

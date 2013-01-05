@@ -12,8 +12,6 @@
  *--
  */
 #include "parser.h"
-#include "gencode.h"
-#include "storage.h"
 #include "nametable.h"
 #include "lexeme.h"
 #include "logging.h"
@@ -462,8 +460,7 @@ DEFINE_TQ_FUNCS(exprseq, exprseq_t, expr_node_t)
 void exprseq_free(expr_ctx_t ctx, exprseq_t *seq);
 void exprseq_copy(expr_ctx_t ctx, exprseq_t *dst, exprseq_t *src);
 
-expr_ctx_t expr_init (strctx_t strctx, parse_ctx_t pctx,
-                      stgctx_t stg, gencodectx_t gctx, scopectx_t kwdscope);
+expr_ctx_t expr_init (strctx_t strctx, parse_ctx_t pctx, scopectx_t kwdscope);
 void expr_finish(expr_ctx_t ctx);
 int expr_parse_expr(expr_ctx_t ctx, expr_node_t **expp);
 int expr_parse_ctce(expr_ctx_t ctx, lexeme_t **lex, long *valp);
@@ -473,14 +470,14 @@ void expr_dispatch_register(expr_ctx_t ctx, lextype_t lt, expr_dispatch_fn fn);
 parse_ctx_t expr_parse_ctx(expr_ctx_t ctx);
 void *expr_decl_ctx(expr_ctx_t ctx);
 void expr_decl_ctx_set(expr_ctx_t ctx, void *d);
-stgctx_t expr_stg_ctx(expr_ctx_t);
-gencodectx_t expr_gencodectx(expr_ctx_t);
+void *expr_gencodectx(expr_ctx_t);
 machinedef_t *expr_machinedef(expr_ctx_t);
 namectx_t expr_namectx(expr_ctx_t);
 lexctx_t expr_lexmemctx(expr_ctx_t);
 logctx_t expr_logctx(expr_ctx_t);
 strctx_t expr_strctx(expr_ctx_t);
 lstgctx_t expr_lstgctx(expr_ctx_t);
+void *expr_symctx(expr_ctx_t);
 expr_node_t *expr_parse_arglist(expr_ctx_t ctx, expr_node_t *rtn);
 initval_t *expr_initval_add(expr_ctx_t ctx, initval_t *ivlist, expr_node_t *exp,
                             unsigned int width);

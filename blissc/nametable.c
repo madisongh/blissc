@@ -148,6 +148,7 @@ struct namectx_s {
     nameref_t           *freerefs;
     struct name_s       *freenames[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1];
     nametype_vectors_t   typevec[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1];
+    void                *typectx[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1];
     int                  freelistindex[LEXTYPE_NAME_MAX-LEXTYPE_NAME_MIN+1];
     int                  nfreelists;
     struct scopectx_s   *nullscope;
@@ -174,6 +175,7 @@ static inline int typeidx(lextype_t type) {
  */
 scopectx_t name_scope (name_t *np) { return np->namescope; }
 strdesc_t *name_string (name_t *np) { return &np->namedsc; }
+char *name_azstring (name_t *np) { return np->name; }
 lextype_t name_type (name_t *np) { return np->nametype; }
 void *name_extraspace (name_t *np) { return np->nameextra; }
 void *name_value_pointer (name_t *np) { return np->nameextra[0]; }
@@ -214,7 +216,7 @@ name_alloc (namectx_t ctx, lextype_t type,
     int i = ctx->freelistindex[typeidx(type)];
     size_t nsize = ctx->typevec[typeidx(type)].typesize;
     name_datainit_fn initfn = ctx->typevec[typeidx(type)].typeinit;
-    void *vctx = ctx->typevec[typeidx(type)].typectx;
+    void *vctx = ctx->typectx[typeidx(type)];
 
     if (ctx->freenames[i] == 0) {
         int j;
@@ -265,7 +267,7 @@ name_copy (name_t *src, scopectx_t dstscope)
     namectx_t ctx = src->namescope->home;
     name_t *dst = name_alloc(ctx, src->nametype, src->name, src->namedsc.len);
     name_datacopy_fn cfn = ctx->typevec[typeidx(src->nametype)].typecopy;
-    void *vctx = ctx->typevec[typeidx(src->nametype)].typectx;
+    void *vctx = ctx->typectx[typeidx(src->nametype)];
 
     if (dst == 0) {
         return dst;
@@ -328,7 +330,7 @@ name_free (name_t *np)
         int i = typeidx(np->nametype);
         freefn = ctx->typevec[i].typefree;
         if (freefn != 0) {
-            freefn(ctx->typevec[i].typectx, np, np->nameextra);
+            freefn(ctx->typectx[i], np, np->nameextra);
         }
         memset(np, 0xcc, ctx->typevec[i].typesize);
         np->tq_next = ctx->freenames[ctx->freelistindex[i]];
@@ -753,7 +755,7 @@ nametype_dataop_register (namectx_t ctx, lextype_t lt,
     if (lt > LEXTYPE_NAME_MIN && lt <= LEXTYPE_NAME_MAX) {
         int j, i = typeidx(lt);
         memcpy(&ctx->typevec[i], vec, sizeof(nametype_vectors_t));
-        ctx->typevec[i].typectx = vctx;
+        ctx->typectx[i] = vctx;
         // If the type-specific data fits in the default "extra"
         // space, just use that.  Otherwise, look for a lookaside
         // list that has the same size, or create a new one if needed.
@@ -1002,7 +1004,7 @@ name_declare_internal (scopectx_t scope, const char *id, size_t len,
     if (datap != 0) {
         name_datacopy_fn cfn = namectx->typevec[typeidx(type)].typecopy;
         if (cfn != 0) {
-            cfn(namectx->typevec[typeidx(type)].typectx,
+            cfn(namectx->typectx[typeidx(type)],
                 np, np->nameextra, 0, datap);
         } else {
             if (datasize > namectx->typevec[typeidx(type)].typesize) {

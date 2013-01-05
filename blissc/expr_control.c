@@ -109,7 +109,8 @@ parse_condexp (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
         expr_cond_test_set(exp, test);
         expr_cond_consequent_set(exp, cons);
         expr_cond_alternative_set(exp, alt);
-        expr_has_value_set(exp, (alt != 0));
+        expr_has_value_set(exp, (alt != 0 && expr_has_value(cons)
+                                 && expr_has_value(alt)));
     }
 
     return exp;

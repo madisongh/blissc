@@ -27,12 +27,11 @@
  */
 #include <stdlib.h>
 #include <stdio.h>
-#include "gencode.h"
 #include "expression.h"
+#include "gencode.h"
 #include "execfuncs.h"
 #include "declarations.h"
 #include "symbols.h"
-#include "storage.h"
 #include "parser.h"
 #include "listings.h"
 #include "nametable.h"
@@ -54,11 +53,11 @@ struct expr_ctx_s {
     gencodectx_t        gctx;
     strctx_t            strctx;
     parse_ctx_t         pctx;
-    stgctx_t            stg;
     namectx_t           namectx;
     lexctx_t            lctx;
     machinedef_t       *mach;
     logctx_t            logctx;
+    symctx_t            symctx;
     struct extenthdr_s *extents;
     expr_node_t        *freenodes;
     expr_dispatch_fn    dispatchers[LEXTYPE_EXPKWD_MAX-LEXTYPE_EXPKWD_MIN+1];
@@ -597,6 +596,7 @@ parse_plit (expr_ctx_t ctx, lextype_t curlt, lexeme_t *lex)
     exp = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG, parser_curpos(pctx));
     expr_seg_name_set(exp, plitname);
     expr_is_ltce_set(exp, 1);
+    expr_has_value_set(exp, 1);
     return exp;
 
 } /* parse_plit */
@@ -647,8 +647,7 @@ lookup_dispatcher (expr_ctx_t ctx, lextype_t lt)
  * Module initialization.
  */
 expr_ctx_t
-expr_init (strctx_t strctx, parse_ctx_t pctx, stgctx_t stg,
-           gencodectx_t gctx, scopectx_t kwdscope)
+expr_init (strctx_t strctx, parse_ctx_t pctx, scopectx_t kwdscope)
 {
     expr_ctx_t ectx;
     int i;
@@ -659,15 +658,17 @@ expr_init (strctx_t strctx, parse_ctx_t pctx, stgctx_t stg,
     }
     memset(ectx, 0, sizeof(struct expr_ctx_s));
     ectx->strctx = strctx;
-    ectx->gctx = gctx;
     ectx->pctx = pctx;
     ectx->lctx = parser_lexmemctx(pctx);
-    ectx->stg = stg;
     ectx->mach = parser_get_machinedef(pctx);
     ectx->namectx = scope_namectx(kwdscope);
     ectx->logctx = parser_logctx(pctx);
     ectx->lstgctx = parser_lstgctx(pctx);
     ectx->fake_label_ptr = (void *)0xffeeeeff;
+    ectx->symctx = symbols_init(ectx);
+    ectx->gctx = gencode_init(ectx, ectx->logctx, ectx->mach, ectx->symctx);
+    symbols_connect_hooks(ectx->symctx);
+
 
     for (i = 0; i < sizeof(expr_names)/sizeof(expr_names[0]); i++) {
         name_declare(kwdscope, &expr_names[i], 0, 0, 0, 0);
@@ -688,7 +689,7 @@ expr_init (strctx_t strctx, parse_ctx_t pctx, stgctx_t stg,
     parser_lexfunc_register(pctx, ectx, LEXTYPE_LXF_ALLOCATION, parse_ALLOCATION);
 
     expr_control_init(ectx);
-    declarations_init(ectx, pctx, kwdscope, stg, ectx->mach);
+    declarations_init(ectx, pctx, kwdscope, ectx->mach);
     execfunc_init(ectx, kwdscope);
 
     return ectx;
@@ -700,7 +701,6 @@ expr_init (strctx_t strctx, parse_ctx_t pctx, stgctx_t stg,
  */
 parse_ctx_t expr_parse_ctx (expr_ctx_t ctx) { return ctx->pctx; }
 namectx_t expr_namectx (expr_ctx_t ctx) { return ctx->namectx; }
-stgctx_t expr_stg_ctx (expr_ctx_t ctx) { return ctx->stg; }
 machinedef_t *expr_machinedef (expr_ctx_t ctx) { return ctx->mach; }
 lexctx_t expr_lexmemctx (expr_ctx_t ctx) { return ctx->lctx; }
 logctx_t expr_logctx (expr_ctx_t ctx) { return ctx->logctx; }
@@ -710,7 +710,8 @@ int expr_loopdepth_get (expr_ctx_t ctx) { return ctx->loopdepth; }
 void *expr_fake_label_ptr (expr_ctx_t ctx) { return ctx->fake_label_ptr; }
 strctx_t expr_strctx(expr_ctx_t ctx) { return ctx->strctx; }
 lstgctx_t expr_lstgctx(expr_ctx_t ctx) { return ctx->lstgctx; }
-gencodectx_t expr_gencodectx(expr_ctx_t ctx) { return ctx->gctx; }
+void *expr_symctx(expr_ctx_t ctx) { return ctx->symctx; }
+void *expr_gencodectx(expr_ctx_t ctx) { return ctx->gctx; }
 
 void
 expr_finish (expr_ctx_t ctx)
@@ -722,7 +723,6 @@ expr_finish (expr_ctx_t ctx)
     }
 
     parser_finish(ctx->pctx);
-    storage_finish(ctx->stg);
 
     for (e = ctx->extents; e != 0; e = enext) {
         enext = e->next;
@@ -962,11 +962,9 @@ expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
                 scopectx_t scope = parser_scope_get(pctx);
                 textpos_t pos = parser_curpos(pctx);
                 char tnbuf[32];
-                int tnlen;
                 strdesc_t str;
                 name_t *tmpsym;
-                initval_t *ivlist;
-                seg_t *seg;
+                data_attr_t attr;
                 if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
                     expr_signal(ctx, STC__DELIMEXP, "(");
                 }
@@ -979,22 +977,16 @@ expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
                 if (!expr_has_value(exp)) {
                     expr_signal(ctx, STC__EXPRVALRQ);
                 }
-                tnlen = tempname_get(ctx->namectx, tnbuf, sizeof(tnbuf));
-                strdesc_init(&str, tnbuf, tnlen);
-                tmpsym = datasym_declare(scope, &str, SYMSCOPE_LOCAL, 0, pos);
-                ivlist = expr_initval_add(ctx, 0, exp, machine_scalar_units(ctx->mach));
-                seg = seg_alloc_stack(ctx->stg, pos, 0);
-                if (tmpsym == 0 || seg == 0 || !seg_initval_set(ctx->stg, seg, ivlist)) {
-                    if (seg != 0) seg_free(ctx->stg, seg);
-                    if (ivlist != 0) initval_freelist(ctx->stg, ivlist);
-                    arg = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, pos);
-                    expr_signal(ctx, STC__INTCMPERR, "expr_parse_arglist");
-                } else {
-                    seg_commit(ctx->stg, seg);
-                    datasym_seg_set(tmpsym, seg);
-                    arg = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG, pos);
-                    expr_seg_name_set(arg, tmpsym);
-                }
+                strdesc_init(&str, tnbuf, 0);
+                str.len = tempname_get(ctx->namectx, tnbuf, sizeof(tnbuf));
+                memset(&attr, 0, sizeof(attr));
+                attr.dclass = DCLASS_STACKONLY;
+                attr.units = machine_scalar_units(ctx->mach);
+                attr.flags = (machine_addr_signed(ctx->mach) ? SYM_M_SIGNEXT : 0);
+                attr.ivlist = expr_initval_add(ctx, 0, exp, machine_scalar_units(ctx->mach));
+                tmpsym = datasym_declare(scope, &str, SYMSCOPE_LOCAL, &attr, pos);
+                arg = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG, pos);
+                expr_seg_name_set(arg, tmpsym);
             } else if (!expr_parse_expr(ctx, &arg)) {
             	// Use a zero literal expression for missing/erroneous parameters
                 arg = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
@@ -1030,6 +1022,17 @@ expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
     expr_rtnaddr_set(exp, rtn);
     exprseq_append(expr_rtn_inargs(exp), &inargs);
     exprseq_append(expr_rtn_outargs(exp), &outargs);
+
+    // This expression has a value unless it was a NOVALUE routine
+    if (expr_type(rtn) == EXPTYPE_PRIM_SEG) {
+        name_t *np = expr_seg_name(rtn);
+        if (name_type(np) == LEXTYPE_NAME_ROUTINE) {
+            routine_attr_t *attr = rtnsym_attr(np);
+            expr_has_value_set(exp, (attr->flags & SYM_M_NOVALUE) == 0);
+            return exp;
+        }
+    }
+    expr_has_value_set(exp, 1);
     return exp;
 
 } /* parse_arglist */
@@ -1108,7 +1111,7 @@ parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
             expr_litval(pos) % machine_unit_bits(mach) == 0 &&
             expr_litval(size) == machine_scalar_bits(mach)) {
             data_attr_t *attr = datasym_attr(expr_seg_name(*expp));
-            if ((attr->flags & SYM_M_ARG) == 0) {
+            if (attr->dclass != DCLASS_ARG && attr->dclass != DCLASS_REGISTER) {
                 expr_seg_offset_set(*expp, expr_seg_offset(*expp) +
                                     expr_litval(pos) / machine_unit_bits(mach));
                 expr_seg_units_set(*expp, machine_scalar_units(mach));
@@ -1703,7 +1706,7 @@ reduce_op_expr (expr_ctx_t ctx, expr_node_t **nodep) {
             }
             if (expr_type(rhs) == EXPTYPE_PRIM_SEG) {
                 data_attr_t *attr = datasym_attr(expr_seg_name(rhs));
-                if ((attr->flags & SYM_M_ARG) == 0) {
+                if (attr->dclass != DCLASS_REGISTER && attr->dclass != DCLASS_ARG) {
                     expr_node_t *tmp = rhs;
                     expr_op_rhs_set(node, 0);
                     expr_seg_name_set(tmp, expr_seg_name(rhs));
@@ -1724,7 +1727,7 @@ reduce_op_expr (expr_ctx_t ctx, expr_node_t **nodep) {
             }
             if (expr_type(lhs) == EXPTYPE_PRIM_SEG) {
                 data_attr_t *attr = datasym_attr(expr_seg_name(lhs));
-                if ((attr->flags & SYM_M_ARG) == 0) {
+                if (attr->dclass != DCLASS_REGISTER && attr->dclass != DCLASS_ARG) {
                     expr_node_t *tmp = lhs;
                     expr_op_lhs_set(node, 0);
                     expr_seg_name_set(tmp, expr_seg_name(lhs));
@@ -1999,16 +2002,15 @@ initval_t *
 expr_initval_add (expr_ctx_t ctx, initval_t *ivlist, expr_node_t *exp,
                   unsigned int width)
 {
-    stgctx_t stg = expr_stg_ctx(ctx);
     long val;
 
     switch (expr_type(exp)) {
         case EXPTYPE_PRIM_LIT:
             val = expr_litval(exp);
             expr_node_free(ctx, exp);
-            return initval_scalar_add(stg, ivlist, 1, val, width, 0);
+            return initval_scalar_add(ctx->symctx, ivlist, 1, val, width, 0);
         default:
-            return initval_expr_add(stg, ivlist, 1, 1, exp, width, 0);
+            return initval_expr_add(ctx->symctx, ivlist, 1, 1, exp, width, 0);
             break;
     }
 

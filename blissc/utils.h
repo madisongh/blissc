@@ -52,6 +52,11 @@ static inline __unused unsigned int textpos_colnum(textpos_t t) {
     return (unsigned int)((t >> TEXTPOS_V_COLNUM) & ~(-1LL<<TEXTPOS_S_COLNUM));
 }
 
+/*
+ * initval_t - need the opaque type definition here XXX
+ */
+struct initval_s;
+typedef struct initval_s initval_t;
 
 /*
  * Width-related functions.  These handle things like bit counting and

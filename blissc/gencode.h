@@ -13,20 +13,17 @@
  */
 
 #include "nametable.h"
-#include "storage.h"
+#include "symbols.h"
 #include "logging.h"
 #include "machinedef.h"
 
 struct gencodectx_s;
 typedef struct gencodectx_s *gencodectx_t;
 
-gencodectx_t gencode_init(logctx_t logctx, machinedef_t *mach, stgctx_t stg);
+gencodectx_t gencode_init(void *ectx, logctx_t logctx, machinedef_t *mach, symctx_t symctx);
 void gencode_finish(gencodectx_t gctx);
-int gencode_module_begin(gencodectx_t gctx, void *exprctx, name_t *np);
+int gencode_module_begin(gencodectx_t gctx, name_t *np);
 int gencode_module_end(gencodectx_t gctx, name_t *np);
-int gencode_datasym(gencodectx_t gctx, name_t *np);
-int gencode_litsym(gencodectx_t gctx, name_t *np);
-int gencode_rtnsym(gencodectx_t gctx, name_t *np);
 int gencode_routine_begin(gencodectx_t gctx, name_t *np);
 int gencode_routine_end(gencodectx_t gctx, name_t *np);
 
