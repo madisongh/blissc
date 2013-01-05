@@ -29,13 +29,16 @@ BEGIN
         dsc : BLOCK [DSC$K_S_BLN,BYTE],
         buf : VECTOR [32,BYTE],
         hello;
-    
+
     hello = 0;
-    WHILE .hello LSS 7 DO
+    farfel = hello;
+    DECRU i FROM 77 BY 2 DO
     BEGIN
-        IF testrtn(.hello) THEN EXITLOOP 99;
-        hello = .hello + 1;
+        hello = .hello + .i;
     END;
+    
+    farfel = hello + 1;
+    
 END;
 
 END
