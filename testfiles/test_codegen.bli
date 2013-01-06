@@ -15,11 +15,11 @@ BEGIN
 
 LOCAL val;
 val = (
-CASE .p1 FROM 0 TO 5 OF
+SELECTONE .p1 OF
 SET
     [1,3,5] : 1;
     [0,2,4] : 0;
-    [OUTRANGE] : 972;
+    [OTHERWISE] : 972;
 TES);
 
 .val
