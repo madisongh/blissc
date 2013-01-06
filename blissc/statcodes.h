@@ -143,7 +143,8 @@ STATCODE( 90,W,UNEXPSWIT, "switch !SD not supported in this context") \
 STATCODE( 91,W,SWITCHDUP, "switch !SD already set") \
 STATCODE( 92,F,RDOUTFILE, "file_readline called on output file !SZ") \
 STATCODE( 93,F,WRTINFILE, "file_writeline called on input file !SZ") \
-STATCODE( 94,W,LSTOPTEXP, "listing option keyword expected")
+STATCODE( 94,W,LSTOPTEXP, "listing option keyword expected") \
+STATCODE( 95,E,NOCASES,   "CASE bounds result in no case actions")
 
 #define STATCODE(msg,typ,nam,txt) STC__##nam =  STC_CODE_##typ(msg),
 typedef enum {

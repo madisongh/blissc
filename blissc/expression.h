@@ -136,9 +136,10 @@ struct expr_rtncall_s {
 };
 struct expr_case_s {
     struct expr_node_s  *caseindex;
-    long                 lowbound, highbound;
-    struct expr_node_s  *outrange;
-    struct expr_node_s  **cases;  // array containing hi-low+1 elements
+    long                 lowbound, highbound, actioncount;
+    long                 outrange; // index into 'actions' for outrange case
+    long                *cases;   // array containing hi-low+1 indices into 'actions'
+    struct expr_node_s  **actions;  // array containing action node pointers
 };
 
 struct expr_selector_s {
@@ -399,18 +400,26 @@ siu long expr_case_highbound(expr_node_t *node) {
 siu void expr_case_bounds_set(expr_node_t *node, long lo, long hi) {
     node->data.casedata.highbound = hi;
     node->data.casedata.lowbound = lo; }
-siu expr_node_t *expr_case_outrange(expr_node_t *node) {
+siu long expr_case_outrange(expr_node_t *node) {
     return node->data.casedata.outrange; }
-siu void expr_case_outrange_set(expr_node_t *node, expr_node_t *exp) {
-    node->data.casedata.outrange = exp; }
+siu void expr_case_outrange_set(expr_node_t *node, long val) {
+    node->data.casedata.outrange = val; }
 siu expr_node_t *expr_case_action(expr_node_t *node, long which) {
-    if (which < node->data.casedata.lowbound || which > node->data.casedata.highbound) {
-        return node->data.casedata.outrange; }
-    return node->data.casedata.cases[which-node->data.casedata.lowbound]; }
-siu expr_node_t **expr_case_cases(expr_node_t *node) {
+    struct expr_case_s *c = &node->data.casedata;
+    if (which < c->lowbound || which > c->highbound)
+        return (c->outrange < 0 ? 0 : c->actions[c->outrange]);
+    else return c->actions[c->cases[which-c->lowbound]]; }
+siu long *expr_case_cases(expr_node_t *node) {
     return node->data.casedata.cases; }
-siu void expr_case_actions_set(expr_node_t *node, expr_node_t **arr) {
-    node->data.casedata.cases = arr; }
+siu void expr_case_cases_set(expr_node_t *node, long *cases) {
+    node->data.casedata.cases = cases; }
+siu void expr_case_actions_set(expr_node_t *node, long count, expr_node_t **arr) {
+    node->data.casedata.actions = arr; node->data.casedata.actioncount = count; }
+siu long expr_case_actioncount(expr_node_t *node) {
+    return node->data.casedata.actioncount; }
+siu expr_node_t **expr_case_actions(expr_node_t *node) {
+    return node->data.casedata.actions;
+}
 
 // CTRL_SELECT
 siu expr_node_t *expr_sel_index(expr_node_t *node) { return node->data.seldata.selindex; }

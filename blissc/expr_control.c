@@ -130,14 +130,13 @@ parse_case (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
 {
 
     expr_node_t *caseidx = 0;
-    expr_node_t **cases, **unique, *exp;
-    expr_node_t *outrange = 0;
+    expr_node_t **unique, *exp;
     int *todo;
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     lexeme_t *lex;
     long lo, hi, ncases, i;
     int saw_inrange, saw_outrange, status;
-    int unique_actions;
+    long unique_actions, *cases, outrange = -1;
     int every_case_has_value = 1;
 
     if (!expr_parse_expr(ctx, &caseidx)) {
@@ -177,10 +176,10 @@ parse_case (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
         return 0;
     }
     ncases = (hi - lo) + 1;
-    cases = malloc(ncases*sizeof(expr_node_t *));
-    unique = malloc(ncases*sizeof(expr_node_t *));
-    memset(cases, 0, ncases*sizeof(expr_node_t *));
-    memset(unique, 0, ncases*sizeof(expr_node_t *));
+    cases = malloc(ncases*sizeof(long));
+    unique = malloc((ncases+1)*sizeof(expr_node_t *)); // extra for 'outrange'
+    memset(cases, -1, ncases*sizeof(long));
+    memset(unique, 0, (ncases+1)*sizeof(expr_node_t *));
     todo = malloc(ncases*sizeof(int));
     saw_inrange = saw_outrange = 0;
     unique_actions = 0;
@@ -202,7 +201,7 @@ parse_case (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
                 }
                 saw_inrange = 1;
                 for (i = 0; i < ncases; i++) {
-                    todo[i] = (cases[i] == 0);
+                    todo[i] = (cases[i] < 0);
                 }
             } else if (lt == LEXTYPE_KWD_OUTRANGE) {
                 if (saw_outrange) {
@@ -255,21 +254,20 @@ parse_case (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
             every_case_has_value = 0;
         }
         if (is_outrange) {
-            if (outrange != 0) {
+            if (outrange >= 0) {
                 expr_signal(ctx, STC__MULTOURNG);
             }
-            outrange = exp;
-        } else {
-            unique[unique_actions++] = exp;
+            outrange = unique_actions;
         }
         for (i = 0; i < ncases; i++) {
             if (todo[i]) {
-                if (cases[i] != 0) {
+                if (cases[i] >= 0) {
                     expr_signal(ctx, STC__MULNUMCAS);
                 }
-                cases[i] = exp;
+                cases[i] = unique_actions;
             }
         }
+        unique[unique_actions++] = exp;
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1)) {
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_TES, 0, 1)) {
                 break;
@@ -283,7 +281,14 @@ parse_case (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
     } /* outer while */
 
     if (status) {
-        for (i = 0; i < ncases && cases[i] != 0; i++);
+        if (ncases == 0 && outrange < 0) {
+            expr_signal(ctx, STC__NOCASES);
+            status = 0;
+        }
+    }
+
+    if (status) {
+        for (i = 0; i < ncases && cases[i] >= 0; i++);
         if (i < ncases) {
             expr_signal(ctx, STC__INSUFCASE);
             status = 0;
@@ -294,19 +299,19 @@ parse_case (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
         exp = expr_node_alloc(ctx, EXPTYPE_CTRL_CASE, parser_curpos(pctx));
         expr_case_bounds_set(exp, lo, hi);
         expr_case_outrange_set(exp, outrange);
-        expr_case_actions_set(exp, cases);
+        expr_case_actions_set(exp, unique_actions, unique);
+        expr_case_cases_set(exp, cases);
         expr_case_index_set(exp, caseidx);
         expr_has_value_set(exp, every_case_has_value);
     } else {
-        expr_node_free(ctx, outrange);
         expr_node_free(ctx, caseidx);
         free(cases);
         while (unique_actions > 0) {
             expr_node_free(ctx, unique[--unique_actions]);
         }
+        free(unique);
     }
 
-    free(unique);
     free(todo);
 
     return (status ? exp : 0);

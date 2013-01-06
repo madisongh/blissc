@@ -114,6 +114,7 @@ struct gencodectx_s {
     name_t              *modnp;
     unsigned int        tmpidx;
     unsigned int        lblidx;
+    unsigned int        globidx;
     LLVMContextRef      llvmctx;
     LLVMModuleRef       module;
     LLVMTypeRef         novalue_type;
@@ -131,7 +132,6 @@ struct gencodectx_s {
     LLVMBuilderRef      builder;
     LLVMPassManagerRef  passmgr;
     char                tmpnambuf[NAME_SIZE];
-    char                tmplblbuf[NAME_SIZE];
 };
 
 static LLVMIntPredicate pred[] = {
@@ -150,11 +150,18 @@ gentempname (gencodectx_t gctx)
     return gctx->tmpnambuf;
 }
 static char *
+genglobname (gencodectx_t gctx)
+{
+    snprintf(gctx->tmpnambuf, NAME_SIZE, "$$$glob.%u", gctx->globidx);
+    gctx->globidx += 1;
+    return gctx->tmpnambuf;
+}
+static char *
 genlabel (gencodectx_t gctx)
 {
-    snprintf(gctx->tmplblbuf, NAME_SIZE, "label.%u", gctx->lblidx);
+    snprintf(gctx->tmpnambuf, NAME_SIZE, "label.%u", gctx->lblidx);
     gctx->lblidx += 1;
-    return gctx->tmplblbuf;
+    return gctx->tmpnambuf;
 }
 
 void
@@ -755,6 +762,116 @@ gencode_expr_CTRL_COND (gencodectx_t gctx, expr_node_t *node)
 static int
 gencode_expr_CTRL_CASE (gencodectx_t gctx, expr_node_t *node)
 {
+    LLVMValueRef v, phi, *xfervec, *destvec, xv, xvarray, loval, hival;
+    LLVMValueRef caseindex, t1, t2, gepidx[2];
+    LLVMValueRef neg1 = LLVMConstAllOnes(gctx->fullword_type);
+    LLVMBasicBlockRef curblk, afterblk, exitblk, last, *bbvec, testblk;
+    expr_node_t **actions;
+    long lo, hi, nactions, i, *cases;
+    int hasval;
+    unsigned int numcases;
+
+    assert(node != 0);
+    hasval = expr_has_value(node);
+    lo = expr_case_lowbound(node);
+    hi = expr_case_highbound(node);
+    numcases  = (unsigned int) (hi-lo+1);
+    nactions = expr_case_actioncount(node);
+    if (nactions == 0) {
+        return 1;
+    }
+    actions = expr_case_actions(node);
+    cases = expr_case_cases(node);
+    destvec = malloc(nactions*sizeof(LLVMValueRef));
+    memset(destvec, 0, nactions*sizeof(LLVMValueRef));
+    bbvec = malloc(nactions*sizeof(LLVMBasicBlockRef));
+    memset(bbvec, 0, nactions*sizeof(LLVMBasicBlockRef));
+    if (numcases != 0) {
+        xfervec = malloc(numcases*sizeof(LLVMValueRef));
+        memset(xfervec, 0, numcases*sizeof(LLVMValueRef));
+    }
+    curblk = LLVMGetInsertBlock(gctx->builder);
+    afterblk = LLVMGetNextBasicBlock(curblk);
+    if (hasval) {
+        exitblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, afterblk, genlabel(gctx));
+        LLVMPositionBuilderAtEnd(gctx->builder, exitblk);
+        phi = LLVMBuildPhi(gctx->builder, gctx->fullword_type, gentempname(gctx));
+        last = exitblk;
+    } else {
+        last = afterblk;
+    }
+
+    for (i = nactions-1; i >= 0; i--) {
+        LLVMBasicBlockRef here = LLVMInsertBasicBlockInContext(gctx->llvmctx,
+                                                               last, genlabel(gctx));
+        LLVMPositionBuilderAtEnd(gctx->builder, here);
+        exprgen_gen(gctx, actions[i]);
+        if (hasval) {
+            v = expr_genref(actions[i]);
+            LLVMBuildBr(gctx->builder, exitblk);
+            LLVMAddIncoming(phi, &v, &here, 1);
+        } else {
+            LLVMBuildBr(gctx->builder, afterblk);
+        }
+        destvec[i] = LLVMBlockAddress(gctx->curfn, here);
+        bbvec[i] = here;
+        last = here;
+    }
+    LLVMPositionBuilderAtEnd(gctx->builder, curblk);
+
+    if (numcases != 0) {
+        for (i = lo; i <= hi; i++) {
+            xfervec[i-lo] = destvec[cases[i-lo]];
+        }
+        testblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, last, genlabel(gctx));
+        xv = LLVMConstArray(LLVMTypeOf(destvec[0]), xfervec, numcases);
+        xvarray = LLVMAddGlobal(gctx->module, LLVMTypeOf(xv), genglobname(gctx));
+        LLVMSetLinkage(xvarray, LLVMPrivateLinkage);
+        LLVMSetInitializer(xvarray, xv);
+    }
+
+    exprgen_gen(gctx, expr_case_index(node));
+    caseindex = expr_genref(expr_case_index(node));
+    i = expr_case_outrange(node);
+
+    if (numcases == 0) {
+        v = LLVMBuildBr(gctx->builder, (i >= 0 ? bbvec[i]
+                                        : (hasval ? exitblk : afterblk)));
+    } else {
+        loval = LLVMConstInt(gctx->fullword_type, lo, 1);
+        hival = LLVMConstInt(gctx->fullword_type, hi, 1);
+        t1 = LLVMBuildICmp(gctx->builder, LLVMIntSLT, caseindex, loval,
+                           gentempname(gctx));
+        t2 = LLVMBuildICmp(gctx->builder, LLVMIntSGT, caseindex, hival,
+                           gentempname(gctx));
+        v = LLVMBuildOr(gctx->builder, t1, t2, gentempname(gctx));
+        v = LLVMBuildCondBr(gctx->builder, v, (i >= 0 ? bbvec[i]
+                                               : (hasval ? exitblk : afterblk)),
+                            testblk);
+    }
+    if (hasval && i < 0) {
+        LLVMAddIncoming(phi, &neg1, &curblk, 1);
+    }
+
+    if (numcases != 0) {
+        LLVMPositionBuilderAtEnd(gctx->builder, testblk);
+        gepidx[0] = LLVMConstInt(gctx->fullword_type, 0, 0);
+        gepidx[1] = LLVMBuildSub(gctx->builder, caseindex, loval, gentempname(gctx));
+        v = LLVMBuildInBoundsGEP(gctx->builder, xvarray, gepidx, 2, gentempname(gctx));
+        v = LLVMBuildLoad(gctx->builder, v, gentempname(gctx));
+        v = LLVMBuildIndirectBr(gctx->builder, v, (unsigned int) nactions);
+        for (i = 0; i < nactions; i++) LLVMAddDestination(v, bbvec[i]);
+    }
+
+    LLVMPositionBuilderAtEnd(gctx->builder, (hasval ? exitblk : afterblk));
+    
+    if (hasval) {
+        expr_genref_set(node, phi);
+    }
+
+    free(bbvec);
+    if (numcases != 0) free(xfervec);
+    free(destvec);
     return 1;
 }
 static int

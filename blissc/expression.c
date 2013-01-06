@@ -334,16 +334,15 @@ expr_node_free (expr_ctx_t ctx, expr_node_t *node)
             exprseq_free(ctx, expr_rtn_outargs(node));
             break;
         case EXPTYPE_CTRL_CASE: {
-            expr_node_t **actarray = expr_case_cases(node);
-            long which, lo, hi;
+            expr_node_t **actarray = expr_case_actions(node);
+            long *cases = expr_case_cases(node);
+            long i, actcount = expr_case_actioncount(node);
             expr_node_free(ctx, expr_case_index(node));
-            expr_node_free(ctx, expr_case_outrange(node));
-            lo = expr_case_lowbound(node);
-            hi = expr_case_highbound(node);
-            for (which = lo; which <= hi; which++) {
-                expr_node_free(ctx, actarray[which-lo]);
+            for (i = 0; i < actcount; i++) {
+                expr_node_free(ctx, actarray[i]);
             }
             free(actarray);
+            free(cases);
             break;
         }
         case EXPTYPE_SELECTOR: {
@@ -453,19 +452,26 @@ expr_node_copy (expr_ctx_t ctx, expr_node_t *node)
             exprseq_copy(ctx, expr_rtn_outargs(dst), expr_rtn_outargs(node));
             break;
         case EXPTYPE_CTRL_CASE: {
-            expr_node_t **actarray = expr_case_cases(node);
+            expr_node_t **actarray = expr_case_actions(node);
             expr_node_t **dstarray;
-            long which, lo, hi;
+            long *casearray, *casedst;
+            long i, actcount, lo, hi;
             expr_case_index_set(dst, expr_node_copy(ctx, expr_case_index(node)));
-            expr_case_outrange_set(dst, expr_node_copy(ctx, expr_case_outrange(node)));
+            expr_case_outrange_set(dst, expr_case_outrange(node));
             lo = expr_case_lowbound(node);
             hi = expr_case_highbound(node);
-            dstarray = malloc((hi-lo+1)*sizeof(expr_node_t *));
-            memset(dstarray, 0, ((hi-lo+1)*sizeof(expr_node_t *)));
-            for (which = lo; which <= hi; which++) {
-                dstarray[which-lo] = expr_node_copy(ctx, actarray[which-lo]);
+            expr_case_bounds_set(dst, lo, hi);
+            expr_case_outrange_set(dst, expr_case_outrange(node));
+            actcount = expr_case_actioncount(node);
+            dstarray = malloc(actcount*sizeof(expr_node_t *));
+            for (i = 0; i < actcount; i++) {
+                dstarray[i] = expr_node_copy(ctx, actarray[i]);
             }
-            expr_case_actions_set(dst, dstarray);
+            expr_case_actions_set(dst, actcount, dstarray);
+            casearray = expr_case_cases(node);
+            casedst = malloc((hi-lo+1)*sizeof(long));
+            memcpy(casedst, casearray, (hi-lo+1)*sizeof(long));
+            expr_case_cases_set(dst, casedst);
             break;
         }
         case EXPTYPE_SELECTOR: {
