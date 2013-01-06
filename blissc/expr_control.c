@@ -330,14 +330,13 @@ static expr_node_t *
 parse_select (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
-    expr_node_t *si, *exp, *lo, *hi;
+    expr_node_t *si, *exp, *lo, *hi, *always, *otherwise;
     expr_node_t *selectors, *sellast, *sel;
     exprseq_t selseq;
     int every_selector_has_value = 1;
     int is_selectone;
-    int need_default_otherwise = 1;
 
-    si = 0;
+    si = always = otherwise = 0;
     if (!expr_parse_expr(ctx, &si)) {
         expr_signal(ctx, STC__EXPREXP);
         return 0;
@@ -354,6 +353,9 @@ parse_select (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
                     || curlt == LEXTYPE_CTRL_SELECTONEU
                     || curlt == LEXTYPE_CTRL_SELECTONEA);
     while (1) {
+        int is_otherwise, is_always;
+        is_otherwise = is_always = 0;
+
         selectors = sellast = 0;
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_TES, 0, 1)) {
             break;
@@ -363,35 +365,51 @@ parse_select (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
             parser_skip_to_delim(pctx, LEXTYPE_KWD_TES);
             break;
         }
-        sel = expr_node_alloc(ctx, EXPTYPE_SELECTOR, parser_curpos(pctx));
         while (1) {
-            lo = hi = 0;
+            sel = lo = hi = 0;
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_OTHERWISE, 0, 1)) {
-                expr_selector_otherwise_set(sel, 1);
-                need_default_otherwise = 0;
+                if (otherwise != 0) {
+                    expr_signal(ctx, STC__MULOTHERW);
+                } else {
+                    is_otherwise = 1;
+                }
             } else if (!is_selectone &&
                        parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_ALWAYS, 0, 1)) {
-                expr_selector_always_set(sel, 1);
-                need_default_otherwise = 0;
+                if (always != 0) {
+                    expr_signal(ctx, STC__MULALWAYS);
+                } else {
+                    is_always = 1;
+                }
             } else if (expr_parse_expr(ctx, &lo)) {
                 if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_TO, 0, 1)) {
                     if (!expr_parse_expr(ctx, &hi)) {
                         expr_signal(ctx, STC__EXPREXP);
                     }
                 }
-                expr_selector_lohi_set(sel, lo, hi);
             } else {
                 expr_signal(ctx, STC__EXPREXP);
-                expr_node_free(ctx, sel);
                 expr_node_free(ctx, selectors);
                 selectors = 0;
                 break;
             }
-            if (selectors == 0) {
-                selectors = sellast = sel;
-            } else {
-                expr_selector_next_set(sellast, sel);
-                sellast = sel;
+
+            // If this line has ALWAYS, any other selection criteria
+            // can be discarded
+            if (is_always) {
+                if (lo != 0) expr_node_free(ctx, lo);
+                if (hi != 0) expr_node_free(ctx, hi);
+                lo = hi = 0;
+                is_otherwise = 0;
+            }
+            if (lo != 0) {
+                sel = expr_node_alloc(ctx, EXPTYPE_SELECTOR, parser_curpos(pctx));
+                expr_selector_lohi_set(sel, lo, hi);
+                if (selectors == 0) {
+                    selectors = sellast = sel;
+                } else {
+                    expr_selector_next_set(sellast, sel);
+                    sellast = sel;
+                }
             }
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RBRACK, 0, 1)) {
                 break;
@@ -407,14 +425,23 @@ parse_select (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
         if (!expr_parse_expr(ctx, &exp)) {
             expr_signal(ctx, STC__EXPREXP);
         }
-        if (selectors == 0) {
+        if (selectors == 0 && !is_always && !is_otherwise) {
             expr_node_free(ctx, exp);
         } else {
-            expr_selector_action_set(selectors, exp);
+            if (is_always) {
+                always = exp;
+            } else {
+                if (is_otherwise) {
+                    otherwise = exp;
+                }
+                if (selectors != 0) {
+                    expr_selector_action_set(selectors, exp);
+                    exprseq_instail(&selseq, selectors);
+                }
+            }
             if (!expr_has_value(exp)) {
                 every_selector_has_value = 0;
             }
-            exprseq_instail(&selseq, selectors);
         }
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_TES, 0, 1)) {
             break;
@@ -424,28 +451,26 @@ parse_select (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
         }
     } /* outer loop */
 
-    // Spec says that if nothing matches, the value of the
-    // expression should be set to -1, so fill in a default
-    // OTHERWISE here to do that, if we haven't seen an OTHERWISE
-    // or ALWAYS.
-    if (need_default_otherwise) {
-        sel = expr_node_alloc(ctx, EXPTYPE_SELECTOR, parser_curpos(pctx));
-        expr_selector_otherwise_set(sel, 1);
-        exp = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
-        expr_litval_set(exp, -1);
-        expr_selector_action_set(sel, exp);
-        exprseq_instail(&selseq, sel);
-    }
-
-    if (exprseq_length(&selseq) == 0) {
+    if (exprseq_length(&selseq) == 0 && always == 0 && otherwise == 0) {
         expr_signal(ctx, STC__SELNOSEL);
         expr_node_free(ctx, si);
         return 0;
     }
 
+    // Spec says that if nothing matches, the value of the
+    // expression should be set to -1, so fill in a default
+    // OTHERWISE here to do that, if we haven't seen an OTHERWISE
+    // or ALWAYS. XXX Could leave this to the code generation phase
+    if (otherwise == 0 && always == 0) {
+        otherwise = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
+        expr_litval_set(otherwise, -1);
+    }
+
     exp = expr_node_alloc(ctx, EXPTYPE_CTRL_SELECT, parser_curpos(pctx));
     expr_sel_index_set(exp, si);
     expr_sel_oneonly_set(exp, is_selectone);
+    expr_sel_alwaysaction_set(exp, always);
+    expr_sel_otherwiseaction_set(exp, otherwise);
     switch (curlt) {
         case LEXTYPE_CTRL_SELECT:
         case LEXTYPE_CTRL_SELECTONE:

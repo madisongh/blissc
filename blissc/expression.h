@@ -147,11 +147,11 @@ struct expr_selector_s {
     struct expr_node_s  *high;
     struct expr_node_s  *nextsel;
     struct expr_node_s  *action;
-    int is_otherwise;
-    int is_always;
 };
 struct expr_sel_s {
     struct expr_node_s  *selindex;
+    struct expr_node_s  *alwaysaction;
+    struct expr_node_s  *otherwiseaction;
     optype_t            cmptype;
     int                 selectone;
     exprseq_t           sequence;
@@ -433,6 +433,14 @@ siu void expr_sel_oneonly_set(expr_node_t *node, int val) {
     node->data.seldata.selectone = val; }
 siu exprseq_t *expr_sel_selectors(expr_node_t *node) {
 	return &node->data.seldata.sequence; }
+siu expr_node_t *expr_sel_alwaysaction(expr_node_t *node) {
+    return node->data.seldata.alwaysaction; }
+siu void expr_sel_alwaysaction_set(expr_node_t *node, expr_node_t *exp) {
+    node->data.seldata.alwaysaction = exp; }
+siu expr_node_t *expr_sel_otherwiseaction(expr_node_t *node) {
+    return node->data.seldata.otherwiseaction; }
+siu void expr_sel_otherwiseaction_set(expr_node_t *node, expr_node_t *exp) {
+    node->data.seldata.otherwiseaction = exp; }
 // selectors
 siu expr_node_t *expr_selector_low(expr_node_t *node) { return node->data.slctrdata.low; }
 siu expr_node_t *expr_selector_high(expr_node_t *node) {
@@ -444,14 +452,6 @@ siu expr_node_t *expr_selector_action(expr_node_t *node) {
     return node->data.slctrdata.action; }
 siu void expr_selector_action_set(expr_node_t *node, expr_node_t *act) {
     node->data.slctrdata.action = act; }
-siu int expr_selector_otherwise(expr_node_t *node) {
-    return node->data.slctrdata.is_otherwise; }
-siu void expr_selector_otherwise_set(expr_node_t *node, int val) {
-    node->data.slctrdata.is_otherwise = val; }
-siu int expr_selector_always(expr_node_t *node) {
-    return node->data.slctrdata.is_always; }
-siu void expr_selector_always_set(expr_node_t *node, int val) {
-    node->data.slctrdata.is_always = val; }
 siu expr_node_t *expr_selector_next(expr_node_t *node) {
     return node->data.slctrdata.nextsel; }
 siu void expr_selector_next_set(expr_node_t *node, expr_node_t *sel) {
