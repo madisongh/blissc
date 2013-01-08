@@ -9,6 +9,11 @@ MACRO
     DSC$B_DTYPE     = 0,16,8,0%,
     DSC$B_CLASS     = 0,24,8,0%,
     DSC$A_POINTER   = 4,0,32,0%;
+    
+OWN
+    testown : INITIAL (29),
+    ch      : VECTOR [4,BYTE] INITIAL(%CHAR(%X'7F'),%CHAR(%X'EE'),
+                                      %CHAR(%X'0A'), %CHAR(%x'0D'));
 
 ROUTINE testrtn (p1) =
 BEGIN
@@ -35,7 +40,7 @@ BEGIN
         buf : VECTOR [32,BYTE],
         hello;
 
-    hello = 0;
+    hello = PLIT(REP 37 OF (%STRING('abcde')));
     farfel = hello;
     DECRU i FROM 77 BY 2 DO
     BEGIN
