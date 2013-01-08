@@ -2018,7 +2018,7 @@ expr_initval_add (expr_ctx_t ctx, initval_t *ivlist, expr_node_t *exp,
             expr_node_free(ctx, exp);
             return initval_scalar_add(ctx->symctx, ivlist, 1, val, width, 0);
         default:
-            return initval_expr_add(ctx->symctx, ivlist, 1, 1, exp, width, 0);
+            return initval_expr_add(ctx->symctx, ivlist, 1, exp, width, 0);
             break;
     }
 

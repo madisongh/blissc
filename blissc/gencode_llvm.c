@@ -110,6 +110,7 @@ static exprgen_fn exprgen_dispatch[] = {
 
 struct gencodectx_s {
     expr_ctx_t          ectx;
+    symctx_t            symctx;
     machinedef_t        *mach;
     name_t              *modnp;
     unsigned int        tmpidx;
@@ -173,9 +174,9 @@ gendatatype (gencodectx_t gctx, data_attr_t *attr, gen_datasym_t *gd)
         gd->reftype = gctx->fullword_type;
         if ((attr->flags & (SYM_M_REF|SYM_M_BIND)) == (SYM_M_REF|SYM_M_BIND)) {
             gd->type = GDT_PTR2PTR;
-            gd->gentype = LLVMPointerType(LLVMPointerType(gctx->fullword_type, 0), 0);
+            gd->gentype = LLVMPointerType(LLVMPointerType(gctx->unit_types[0], 0), 0);
         } else {
-            gd->gentype = LLVMPointerType(gctx->fullword_type, 0);
+            gd->gentype = LLVMPointerType(gctx->unit_types[0], 0);
             gd->type = GDT_PTR;
         }
     } else {
@@ -189,10 +190,15 @@ gendatatype (gencodectx_t gctx, data_attr_t *attr, gen_datasym_t *gd)
             gd->gentype = LLVMArrayType(gctx->unit_types[0], attr->units);
             gd->reftype = gctx->fullword_type;
         } else {
-            // Non-structure, must be a scalar
-            assert(attr->units > 0 && attr->units <= machine_scalar_units(gctx->mach));
-            gd->gentype = gctx->unit_types[attr->units-1];
-            gd->reftype = gd->gentype;
+            // Non-structure, must be a scalar or PLIT
+            if (attr->units > machine_scalar_units(gctx->mach)) {
+                gd->gentype = LLVMArrayType(gctx->unit_types[0], attr->units);
+                gd->reftype = gctx->fullword_type;
+            } else {
+                assert(attr->units > 0);
+                gd->gentype = gctx->unit_types[attr->units-1];
+                gd->reftype = gd->gentype;
+            }
         }
     }
     assert(gd->gentype != 0);
@@ -396,7 +402,8 @@ gencode_expr_PRIM_STRUREF (gencodectx_t gctx, expr_node_t *node)
     val = expr_genref(expr_struref_accexpr(node));
     if (LLVMGetTypeKind(LLVMTypeOf(val)) != LLVMPointerTypeKind) {
         val = LLVMBuildIntToPtr(gctx->builder, val,
-                                gctx->fullword_pointer, gentempname(gctx));
+                                LLVMPointerType(gctx->unit_types[0], 0),
+                                gentempname(gctx));
     }
     expr_genref_set(node, val);
     
@@ -1298,6 +1305,87 @@ litsym_generator (void *vctx, name_t *np, void *p)
 
 } /* litsym_generator */
 
+static unsigned long
+gen_initializer_const (gencodectx_t gctx, initval_t *iv, char **buf,
+                       unsigned long segsize)
+{
+    char *cp, *itmbuf;
+    int i, mustfree;
+    unsigned long len;
+
+    if (*buf == 0) {
+        unsigned long initsize = initval_size(gctx->symctx, iv);
+        if (initsize < segsize) initsize = segsize;
+        *buf = malloc(initsize);
+        memset(*buf, 0, initsize);
+    }
+
+    cp = *buf;
+
+    while (iv != 0) {
+        mustfree = 0;
+        itmbuf = 0;
+        switch (iv->type) {
+            case IVTYPE_LIST:
+                len = gen_initializer_const(gctx, iv->data.listptr, &itmbuf, 0);
+                mustfree = 1;
+                break;
+            case IVTYPE_STRING:
+                itmbuf = iv->data.string->ptr;
+                len = iv->data.string->len;
+                break;
+            case IVTYPE_SCALAR: {
+                int i;
+                unsigned long val = iv->data.scalar.value;
+                len = iv->data.scalar.width;
+                itmbuf = malloc(len);
+                memset(itmbuf, 0, len);
+                for (i = 0; i < len; i++) { itmbuf[i] = val & 0xff; val = val >> 8; }
+                mustfree = 1;
+                break;
+            }
+            case IVTYPE_EXPR_EXP:
+                // not allowed
+                return 0;
+        }
+        for (i = 0; i < iv->repcount; i++, cp += len) {
+            memcpy(cp, itmbuf, len);
+        }
+        if (mustfree) free(itmbuf);
+        iv = iv->next;
+    }
+
+    return (cp-*buf);
+
+}
+
+static LLVMValueRef
+gen_initialized_datasym (gencodectx_t gctx, name_t *np, gen_datasym_t *gd,
+                         data_attr_t *attr)
+{
+    LLVMValueRef dval, cval;
+    LLVMTypeRef dtype;
+    char *ivbuf = 0;
+    unsigned long ivlen;
+    int i;
+
+    ivlen = gen_initializer_const(gctx, attr->ivlist, &ivbuf, attr->units);
+    if (ivlen > machine_scalar_units(gctx->mach) || attr->struc != 0) {
+        cval = LLVMConstStringInContext(gctx->llvmctx, ivbuf, attr->units, 1);
+        dtype = LLVMArrayType(gctx->unit_types[0], attr->units);
+        assert(dtype == gd->gentype);
+    } else {
+        unsigned long val = 0;
+        for (i = (int)ivlen-1; i >= 0; i--) {
+            val = (val << 8) | ivbuf[i];
+        }
+        dtype = gd->gentype;
+        cval = LLVMConstInt(dtype, val, gd->signext);
+    }
+    dval = LLVMAddGlobal(gctx->module, dtype, name_azstring(np));
+    LLVMSetInitializer(dval, cval);
+    return dval;
+}
 
 /*
  * datasym_generator
@@ -1323,7 +1411,11 @@ datasym_generator (void *vctx, name_t *np, void *p)
             HelperSetAllocaAlignment(gd->value, 1<<attr->alignment);
         }
     } else if (attr->dclass == DCLASS_STATIC) {
-        gd->value = LLVMAddGlobal(gctx->module, gd->gentype, namestr);
+        if (attr->ivlist != 0) {
+            gd->value = gen_initialized_datasym(gctx, np, gd, attr);
+        } else {
+            gd->value = LLVMAddGlobal(gctx->module, gd->gentype, namestr);
+        }
         if (attr->owner != 0) {
             LLVMSetSection(gd->value, name_azstring(attr->owner));
         }
@@ -1477,6 +1569,7 @@ gencode_init (void *ectx, logctx_t logctx, machinedef_t *mach, symctx_t symctx)
     memset(gctx, 0, sizeof(struct gencodectx_s));
     gctx->ectx = ectx;
     gctx->mach = mach;
+    gctx->symctx = symctx;
     gctx->llvmctx = LLVMContextCreate();
     if (gctx->llvmctx == 0) {
         log_signal(logctx, 0, STC__INTCMPERR, "gencode_init");

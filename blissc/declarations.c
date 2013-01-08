@@ -97,7 +97,8 @@ static namedef_t decl_names[] = {
     NAMEDEF("CONCATENATE", LEXTYPE_KWD_CONCATENATE, 0),
     NAMEDEF("REF", LEXTYPE_KWD_REF, 0),
     NAMEDEF("NOVALUE", LEXTYPE_ATTR_NOVALUE, NAME_M_RESERVED),
-    NAMEDEF("%ASSIGN", LEXTYPE_LXF_ASSIGN, NAME_M_RESERVED)
+    NAMEDEF("%ASSIGN", LEXTYPE_LXF_ASSIGN, NAME_M_RESERVED),
+    NAMEDEF("REP", LEXTYPE_KWD_REP, NAME_M_RESERVED)
 };
 
 static int parse_ASSIGN(parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t lt);
@@ -615,15 +616,14 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
         unsigned long size;
         unsigned int padding;
         size = initval_size(symctx, ivlist);
-        padding = size % machine_scalar_units(mach);
+        padding = machine_scalar_units(mach) - (size % machine_scalar_units(mach));
         // Must pad out to integral number of fullwords
         if (padding != 0) {
-            ivlist = initval_scalar_add(symctx, ivlist, padding, 0,
-                                        machine_unit_bits(mach), 0);
+            ivlist = initval_scalar_add(symctx, ivlist, padding, 0, 1, 0);
         }
         size = initval_size(symctx, ivlist) / machine_scalar_units(mach);
         ivlist = initval_scalar_prepend(symctx, ivlist, 1, size,
-                                        machine_scalar_bits(mach), 0);
+                                        machine_scalar_units(mach), 0);
     }
 
     np = 0;
@@ -634,6 +634,7 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
     attr.flags = 0;
     attr.dclass = DCLASS_STATIC;
     attr.ivlist = ivlist;
+    attr.units = (unsigned int) (initval_size(symctx, ivlist) / machine_scalar_units(mach));
     np = datasym_declare(parser_scope_get(pctx), &plitname,
                          SYMSCOPE_LOCAL, &attr, pos);
     if (np == 0) {
@@ -829,7 +830,7 @@ attr_preset (expr_ctx_t ctx, name_t *np, data_attr_t *attr)
             if (attr->dclass == DCLASS_STATIC && !expr_is_ltce(exp)) {
                 expr_signal(ctx, STC__LTCEREQD);
             }
-            ivlist = preset_expr_add(symctx, ivlist, pexp, 1, exp);
+            ivlist = preset_expr_add(symctx, ivlist, pexp, exp);
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
             break;
@@ -1428,7 +1429,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
             }
             if (is_bind) {
                 symctx_t symctx = expr_symctx(ctx);
-                attr.ivlist = initval_expr_add(symctx, 0, 1, 1, exp, 32, 0);
+                attr.ivlist = initval_expr_add(symctx, 0, 1, exp, 32, 0);
                 attr.flags &= ~SYM_M_PENDING;
                 rtnsym_attr_update(np, &attr);
             } else {

@@ -80,6 +80,28 @@ struct routine_attr_s {
 };
 typedef struct routine_attr_s routine_attr_t;
 
+// Initval structure - for handling compile-time
+// initialization of PLITs and data segments (via INITIAL
+// and PRESET).
+struct initval_s {
+    struct initval_s *next;
+    struct initval_s *lastptr;
+    enum { IVTYPE_SCALAR, IVTYPE_EXPR_EXP,
+           IVTYPE_STRING, IVTYPE_LIST } type;
+    unsigned int repcount;
+    void *preset_expr;
+    union {
+        struct {
+            void           *expr;
+            long            value;
+            unsigned int    width;
+            int             signext;
+        } scalar;
+        strdesc_t           *string;
+        struct initval_s    *listptr;
+    } data;
+};
+
 typedef unsigned int (*sym_gensize_fn)(void *ctx, lextype_t lt);
 typedef int (*sym_geninit_fn)(void *ctx, name_t *np, void *p);
 typedef int (*sym_generator_fn)(void *ctx, name_t *np, void *p);
@@ -150,7 +172,7 @@ unsigned int psect_attr(name_t *np);
 initval_t *initval_scalar_add(symctx_t ctx, initval_t *head, unsigned int reps,
                               long val, unsigned int width, int signext);
 initval_t *initval_expr_add(symctx_t ctx, initval_t *head, unsigned int reps,
-                            int is_expr, void *exp, unsigned int width, int signext);
+                            void *exp, unsigned int width, int signext);
 initval_t *initval_scalar_prepend(symctx_t ctx, initval_t *head, unsigned int reps,
                                   long val, unsigned int width, int signext);
 initval_t *initval_string_add(symctx_t ctx, initval_t *head, unsigned int reps,
@@ -160,7 +182,6 @@ initval_t *initval_ivlist_add(symctx_t ctx, initval_t *head, unsigned int reps,
 void initval_freelist(symctx_t ctx, initval_t *iv);
 unsigned long initval_size(symctx_t ctx, initval_t *ivlist);
 initval_t *preset_scalar_add(symctx_t ctx, initval_t *head, void *pexp, long val);
-initval_t *preset_expr_add(symctx_t ctx, initval_t *head, void *pexp,
-                           int is_expr, void *exp);
+initval_t *preset_expr_add(symctx_t ctx, initval_t *head, void *pexp, void *exp);
 
 #endif /* symbols_h__ */

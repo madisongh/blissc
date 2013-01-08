@@ -129,28 +129,6 @@ static const lextype_t symtype[6] = {
 
 #define IV_ALLOCOUNT 128
 
-// Initval structure - for handling compile-time
-// initialization of PLITs and data segments (via INITIAL
-// and PRESET).
-struct initval_s {
-    struct initval_s *next;
-    struct initval_s *lastptr;
-    enum { IVTYPE_SCALAR, IVTYPE_EXPR_SEG, IVTYPE_EXPR_EXP,
-        IVTYPE_STRING, IVTYPE_LIST } type;
-    unsigned int repcount;
-    void *preset_expr;
-    union {
-        struct {
-            void           *expr;
-            long            value;
-            unsigned int    width;
-            int             signext;
-        } scalar;
-        strdesc_t           *string;
-        struct initval_s    *listptr;
-    } data;
-};
-
 /*
  * log2
  *
@@ -1535,7 +1513,6 @@ initval_freelist (symctx_t ctx, initval_t *iv)
             case IVTYPE_LIST:
                 initval_freelist(ctx, iv->data.listptr);
             case IVTYPE_SCALAR:
-            case IVTYPE_EXPR_SEG:
                 break;
         }
         iv->next = ctx->freeivs;
@@ -1612,14 +1589,14 @@ preset_scalar_add (symctx_t ctx, initval_t *listhead, void *pexp, long val)
  */
 initval_t *
 initval_expr_add (symctx_t ctx, initval_t *listhead, unsigned int reps,
-                  int is_expr, void *exp, unsigned int width, int signext)
+                  void *exp, unsigned int width, int signext)
 {
     initval_t *iv = initval_alloc(ctx);
 
     if (iv == 0) {
         return 0;
     }
-    iv->type = (is_expr ? IVTYPE_EXPR_EXP : IVTYPE_EXPR_SEG);
+    iv->type = IVTYPE_EXPR_EXP;
     iv->repcount = reps;
     iv->data.scalar.expr  = exp;
     iv->data.scalar.width = width;
@@ -1640,15 +1617,14 @@ initval_expr_add (symctx_t ctx, initval_t *listhead, unsigned int reps,
  * Adds an expression to an initval list used for PRESET.
  */
 initval_t *
-preset_expr_add (symctx_t ctx, initval_t *listhead, void *pexp,
-                 int is_expr, void *exp)
+preset_expr_add (symctx_t ctx, initval_t *listhead, void *pexp, void *exp)
 {
     initval_t *iv = initval_alloc(ctx);
 
     if (iv == 0) {
         return 0;
     }
-    iv->type = (is_expr ? IVTYPE_EXPR_EXP : IVTYPE_EXPR_SEG);
+    iv->type = IVTYPE_EXPR_EXP;
     iv->repcount = 0;
     iv->preset_expr = pexp;
     iv->data.scalar.expr  = exp;
@@ -1684,13 +1660,11 @@ initval_scalar_prepend (symctx_t ctx, initval_t *listhead, unsigned int reps,
     iv->data.scalar.value = val;
     iv->data.scalar.width = width;
     iv->data.scalar.signext = 0;
+    iv->next = listhead;
     if (listhead == 0) {
         iv->lastptr = iv;
-        return iv;
     }
-    listhead->lastptr->next = iv;
-    listhead->lastptr = iv;
-    return listhead;
+    return iv;
 
 } /* initval_scalar_prepend */
 
@@ -1762,14 +1736,13 @@ initval_size (symctx_t ctx, initval_t *ivlist)
     for (iv = ivlist; iv != 0; iv = iv->next) {
         switch (iv->type) {
             case IVTYPE_SCALAR:
-            case IVTYPE_EXPR_SEG:
             case IVTYPE_EXPR_EXP:
                 totsize += iv->repcount * iv->data.scalar.width;
                 break;
             case IVTYPE_STRING:
-                totsize += iv->repcount *
-                ((iv->data.string->len + machine_unit_maxbytes(ctx->mach)-1) /
-                 machine_unit_maxbytes(ctx->mach));
+                totsize += ((iv->repcount * iv->data.string->len +
+                            machine_unit_maxbytes(ctx->mach))-1) /
+                            machine_unit_maxbytes(ctx->mach);
                 break;
             case IVTYPE_LIST:
                 totsize += iv->repcount * initval_size(ctx, iv->data.listptr);

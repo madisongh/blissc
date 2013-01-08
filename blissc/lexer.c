@@ -433,7 +433,9 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek, textpos_t *posp)
             type = scan_getnext(chain->strm, sflags, &tok,
                                 &chain->curline, &column);
             if (!scan_ok(type)) {
-                log_signal(ctx->logctx, 0, STC__INTCMPERR, "lexer___next");
+                textpos_t pos = textpos_create(chain->filename_index,
+                                               chain->curline, column);
+                log_signal(ctx->logctx, pos, STC__INVTOKEN);
                 lex = &errlex;
                 string_free(ctx->strctx, tok);
                 break;
