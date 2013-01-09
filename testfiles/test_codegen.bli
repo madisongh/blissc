@@ -36,8 +36,11 @@ OWN farfel;
 GLOBAL ROUTINE testme : NOVALUE =
 BEGIN
     LOCAL
-        dsc : BLOCK [DSC$K_S_BLN,BYTE],
-        buf : VECTOR [32,BYTE],
+        dsc : BLOCK [DSC$K_S_BLN,BYTE]
+                PRESET ([DSC$B_DTYPE] = 14,
+                        [DSC$B_CLASS] = 2,
+                        [DSC$W_LENGTH] = 32),
+        buf : VECTOR [32,BYTE] INITIAL (1,2,3,4),
         hello;
 
     hello = PLIT(REP 37 OF (%STRING('abcde')));

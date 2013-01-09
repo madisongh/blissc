@@ -423,8 +423,14 @@
 			buildSettings = {
 				CLANG_CXX_LANGUAGE_STANDARD = "compiler-default";
 				CLANG_CXX_LIBRARY = "compiler-default";
-				HEADER_SEARCH_PATHS = "/opt/local/libexec/llvm-3.2/include";
-				LIBRARY_SEARCH_PATHS = "/opt/local/libexec/llvm-3.2/lib";
+				HEADER_SEARCH_PATHS = (
+					/Volumes/Extra/llvm/install/include,
+					"/opt/local/libexec/llvm-3.2/include",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					/Volumes/Extra/llvm/install/lib,
+					"/opt/local/libexec/llvm-3.2/lib",
+				);
 				OTHER_CFLAGS = (
 					"-D__STDC_CONSTANT_MACROS",
 					"-D__STDC_FORMAT_MACROS",
@@ -469,8 +475,14 @@
 			buildSettings = {
 				CLANG_CXX_LANGUAGE_STANDARD = "compiler-default";
 				CLANG_CXX_LIBRARY = "compiler-default";
-				HEADER_SEARCH_PATHS = "/opt/local/libexec/llvm-3.2/include";
-				LIBRARY_SEARCH_PATHS = "/opt/local/libexec/llvm-3.2/lib";
+				HEADER_SEARCH_PATHS = (
+					/Volumes/Extra/llvm/install/include,
+					"/opt/local/libexec/llvm-3.2/include",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					/Volumes/Extra/llvm/install/lib,
+					"/opt/local/libexec/llvm-3.2/lib",
+				);
 				OTHER_CFLAGS = (
 					"-D__STDC_CONSTANT_MACROS",
 					"-D__STDC_FORMAT_MACROS",
