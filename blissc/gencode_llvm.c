@@ -132,6 +132,7 @@ struct gencodectx_s {
     LLVMBasicBlockRef   curloopexit;
     LLVMBuilderRef      builder;
     LLVMPassManagerRef  passmgr;
+    LLVMValueRef        memcpyfn;
     char                tmpnambuf[NAME_SIZE];
 };
 
@@ -1305,28 +1306,62 @@ litsym_generator (void *vctx, name_t *np, void *p)
 
 } /* litsym_generator */
 
+static char *
+calculate_pointer (expr_node_t *pexp, char *base, unsigned int *lenp, int *signextp)
+{
+    char *ptr;
+
+    if (expr_type(pexp) == EXPTYPE_PRIM_STRUREF) {
+        pexp = expr_struref_accexpr(pexp);
+    }
+    if (expr_type(pexp) == EXPTYPE_PRIM_FLDREF) {
+        expr_node_t *p = expr_fldref_pos(pexp), *s = expr_fldref_size(pexp);
+        ptr = calculate_pointer(expr_fldref_addr(pexp), base, 0, 0);
+        if (p != 0) {
+            assert(expr_type(p) == EXPTYPE_PRIM_LIT);
+            ptr += expr_litval(p);
+        }
+        assert(s != 0 && expr_type(s) == EXPTYPE_PRIM_LIT);
+        if (lenp != 0) *lenp = (unsigned int)(expr_litval(s));
+        if (signextp != 0) *signextp = expr_fldref_signext(pexp);
+        return ptr;
+    }
+    assert(expr_type(pexp) == EXPTYPE_PRIM_SEG);
+    if (lenp != 0) *lenp = expr_seg_units(pexp);
+    if (signextp != 0) *signextp = expr_seg_signext(pexp);
+    return base + expr_seg_offset(pexp);
+}
+
 static unsigned long
 gen_initializer_const (gencodectx_t gctx, initval_t *iv, char **buf,
                        unsigned long segsize)
 {
     char *cp, *itmbuf;
-    int i, mustfree;
-    unsigned long len;
+    int i, mustfree, is_preset;
+    unsigned long len, allosize = 0;
+
+    is_preset = iv->preset_expr != 0;
 
     if (*buf == 0) {
-        unsigned long initsize = initval_size(gctx->symctx, iv);
-        if (initsize < segsize) initsize = segsize;
-        *buf = malloc(initsize);
-        memset(*buf, 0, initsize);
+        allosize = (is_preset ? segsize : initval_size(gctx->symctx, iv));
+        if (allosize < segsize) allosize = segsize;
+        *buf = malloc(allosize);
+        memset(*buf, 0, allosize);
     }
 
-    cp = *buf;
+    cp = (is_preset ? 0 : *buf);
 
     while (iv != 0) {
+        unsigned int targlen;
         mustfree = 0;
+        if (is_preset) {
+            assert(iv->repcount == 1);
+            cp = calculate_pointer(iv->preset_expr, *buf, &targlen, 0);
+        }
         itmbuf = 0;
         switch (iv->type) {
             case IVTYPE_LIST:
+                assert(!is_preset);
                 len = gen_initializer_const(gctx, iv->data.listptr, &itmbuf, 0);
                 mustfree = 1;
                 break;
@@ -1340,7 +1375,10 @@ gen_initializer_const (gencodectx_t gctx, initval_t *iv, char **buf,
                 len = iv->data.scalar.width;
                 itmbuf = malloc(len);
                 memset(itmbuf, 0, len);
-                for (i = 0; i < len; i++) { itmbuf[i] = val & 0xff; val = val >> 8; }
+                for (i = 0; i < len && val != 0; i++) {
+                    itmbuf[i] = val & 0xff;
+                    val = val >> 8;
+                }
                 mustfree = 1;
                 break;
             }
@@ -1348,6 +1386,7 @@ gen_initializer_const (gencodectx_t gctx, initval_t *iv, char **buf,
                 // not allowed
                 return 0;
         }
+        if (is_preset && len > targlen) len = targlen;
         for (i = 0; i < iv->repcount; i++, cp += len) {
             memcpy(cp, itmbuf, len);
         }
@@ -1355,9 +1394,79 @@ gen_initializer_const (gencodectx_t gctx, initval_t *iv, char **buf,
         iv = iv->next;
     }
 
-    return (cp-*buf);
+    return (is_preset ? allosize : cp-*buf);
 
 }
+
+static LLVMValueRef
+gen_initializer_llvmconst (gencodectx_t gctx, initval_t *iv,
+                           unsigned int padcount, LLVMTypeRef *ctype)
+{
+    LLVMValueRef v, c, *varr;
+    LLVMTypeRef  t = 0;
+    initval_t *p;
+    unsigned int count, i;
+
+    for (p = iv, count = 0; p != 0; p = p->next, count++);
+    if (padcount > 0) count += 1;
+    varr = malloc(count * sizeof(LLVMValueRef));
+    memset(varr, 0, count * sizeof(LLVMValueRef));
+
+    for (i = 0; iv != 0; iv = iv->next, i++) {
+        switch (iv->type) {
+            case IVTYPE_LIST:
+                varr[i] = gen_initializer_llvmconst(gctx, iv->data.listptr, 0, &t);
+                break;
+            case IVTYPE_STRING:
+                varr[i] = LLVMConstStringInContext(gctx->llvmctx, iv->data.string->ptr,
+                                                   iv->data.string->len, 1);
+                t = LLVMTypeOf(varr[i]);
+                break;
+            case IVTYPE_SCALAR:
+                t = LLVMIntTypeInContext(gctx->llvmctx, iv->data.scalar.width);
+                varr[i] = LLVMConstInt(t, iv->data.scalar.value, iv->data.scalar.signext);
+                break;
+            case IVTYPE_EXPR_EXP:
+                exprgen_gen(gctx, iv->data.scalar.expr);
+                varr[i] = expr_genref(iv->data.scalar.expr);
+                break;
+        }
+
+        if (iv->repcount > 1) {
+            LLVMValueRef *subarray = malloc(iv->repcount*sizeof(LLVMValueRef));
+            int j;
+            memset(subarray, 0, iv->repcount*sizeof(LLVMValueRef));
+            for (j = 0; j < iv->repcount; j++) subarray[j] = varr[i];
+            varr[i] = LLVMConstArray(t, subarray, iv->repcount);
+        }
+    }
+
+    if (padcount > 0) {
+        if (padcount <= machine_scalar_units(gctx->mach)) {
+            varr[count-1] = LLVMConstNull(gctx->unit_types[padcount-1]);
+        } else {
+            varr[count-1] = LLVMConstNull(LLVMArrayType(LLVMInt8Type(), padcount));
+        }
+    }
+
+    if (count == 1) {
+        v = LLVMAddGlobal(gctx->module, LLVMTypeOf(varr[0]), genglobname(gctx));
+        LLVMSetLinkage(v, LLVMPrivateLinkage);
+        LLVMSetInitializer(v, varr[0]);
+        *ctype = LLVMTypeOf(v);
+        free(varr);
+        return v;
+    }
+
+    c = LLVMConstStructInContext(gctx->llvmctx, varr, count, 1);
+    v = LLVMAddGlobal(gctx->module, LLVMTypeOf(c), genglobname(gctx));
+    LLVMSetLinkage(v, LLVMPrivateLinkage);
+    LLVMSetInitializer(v, c);
+    *ctype = LLVMTypeOf(v);
+    return v;
+
+}
+
 
 static LLVMValueRef
 gen_initialized_datasym (gencodectx_t gctx, name_t *np, gen_datasym_t *gd,
@@ -1382,11 +1491,79 @@ gen_initialized_datasym (gencodectx_t gctx, name_t *np, gen_datasym_t *gd,
         dtype = gd->gentype;
         cval = LLVMConstInt(dtype, val, gd->signext);
     }
+    free(ivbuf);
     dval = LLVMAddGlobal(gctx->module, dtype, name_azstring(np));
     LLVMSetInitializer(dval, cval);
     return dval;
 }
 
+static void
+gen_initial_assignments (gencodectx_t gctx, name_t *np, gen_datasym_t *gd,
+                         data_attr_t *attr)
+{
+    LLVMValueRef cval, v, args[5];
+    LLVMTypeRef ctype, byteptr;
+
+    byteptr = LLVMPointerType(LLVMInt8Type(), 0);
+    if (attr->ivlist->preset_expr == 0) {
+        unsigned int nunits, padcount;
+        nunits = (unsigned int)initval_size(gctx->symctx, attr->ivlist);
+        if (nunits > attr->units) {
+            padcount = 0;
+        } else {
+            padcount = attr->units - nunits;
+        }
+        cval = gen_initializer_llvmconst(gctx, attr->ivlist, padcount, &ctype);
+        if (ctype != byteptr) {
+            cval = LLVMBuildPointerCast(gctx->builder, cval, byteptr, gentempname(gctx));
+        }
+        if (gd->genptrtype != byteptr) {
+            v = LLVMBuildPointerCast(gctx->builder, gd->value, byteptr,
+                                     gentempname(gctx));
+        } else {
+            v = gd->value;
+        }
+        args[0] = v;
+        args[1] = cval;
+        args[2] = LLVMConstInt(LLVMInt32Type(), attr->units, 0);
+        args[3] = LLVMConstInt(LLVMInt32Type(), 0, 0);
+        args[4] = LLVMConstInt(LLVMInt1Type(), (attr->flags & SYM_M_VOLATILE) != 0, 0);
+        LLVMBuildCall(gctx->builder, gctx->memcpyfn, args, 5, "");
+    } else {
+        expr_ctx_t ctx = gctx->ectx;
+        textpos_t pos = parser_curpos(expr_parse_ctx(ctx));
+        expr_node_t *exp;
+        initval_t *iv;
+
+        ctype = LLVMArrayType(LLVMInt8Type(), attr->units);
+        cval = LLVMAddGlobal(gctx->module, ctype, genglobname(gctx));
+        LLVMSetLinkage(cval, LLVMPrivateLinkage);
+        LLVMSetInitializer(cval, LLVMConstNull(ctype));
+        cval = LLVMBuildPointerCast(gctx->builder, cval, byteptr, gentempname(gctx));
+        if (gd->genptrtype != byteptr) {
+            v = LLVMBuildPointerCast(gctx->builder, gd->value, byteptr, gentempname(gctx));
+        } else {
+            v = gd->value;
+        }
+        args[0] = v;
+        args[1] = cval;
+        args[2] = LLVMConstInt(LLVMInt32Type(), attr->units, 0);
+        args[3] = LLVMConstInt(LLVMInt32Type(), 0, 0);
+        args[4] = LLVMConstInt(LLVMInt1Type(), (attr->flags & SYM_M_VOLATILE) != 0, 0);
+        LLVMBuildCall(gctx->builder, gctx->memcpyfn, args, 5, "");
+
+        exp = expr_node_alloc(ctx, EXPTYPE_OPERATOR, pos);
+        for (iv = attr->ivlist; iv != 0; iv = iv->next) {
+            expr_op_lhs_set(exp, iv->preset_expr);
+            expr_op_rhs_set(exp, iv->data.scalar.expr);
+            expr_op_type_set(exp, OPER_ASSIGN);
+            exprgen_gen(gctx, exp);
+        }
+        expr_op_lhs_set(exp, 0);
+        expr_op_rhs_set(exp, 0);
+        expr_node_free(ctx, exp);
+    }
+}
 /*
  * datasym_generator
  */
@@ -1409,6 +1586,9 @@ datasym_generator (void *vctx, name_t *np, void *p)
         gd->value = LLVMBuildAlloca(gctx->builder, gd->gentype, namestr);
         if (attr->alignment != 0) {
             HelperSetAllocaAlignment(gd->value, 1<<attr->alignment);
+        }
+        if (attr->ivlist != 0) {
+            gen_initial_assignments(gctx, np, gd, attr);
         }
     } else if (attr->dclass == DCLASS_STATIC) {
         if (attr->ivlist != 0) {
@@ -1520,11 +1700,19 @@ int
 gencode_module_begin (gencodectx_t gctx, name_t *modnp)
 {
     gen_module_t *gm = sym_genspace(modnp);
+    LLVMTypeRef memcpytype;
+    LLVMTypeRef memcpyargs[5];
 
     gctx->modnp = modnp;
     gctx->module = gm->module = LLVMModuleCreateWithNameInContext(name_azstring(modnp),
                                                                   gctx->llvmctx);
     gctx->passmgr = LLVMCreateFunctionPassManagerForModule(gctx->module);
+    memcpyargs[0] = memcpyargs[1] = LLVMPointerType(LLVMInt8Type(), 0);
+    memcpyargs[2] = memcpyargs[3] = LLVMInt32Type();
+    memcpyargs[4] = LLVMInt1Type();
+    memcpytype = LLVMFunctionType(LLVMVoidType(), memcpyargs, 5, 0);
+    gctx->memcpyfn = LLVMAddFunction(gctx->module, "llvm.memcpy.p0i8.p0i8.i32",
+                                     memcpytype);
 
     LLVMAddBasicAliasAnalysisPass(gctx->passmgr);
     LLVMAddInstructionCombiningPass(gctx->passmgr);

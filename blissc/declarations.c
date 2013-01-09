@@ -518,7 +518,7 @@ attr_allocunit (expr_ctx_t ctx, int *valp)
  * attribute on a data declaration.
  */
 static initval_t *
-plit_items (expr_ctx_t ctx, int defau) {
+plit_items (expr_ctx_t ctx, int defau, int is_static) {
 
     symctx_t symctx = expr_symctx(ctx);
     parse_ctx_t pctx = expr_parse_ctx(ctx);
@@ -526,6 +526,7 @@ plit_items (expr_ctx_t ctx, int defau) {
     initval_t *ivlist, *iv;
     int itemau = defau;
     lexeme_t *lex;
+    int ltces_ok = machine_linktime_constant_initializers(expr_machinedef(ctx));
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
         expr_signal(ctx, STC__DELIMEXP, "(");
@@ -548,12 +549,12 @@ plit_items (expr_ctx_t ctx, int defau) {
             if (attr_allocunit(ctx, &itemau) == 0) {
                 itemau = defau;
             }
-            iv = plit_items(ctx, itemau);
+            iv = plit_items(ctx, itemau, is_static);
             if (iv != 0) {
                 ivlist = initval_ivlist_add(symctx, ivlist, repcount, iv);
             }
         } else if (attr_allocunit(ctx, &itemau) != 0) {
-            iv = plit_items(ctx, itemau);
+            iv = plit_items(ctx, itemau, is_static);
             if (iv != 0) {
                 ivlist = initval_ivlist_add(symctx, ivlist, 1, iv);
             }
@@ -564,6 +565,17 @@ plit_items (expr_ctx_t ctx, int defau) {
                 ivlist = initval_string_add(symctx, ivlist, 1, lexeme_text(lex));
                 lexeme_free(lctx, lex);
             } else if (expr_parse_expr(ctx, &exp)) {
+                if (is_static) {
+                    if (ltces_ok && !expr_is_ltce(exp)) {
+                        expr_signal(ctx, STC__LTCEREQD);
+                        expr_node_free(ctx, exp);
+                        return 0;
+                    } else if (!ltces_ok && !expr_is_ctce(exp)) {
+                        expr_signal(ctx, STC__EXPCTCE);
+                        expr_node_free(ctx, exp);
+                        return 0;
+                    }
+                }
                 ivlist = expr_initval_add(ctx, ivlist, exp, itemau);
             } else {
                 expr_signal(ctx, STC__EXPREXP);
@@ -607,7 +619,7 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
     if (!attr_allocunit(ctx, &plitau)) {
         plitau = machine_scalar_units(mach);
     }
-    ivlist = plit_items(ctx, plitau);
+    ivlist = plit_items(ctx, plitau, 1);
     if (ivlist == 0) {
         return 0;
     }
@@ -717,14 +729,14 @@ attr_align (expr_ctx_t ctx, unsigned int *valp)
  * Handle the INITIAL attribute.
  */
 static int
-attr_initial (expr_ctx_t ctx, int defau, initval_t **ivlistp)
+attr_initial (expr_ctx_t ctx, int defau, int is_static, initval_t **ivlistp)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_ATTR_INITIAL, 0, 1)) {
         return 0;
     }
-    *ivlistp = plit_items(ctx, defau);
+    *ivlistp = plit_items(ctx, defau, is_static);
     return 1;
 
 } /* attr_initial */
@@ -791,6 +803,7 @@ attr_preset (expr_ctx_t ctx, name_t *np, data_attr_t *attr)
     lexeme_t *lex;
     initval_t *ivlist = 0;
     expr_node_t *pexp, *exp;
+    int ltces_ok = machine_linktime_constant_initializers(expr_machinedef(ctx));
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_ATTR_PRESET, 0, 1)) {
         return 0;
@@ -821,16 +834,28 @@ attr_preset (expr_ctx_t ctx, name_t *np, data_attr_t *attr)
         if (!expr_parse_expr(ctx, &exp)) {
             expr_signal(ctx, STC__EXPREXP);
         }
-        if (exp != 0 && expr_type(exp) == EXPTYPE_PRIM_LIT) {
-            ivlist = preset_scalar_add(symctx, ivlist, pexp, expr_litval(exp));
-            expr_node_free(ctx, exp);
-            exp = 0;
+//        if (exp != 0 && expr_type(exp) == EXPTYPE_PRIM_LIT) {
+//            ivlist = preset_scalar_add(symctx, ivlist, pexp, expr_litval(exp));
+//            expr_node_free(ctx, exp);
+//            exp = 0;
+//        }
+        if (exp != 0) {
+            if (attr->dclass == DCLASS_STATIC) {
+                if (ltces_ok && !expr_is_ltce(exp)) {
+                    expr_signal(ctx, STC__LTCEREQD);
+                    expr_node_free(ctx, exp);
+                    exp = 0;
+                } else if (!ltces_ok && !expr_is_ctce(exp)) {
+                    expr_signal(ctx, STC__EXPCTCE);
+                    expr_node_free(ctx, exp);
+                    exp = 0;
+                }
+            }
         }
         if (exp != 0) {
-            if (attr->dclass == DCLASS_STATIC && !expr_is_ltce(exp)) {
-                expr_signal(ctx, STC__LTCEREQD);
-            }
             ivlist = preset_expr_add(symctx, ivlist, pexp, exp);
+        } else {
+            expr_node_free(ctx, pexp);
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
             break;
@@ -946,7 +971,10 @@ handle_data_attrs (expr_ctx_t ctx, scopectx_t scope, decltype_t dt,
             if (saw_psect) { did1 = 1; }
         }
         if (!saw_init) {
-            if (attr_initial(ctx, attr->units, &attr->ivlist)) {
+            unsigned int defau = (attr->struc ? machine_scalar_units(mach)
+                                  : attr->units);
+            if (attr_initial(ctx, defau, (attr->dclass == DCLASS_STATIC),
+                             &attr->ivlist)) {
                 saw_init = 1;
                 saw_preset = -1;
                 did1 = 1;

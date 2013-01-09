@@ -21,6 +21,7 @@ struct machinedef_s {
     int             signext_supported;
     unsigned int    max_align; // maximum # of bits for ALIGN() attribute
     unsigned int    reg_count;
+    int             ltc_initializers;
 };
 
 typedef struct machinedef_s machinedef_t;
@@ -39,6 +40,8 @@ siu unsigned int machine_scalar_maxbytes(machinedef_t *mach) { return mach->bpva
 siu unsigned int machine_addr_maxbytes(machinedef_t *mach) { return mach->bpaddr/8; }
 siu unsigned int machine_register_count(machinedef_t *mach) { return mach->reg_count; }
 siu unsigned int machine_align_max(machinedef_t *mach) { return mach->max_align; }
+siu int machine_linktime_constant_initializers(machinedef_t *mach) {
+    return mach->ltc_initializers; }
 #undef siu
 
 #endif /* machinedef_h__ */
