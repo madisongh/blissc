@@ -458,13 +458,8 @@ parse_select (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
     }
 
     // Spec says that if nothing matches, the value of the
-    // expression should be set to -1, so fill in a default
-    // OTHERWISE here to do that, if we haven't seen an OTHERWISE
-    // or ALWAYS. XXX Could leave this to the code generation phase
-    if (otherwise == 0 && always == 0) {
-        otherwise = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
-        expr_litval_set(otherwise, -1);
-    }
+    // expression should be set to -1.  This needs to be
+    // done in the code generation phase.
 
     exp = expr_node_alloc(ctx, EXPTYPE_CTRL_SELECT, parser_curpos(pctx));
     expr_sel_index_set(exp, si);
@@ -631,7 +626,6 @@ parse_leave (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
     exp = expr_node_alloc(ctx, EXPTYPE_CTRL_EXIT, pos);
     expr_exit_label_set(exp, lp);
     expr_exit_value_set(exp, valexp);
-    expr_has_value_set(exp, (valexp != 0));
     return exp;
 
 } /* parse_leave */
@@ -704,7 +698,7 @@ parse_return (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
     exp = expr_node_alloc(ctx, EXPTYPE_CTRL_RET, pos);
     expr_exit_label_set(exp, lp);
     expr_exit_value_set(exp, valexp);
-    expr_has_value_set(exp, (valexp != 0));
+    expr_has_value_set(exp, 0);
     return exp;
 
 } /* parse_return */

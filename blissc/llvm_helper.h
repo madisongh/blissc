@@ -15,6 +15,7 @@ extern "C" {
 #endif
 
 void HelperSetAllocaAlignment(LLVMValueRef Inst, unsigned int Bytes);
+void HelperRemoveFunction(LLVMValueRef fn);
 
 #ifdef __cplusplus
 }

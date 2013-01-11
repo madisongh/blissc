@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include "gencode.h"
+#include "execfuncs.h"
 #include "expression.h"
 #include "symbols.h"
 #include "machinedef.h"
@@ -108,6 +109,7 @@ static exprgen_fn exprgen_dispatch[] = {
 
 // Module context
 
+#define BSTKSIZE 16
 struct gencodectx_s {
     expr_ctx_t          ectx;
     symctx_t            symctx;
@@ -133,6 +135,14 @@ struct gencodectx_s {
     LLVMBuilderRef      builder;
     LLVMPassManagerRef  passmgr;
     LLVMValueRef        memcpyfn;
+    struct {
+        LLVMBuilderRef  builder;
+        unsigned int    tmpidx;
+        unsigned int    lblidx;
+        LLVMValueRef    curfn, curfnphi;
+        LLVMBasicBlockRef curfnexit, curbldpos;
+    }                   stack[BSTKSIZE];
+    int                 bstkidx;
     char                tmpnambuf[NAME_SIZE];
 };
 
@@ -277,6 +287,13 @@ gencode_expr_PRIM_LIT (gencodectx_t gctx, expr_node_t *node)
     if (str == 0) {
         val = LLVMConstInt(gctx->fullword_type, expr_litval(node),
                            (machine_signext_supported(mach) ? 1 : 0));
+    } else if (str->len <= machine_scalar_units(mach)) {
+        unsigned long ival = 0;
+        int i;
+        for (i = (int)str->len; i >= 0; i--) {
+            ival = (ival << 8) | str->ptr[i];
+        }
+        val = LLVMConstInt(gctx->fullword_type, ival, 0);
     } else {
         val = LLVMConstStringInContext(gctx->llvmctx,
                                        str->ptr, str->len, 1);
@@ -302,7 +319,17 @@ gen_segment (gencodectx_t gctx, expr_node_t *node, int nogenasint)
                 expr_genref_set(node, val);
                 return val;
             }
-            if (nogenasint && offset == 0) return val;
+            if (nogenasint) {
+                if (offset == 0) return val;
+                if (gd->gentype == LLVMPointerType(gctx->unit_types[0], 0) ||
+                    (LLVMGetTypeKind(gd->gentype) == LLVMArrayTypeKind &&
+                     LLVMGetElementType(gd->gentype) == gctx->unit_types[0])) {
+                    LLVMValueRef idx;
+                    idx = LLVMConstInt(LLVMInt32TypeInContext(gctx->llvmctx), offset, 0);
+                    val = LLVMBuildInBoundsGEP(gctx->builder, val, &idx, 1, gentempname(gctx));
+                    return val;
+                }
+            }
             if (gd->valueasint == 0 || gctx->curfn != gd->fn_for_intval) {
                 gd->valueasint = LLVMBuildPtrToInt(gctx->builder, gd->value,
                                                    gctx->fullword_type,
@@ -367,6 +394,8 @@ gencode_expr_PRIM_RTNCALL (gencodectx_t gctx, expr_node_t *node)
         name_t *np = expr_seg_name(rtnexp);
         gen_rtnsym_t *gr = sym_genspace(np);
         rtnadr = gr->genfn;
+        type = gr->gentype;
+        rettype = gr->returntype;
     } else {
         exprgen_gen(gctx, rtnexp);
         rettype = gctx->fullword_type;
@@ -382,15 +411,33 @@ gencode_expr_PRIM_RTNCALL (gencodectx_t gctx, expr_node_t *node)
         argvals = 0;
     } else {
         int i;
+        unsigned int numformals = LLVMCountParamTypes(type);
         expr_node_t *arg;
+        LLVMTypeRef *ftypes;
         argvals = malloc(exprseq_length(args)*sizeof(LLVMValueRef));
+        ftypes = (numformals == 0 ? 0 : malloc(numformals*sizeof(LLVMTypeRef)));
+        if (numformals != 0) LLVMGetParamTypes(type, ftypes);
         for (i = 0, arg = exprseq_head(args); arg != 0; i++, arg = arg->tq_next) {
             exprgen_gen(gctx, arg);
             argvals[i] = expr_genref(arg);
+            if (i < numformals && LLVMTypeOf(argvals[i]) != ftypes[i]) {
+                if (LLVMGetTypeKind(LLVMTypeOf(argvals[i])) == LLVMPointerTypeKind) {
+                    argvals[i] = LLVMBuildPointerCast(gctx->builder, argvals[i],
+                                                      ftypes[i], gentempname(gctx));
+                } else if (LLVMGetTypeKind(ftypes[i]) == LLVMPointerTypeKind) {
+                    argvals[i] = LLVMBuildIntToPtr(gctx->builder, argvals[i],
+                                                   ftypes[i], gentempname(gctx));
+                } else {
+                    argvals[i] = LLVMBuildIntCast(gctx->builder, argvals[i],
+                                                  ftypes[i], gentempname(gctx));
+                }
+            }
         }
+        if (ftypes != 0) free(ftypes);
     }
     val = LLVMBuildCall(gctx->builder, rtnadr, argvals, exprseq_length(args),
-                        gentempname(gctx));
+                        (LLVMGetTypeKind(rettype) == LLVMVoidTypeKind
+                         ? "" : gentempname(gctx)));
     expr_genref_set(node, val);
     return 1;
 }
@@ -421,19 +468,26 @@ gencode_expr_PRIM_BLK (gencodectx_t gctx, expr_node_t *node)
     LLVMValueRef cbpsave = gctx->curblkphi, normalval;
     
     if (namereflist_length(labels) > 0) {
+        LLVMBasicBlockRef curblk, afterblk;
+        curblk = LLVMGetInsertBlock(gctx->builder);
+        afterblk = LLVMGetNextBasicBlock(curblk);
         lbl = namereflist_head(labels);
-        gctx->curblkexit = LLVMAppendBasicBlockInContext(gctx->llvmctx,
-                                                         gctx->curfn,
-                                                         name_azstring(lbl->np));
+        if (afterblk == 0) {
+            gctx->curblkexit = LLVMAppendBasicBlockInContext(gctx->llvmctx,
+                                                             gctx->curfn,
+                                                             name_azstring(lbl->np));
+        } else {
+            gctx->curblkexit = LLVMInsertBasicBlockInContext(gctx->llvmctx,
+                                                             afterblk,
+                                                             name_azstring(lbl->np));
+        }
         LLVMPositionBuilderAtEnd(gctx->builder, gctx->curblkexit);
         if (expr_has_value(node)) {
             gctx->curblkphi = LLVMBuildPhi(gctx->builder,
                                            gctx->fullword_type,
                                            genlabel(gctx));
         }
-        LLVMPositionBuilderAtEnd(gctx->builder,
-                                 LLVMGetPreviousBasicBlock(gctx->curblkexit));
-        
+        LLVMPositionBuilderAtEnd(gctx->builder, curblk);        
         for (lbl = namereflist_head(labels); lbl != 0; lbl = lbl->tq_next) {
             gen_label_t *gl = sym_genspace(lbl->np);
             gl->phi = gctx->curblkphi;
@@ -449,12 +503,17 @@ gencode_expr_PRIM_BLK (gencodectx_t gctx, expr_node_t *node)
         normalval = expr_genref(expr_blk_valexp(node));
     }
     if (namereflist_length(labels) > 0) {
+        LLVMBasicBlockRef normalbb = LLVMGetPreviousBasicBlock(gctx->curblkexit);
         if (expr_has_value(node)) {
-            LLVMBasicBlockRef normalbb = LLVMGetPreviousBasicBlock(gctx->curblkexit);
             LLVMAddIncoming(gctx->curblkphi, &normalval, &normalbb, 1);
             expr_genref_set(node, gctx->curblkphi);
             gctx->curblkphi = cbpsave;
         }
+        if (LLVMGetBasicBlockTerminator(normalbb) == 0) {
+            LLVMPositionBuilderAtEnd(gctx->builder, normalbb);
+            LLVMBuildBr(gctx->builder, gctx->curblkexit);
+        }
+        LLVMPositionBuilderAtEnd(gctx->builder, gctx->curblkexit);
         gctx->curblkexit = cbesave;
     } else if (expr_has_value(node)) {
         expr_genref_set(node, normalval);
@@ -517,6 +576,10 @@ gencode_expr_OPERATOR (gencodectx_t gctx, expr_node_t *node)
             } else {
                 exprgen_gen(gctx, erhs);
                 rhs = expr_genref(erhs);
+                if (LLVMGetTypeKind(LLVMTypeOf(rhs)) != LLVMPointerTypeKind) {
+                    rhs = LLVMBuildIntToPtr(gctx->builder, rhs,
+                                            gctx->fullword_pointer, gentempname(gctx));
+                }
                 v = LLVMBuildLoad(gctx->builder, rhs, valname);
             }
             if (expr_type(erhs) == EXPTYPE_PRIM_FLDREF) {
@@ -718,13 +781,108 @@ gencode_expr_OPERATOR (gencodectx_t gctx, expr_node_t *node)
 static int
 gencode_expr_EXECFUN (gencodectx_t gctx, expr_node_t *node)
 {
+    strdesc_t *fname = name_string(expr_func_name(node));
+    exprseq_t *args = expr_func_arglist(node);
+    LLVMBasicBlockRef curblk, exitblk, afterblk;
+    LLVMValueRef zero = LLVMConstNull(gctx->fullword_type);
+    LLVMValueRef cmp, phi, v;
+
+    curblk = LLVMGetInsertBlock(gctx->builder);
+    afterblk = LLVMGetNextBasicBlock(curblk);
+    if (afterblk == 0) {
+        exitblk = LLVMAppendBasicBlockInContext(gctx->llvmctx, gctx->curfn,
+                                                genlabel(gctx));
+    } else {
+        exitblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, afterblk, genlabel(gctx));
+    }
+    LLVMPositionBuilderAtEnd(gctx->builder, exitblk);
+    phi = LLVMBuildPhi(gctx->builder, gctx->fullword_type, gentempname(gctx));
+    LLVMPositionBuilderAtEnd(gctx->builder, curblk);
+
+    if (fname->len == 4 && memcmp(fname->ptr, "SIGN", 4) == 0) {
+        LLVMBasicBlockRef posblk, negblk;
+        LLVMValueRef pos1 = LLVMConstInt(gctx->fullword_type, 1, 1);
+        LLVMValueRef neg1 = LLVMConstAllOnes(gctx->fullword_type);
+        posblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, genlabel(gctx));
+        negblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, posblk, genlabel(gctx));
+        exprgen_gen(gctx, exprseq_head(args));
+        v = expr_genref(exprseq_head(args));
+        cmp = LLVMBuildICmp(gctx->builder, LLVMIntEQ, v, zero, gentempname(gctx));
+        LLVMBuildCondBr(gctx->builder, cmp, exitblk, negblk);
+        LLVMAddIncoming(phi, &zero, &curblk, 1);
+        LLVMPositionBuilderAtEnd(gctx->builder, negblk);
+        cmp = LLVMBuildICmp(gctx->builder, LLVMIntSLT, v, zero, gentempname(gctx));
+        LLVMBuildCondBr(gctx->builder, cmp, exitblk, posblk);
+        LLVMAddIncoming(phi, &neg1, &negblk, 1);
+        LLVMPositionBuilderAtEnd(gctx->builder, posblk);
+        LLVMBuildBr(gctx->builder, exitblk);
+        LLVMAddIncoming(phi, &pos1, &posblk, 1);
+    } else if (fname->len == 3 && memcmp(fname->ptr, "ABS", 3) == 0) {
+        LLVMBasicBlockRef negblk;
+        negblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, genlabel(gctx));
+        exprgen_gen(gctx, exprseq_head(args));
+        v = expr_genref(exprseq_head(args));
+        cmp = LLVMBuildICmp(gctx->builder, LLVMIntSLT, v, zero, gentempname(gctx));
+        LLVMBuildCondBr(gctx->builder, cmp, negblk, exitblk);
+        LLVMAddIncoming(phi, &v, &curblk, 1);
+        LLVMPositionBuilderAtEnd(gctx->builder, negblk);
+        v = LLVMBuildSub(gctx->builder, zero, v, gentempname(gctx));
+        LLVMBuildBr(gctx->builder, exitblk);
+        LLVMAddIncoming(phi, &v, &negblk, 1);
+    } else {  // MAX or MIN
+        expr_node_t *arg;
+        LLVMIntPredicate p = (fname->ptr[1] == 'A' ? LLVMIntSGE : LLVMIntSLE);
+        LLVMValueRef nextphi, v2;
+        LLVMBasicBlockRef yesdest, nodest, here;
+
+        if (fname->len == 4  && (fname->ptr[3] == 'U' ||
+                                 !machine_addr_signed(gctx->mach))) {
+            p = (fname->ptr[1] == 'A' ? LLVMIntUGE : LLVMIntULE);
+        }
+        arg = exprseq_head(args);
+        exprgen_gen(gctx, arg);
+        v = expr_genref(arg);
+
+        here = LLVMGetInsertBlock(gctx->builder);
+        for (arg = arg->tq_next; arg != 0; arg = arg->tq_next) {
+            nodest = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk,
+                                                   genlabel(gctx));
+            if (arg->tq_next == 0) {
+                yesdest = exitblk;
+                nextphi = phi;
+            } else {
+                yesdest = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk,
+                                                        genlabel(gctx));
+                LLVMPositionBuilderAtEnd(gctx->builder, yesdest);
+                nextphi = LLVMBuildPhi(gctx->builder, gctx->fullword_type,
+                                       gentempname(gctx));
+                LLVMPositionBuilderAtEnd(gctx->builder, here);
+            }
+            exprgen_gen(gctx, arg);
+            v2 = expr_genref(arg);
+            cmp = LLVMBuildICmp(gctx->builder, p, v, v2, gentempname(gctx));
+            LLVMBuildCondBr(gctx->builder, cmp, yesdest, nodest);
+            LLVMAddIncoming(nextphi, &v, &here, 1);
+            LLVMPositionBuilderAtEnd(gctx->builder, nodest);
+            LLVMBuildBr(gctx->builder, yesdest);
+            LLVMAddIncoming(nextphi, &v2, &nodest, 1);
+            LLVMPositionBuilderAtEnd(gctx->builder, yesdest);
+            here = yesdest;
+            v = nextphi;
+        }
+    }
+
+    LLVMPositionBuilderAtEnd(gctx->builder, exitblk);
+    expr_genref_set(node, phi);
+
     return 1;
 }
+
 static int
 gencode_expr_CTRL_COND (gencodectx_t gctx, expr_node_t *node)
 {
     LLVMValueRef v, phi;
-    LLVMBasicBlockRef curblk, consequent, alternative, afterblk;
+    LLVMBasicBlockRef curblk, consequent, alternative, afterblk, exitblk;
     int hasval = expr_has_value(node);
 
     alternative = 0;
@@ -732,35 +890,47 @@ gencode_expr_CTRL_COND (gencodectx_t gctx, expr_node_t *node)
     v = LLVMBuildTrunc(gctx->builder, expr_genref(expr_cond_test(node)), gctx->onebit, gentempname(gctx));
     curblk = LLVMGetInsertBlock(gctx->builder);
     afterblk = LLVMGetNextBasicBlock(curblk);
-    afterblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, afterblk, genlabel(gctx));
-    consequent = LLVMInsertBasicBlockInContext(gctx->llvmctx, afterblk, genlabel(gctx));
+    if (afterblk == 0) {
+        exitblk = LLVMAppendBasicBlockInContext(gctx->llvmctx, gctx->curfn,
+                                                genlabel(gctx));
+    } else {
+        exitblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, afterblk, genlabel(gctx));
+    }
+    consequent = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, genlabel(gctx));
     if (expr_cond_alternative(node)) {
-        alternative = LLVMInsertBasicBlockInContext(gctx->llvmctx, afterblk, genlabel(gctx));
+        alternative = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk,
+                                                    genlabel(gctx));
     }
     if (hasval) {
-        LLVMPositionBuilderAtEnd(gctx->builder, afterblk);
+        LLVMPositionBuilderAtEnd(gctx->builder, exitblk);
         phi = LLVMBuildPhi(gctx->builder, gctx->fullword_type, gentempname(gctx));
     }
     LLVMPositionBuilderAtEnd(gctx->builder, curblk);
     LLVMBuildCondBr(gctx->builder, v, consequent,
-                    (alternative == 0 ? afterblk : alternative));
+                    (alternative == 0 ? exitblk : alternative));
     LLVMPositionBuilderAtEnd(gctx->builder, consequent);
     exprgen_gen(gctx, expr_cond_consequent(node));
-    LLVMBuildBr(gctx->builder, afterblk);
-    if (hasval) {
-        v = expr_genref(expr_cond_consequent(node));
-        LLVMAddIncoming(phi, &v, &consequent, 1);
+    if (LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(gctx->builder)) == 0) {
+        LLVMBuildBr(gctx->builder, exitblk);
+        if (hasval) {
+            v = expr_genref(expr_cond_consequent(node));
+            LLVMAddIncoming(phi, &v, &consequent, 1);
+        }
     }
     if (alternative != 0) {
         LLVMPositionBuilderAtEnd(gctx->builder, alternative);
         exprgen_gen(gctx, expr_cond_alternative(node));
-        LLVMBuildBr(gctx->builder, afterblk);
-        if (hasval) {
-            v = expr_genref(expr_cond_alternative(node));
-            LLVMAddIncoming(phi, &v, &alternative, 1);
+        if (LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(gctx->builder)) == 0) {
+            LLVMBuildBr(gctx->builder, exitblk);
+            if (hasval) {
+                v = expr_genref(expr_cond_alternative(node));
+                LLVMAddIncoming(phi, &v, &alternative, 1);
+            }
         }
     }
-    LLVMPositionBuilderAtEnd(gctx->builder, afterblk);
+
+    LLVMPositionBuilderAtEnd(gctx->builder, exitblk);
+
     if (hasval) {
         expr_genref_set(node, phi);
     }
@@ -801,7 +971,12 @@ gencode_expr_CTRL_CASE (gencodectx_t gctx, expr_node_t *node)
     }
     curblk = LLVMGetInsertBlock(gctx->builder);
     afterblk = LLVMGetNextBasicBlock(curblk);
-    exitblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, afterblk, genlabel(gctx));
+    if (afterblk == 0) {
+        exitblk = LLVMAppendBasicBlockInContext(gctx->llvmctx, gctx->curfn,
+                                                genlabel(gctx));
+    } else {
+        exitblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, afterblk, genlabel(gctx));
+    }
     if (hasval) {
         LLVMPositionBuilderAtEnd(gctx->builder, exitblk);
         phi = LLVMBuildPhi(gctx->builder, gctx->fullword_type, gentempname(gctx));
@@ -813,11 +988,13 @@ gencode_expr_CTRL_CASE (gencodectx_t gctx, expr_node_t *node)
                                                                last, genlabel(gctx));
         LLVMPositionBuilderAtEnd(gctx->builder, here);
         exprgen_gen(gctx, actions[i]);
-        if (hasval) {
-            v = expr_genref(actions[i]);
-            LLVMAddIncoming(phi, &v, &here, 1);
+        if (LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(gctx->builder)) == 0) {
+            if (hasval) {
+                v = expr_genref(actions[i]);
+                LLVMAddIncoming(phi, &v, &here, 1);
+            }
+            LLVMBuildBr(gctx->builder, exitblk);
         }
-        LLVMBuildBr(gctx->builder, exitblk);
         destvec[i] = LLVMBlockAddress(gctx->curfn, here);
         bbvec[i] = here;
         last = here;
@@ -916,7 +1093,7 @@ gencode_expr_CTRL_RET (gencodectx_t gctx, expr_node_t *node)
     LLVMValueRef val;
     LLVMBasicBlockRef thisblk;
     
-    if (exitval == 0) {
+    if (exitval == 0 || gctx->curfnphi == 0) {
         LLVMBuildBr(gctx->builder, gctx->curfnexit);
         return 1;
     }
@@ -944,7 +1121,7 @@ gencode_expr_CTRL_SELECT (gencodectx_t gctx, expr_node_t *node)
     int hasval = expr_has_value(node);
     expr_node_t *sel, *always, *otherwise;
     LLVMBasicBlockRef curblk, afterblk, exitblk, lastblk;
-    LLVMBasicBlockRef otherwiseblk, *testblks, *matchdests;
+    LLVMBasicBlockRef otherwiseblk, *testblks, *matchdests, *matchdestends;
     LLVMValueRef phi, v, indexval, *testvals;
     unsigned int numtests, i;
 
@@ -960,7 +1137,12 @@ gencode_expr_CTRL_SELECT (gencodectx_t gctx, expr_node_t *node)
     indexval = expr_genref(expr_sel_index(node));
 
     afterblk = LLVMGetNextBasicBlock(curblk);
-    exitblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, afterblk, genlabel(gctx));
+    if (afterblk == 0) {
+        exitblk = LLVMAppendBasicBlockInContext(gctx->llvmctx, gctx->curfn,
+                                                genlabel(gctx));
+    } else {
+        exitblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, afterblk, genlabel(gctx));
+    }
     LLVMPositionBuilderAtEnd(gctx->builder, exitblk);
     if (always != 0) {
         exprgen_gen(gctx, always);
@@ -977,29 +1159,39 @@ gencode_expr_CTRL_SELECT (gencodectx_t gctx, expr_node_t *node)
                                                      genlabel(gctx));
         LLVMPositionBuilderAtEnd(gctx->builder, otherwiseblk);
         exprgen_gen(gctx, otherwise);
-        LLVMBuildBr(gctx->builder, exitblk);
-        if (always == 0 && hasval) {
-            v = expr_genref(otherwise);
-            LLVMAddIncoming(phi, &v, &otherwiseblk, 1);
+        if (LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(gctx->builder)) == 0) {
+            LLVMBuildBr(gctx->builder, exitblk);
+            if (always == 0 && hasval) {
+                v = expr_genref(otherwise);
+                LLVMAddIncoming(phi, &v, &otherwiseblk, 1);
+            }
         }
         lastblk = otherwiseblk;
     }
-    // XXX The parsing code fills in a default OTHERWISE, if needed,
-    // so we can assume that even if there are no actual tests, we
-    // have either an OTHERWISE or an ALWAYS to branch to.
+
     numtests = exprseq_length(selseq);
     if (numtests == 0) {
         LLVMPositionBuilderAtEnd(gctx->builder, curblk);
-        LLVMBuildBr(gctx->builder, (otherwise == 0 ? exitblk : otherwiseblk));
+        if (otherwise == 0) {
+            LLVMBuildBr(gctx->builder, exitblk);
+            if (always == 0 && hasval) {
+                v = LLVMConstAllOnes(gctx->fullword_type);
+                LLVMAddIncoming(phi, &v, &curblk, 1);
+            }
+        } else {
+            LLVMBuildBr(gctx->builder, otherwiseblk);
+        }
         LLVMPositionBuilderAtEnd(gctx->builder, exitblk);
         if (hasval) expr_genref_set(node, phi);
         return 1;
     }
     testblks = malloc(numtests*sizeof(LLVMBasicBlockRef));
     matchdests = malloc(numtests*sizeof(LLVMBasicBlockRef));
+    matchdestends = malloc(numtests*sizeof(LLVMBasicBlockRef));
     testvals = malloc(numtests*sizeof(LLVMValueRef));
     memset(testblks, 0, numtests*sizeof(LLVMBasicBlockRef));
     memset(matchdests, 0, numtests*sizeof(LLVMBasicBlockRef));
+    memset(matchdestends, 0, numtests*sizeof(LLVMBasicBlockRef));
     memset(testvals, 0, numtests*sizeof(LLVMValueRef));
     for (i = 0, sel = exprseq_head(selseq); sel != 0; i++, sel = sel->tq_next) {
         LLVMValueRef testval;
@@ -1011,7 +1203,9 @@ gencode_expr_CTRL_SELECT (gencodectx_t gctx, expr_node_t *node)
                                                           genlabel(gctx));
             LLVMPositionBuilderAtEnd(gctx->builder, matchdests[i]);
             exprgen_gen(gctx, expr_selector_action(sel));
-            if (always == 0 && hasval) {
+            matchdestends[i] = LLVMGetInsertBlock(gctx->builder);
+            if (always == 0 && hasval &&
+                LLVMGetBasicBlockTerminator(matchdestends[i]) == 0) {
                 v = expr_genref(expr_selector_action(sel));
                 LLVMAddIncoming(phi, &v, &matchdests[i], 1);
             }
@@ -1065,13 +1259,16 @@ gencode_expr_CTRL_SELECT (gencodectx_t gctx, expr_node_t *node)
         LLVMPositionBuilderAtEnd(gctx->builder, testblks[i]);
         LLVMBuildCondBr(gctx->builder, testvals[i], matchdests[i], nextifnomatch);
         if (otherwise == 0 || matchdests[i] != otherwiseblk) {
-            LLVMPositionBuilderAtEnd(gctx->builder, matchdests[i]);            
-            LLVMBuildBr(gctx->builder, nextaftermatchaction);
+            if (LLVMGetBasicBlockTerminator(matchdestends[i]) == 0) {
+                LLVMPositionBuilderAtEnd(gctx->builder, matchdestends[i]);
+                LLVMBuildBr(gctx->builder, nextaftermatchaction);
+            }
         }
     }
     LLVMPositionBuilderAtEnd(gctx->builder, exitblk);
     if (hasval) expr_genref_set(node, phi);
     free(matchdests);
+    free(matchdestends);
     free(testblks);
     free(testvals);
 
@@ -1088,8 +1285,13 @@ gencode_expr_CTRL_LOOPWU (gencodectx_t gctx, expr_node_t *node)
     afterblk = LLVMGetNextBasicBlock(curblk);
     savecle = gctx->curloopexit;
     saveclp = gctx->curloopphi;
-    gctx->curloopexit = LLVMInsertBasicBlockInContext(gctx->llvmctx, afterblk,
-                                                      genlabel(gctx));
+    if (afterblk == 0) {
+        gctx->curloopexit = LLVMAppendBasicBlockInContext(gctx->llvmctx, gctx->curfn,
+                                                genlabel(gctx));
+    } else {
+        gctx->curloopexit = LLVMInsertBasicBlockInContext(gctx->llvmctx, afterblk,
+                                                          genlabel(gctx));
+    }
     LLVMPositionBuilderAtEnd(gctx->builder, gctx->curloopexit);
     gctx->curloopphi = LLVMBuildPhi(gctx->builder, gctx->fullword_type,
                                     gentempname(gctx));
@@ -1113,8 +1315,10 @@ gencode_expr_CTRL_LOOPWU (gencodectx_t gctx, expr_node_t *node)
     LLVMBuildCondBr(gctx->builder, v, loopblk, gctx->curloopexit);
     LLVMPositionBuilderAtEnd(gctx->builder, loopblk);
     exprgen_gen(gctx, expr_wuloop_body(node));
-    LLVMBuildBr(gctx->builder, testblk);
-    LLVMAddIncoming(gctx->curloopphi, &neg1, &testblk, 1);
+    if (LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(gctx->builder)) == 0) {
+        LLVMBuildBr(gctx->builder, testblk);
+        LLVMAddIncoming(gctx->curloopphi, &neg1, &testblk, 1);
+    }
     LLVMPositionBuilderAtEnd(gctx->builder, gctx->curloopexit);
     gctx->curloopexit = savecle;
     expr_genref_set(node, gctx->curloopphi);
@@ -1137,8 +1341,13 @@ gencode_expr_CTRL_LOOPID (gencodectx_t gctx, expr_node_t *node)
     afterblk = LLVMGetNextBasicBlock(curblk);
     savecle = gctx->curloopexit;
     saveclp = gctx->curloopphi;
-    gctx->curloopexit = LLVMInsertBasicBlockInContext(gctx->llvmctx, afterblk,
-                                                      genlabel(gctx));
+    if (afterblk == 0) {
+        gctx->curloopexit = LLVMAppendBasicBlockInContext(gctx->llvmctx, gctx->curfn,
+                                                          genlabel(gctx));
+    } else {
+        gctx->curloopexit = LLVMInsertBasicBlockInContext(gctx->llvmctx, afterblk,
+                                                          genlabel(gctx));
+    }
     LLVMPositionBuilderAtEnd(gctx->builder, gctx->curloopexit);
     gctx->curloopphi = LLVMBuildPhi(gctx->builder, gctx->fullword_type,
                                     gentempname(gctx));
@@ -1179,15 +1388,17 @@ gencode_expr_CTRL_LOOPID (gencodectx_t gctx, expr_node_t *node)
     }
     LLVMPositionBuilderAtEnd(gctx->builder, loopblk);
     exprgen_gen(gctx, expr_idloop_body(node));
-    v = LLVMBuildLoad(gctx->builder, lindex->value, gentempname(gctx));
-    if (is_decr) {
-        v = LLVMBuildSub(gctx->builder, v, stepval, gentempname(gctx));
-    } else {
-        v = LLVMBuildAdd(gctx->builder, v, stepval, gentempname(gctx));
+    if (LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(gctx->builder)) == 0) {
+        v = LLVMBuildLoad(gctx->builder, lindex->value, gentempname(gctx));
+        if (is_decr) {
+            v = LLVMBuildSub(gctx->builder, v, stepval, gentempname(gctx));
+        } else {
+            v = LLVMBuildAdd(gctx->builder, v, stepval, gentempname(gctx));
+        }
+        LLVMBuildBr(gctx->builder, testblk);
+        loopblk = LLVMGetInsertBlock(gctx->builder);
+        LLVMAddIncoming(testphi, &v, &loopblk, 1);
     }
-    LLVMBuildBr(gctx->builder, testblk);
-    loopblk = LLVMGetInsertBlock(gctx->builder);
-    LLVMAddIncoming(testphi, &v, &loopblk, 1);
 
     expr_genref_set(node, gctx->curloopphi);
     gctx->curloopphi = saveclp;
@@ -1209,6 +1420,18 @@ gencode_routine_begin (gencodectx_t gctx, name_t *np)
     routine_attr_t  *attr = rtnsym_attr(np);
     LLVMBasicBlockRef entryblk, exitblk;
 
+    if (gctx->builder != 0) {
+        int i = gctx->bstkidx;
+        assert(gctx->bstkidx < BSTKSIZE);
+        gctx->stack[i].curbldpos = LLVMGetInsertBlock(gctx->builder);
+        gctx->stack[i].builder = gctx->builder;
+        gctx->stack[i].tmpidx = gctx->tmpidx;
+        gctx->stack[i].lblidx = gctx->lblidx;
+        gctx->stack[i].curfn  = gctx->curfn;
+        gctx->stack[i].curfnphi = gctx->curfnphi;
+        gctx->stack[i].curfnexit = gctx->curfnexit;
+        gctx->bstkidx += 1;
+    }
     gctx->tmpidx = 0;
     gctx->lblidx = 0;
     entryblk = LLVMAppendBasicBlockInContext(gctx->llvmctx, thisfn,
@@ -1219,6 +1442,7 @@ gencode_routine_begin (gencodectx_t gctx, name_t *np)
     LLVMPositionBuilderAtEnd(gctx->builder, exitblk);
     if (attr->flags & SYM_M_NOVALUE) {
         LLVMBuildRetVoid(gctx->builder);
+        gctx->curfnphi = 0;
     } else {
         gctx->curfnphi = LLVMBuildPhi(gctx->builder,
                                       gctx->fullword_type,
@@ -1244,6 +1468,7 @@ gencode_routine_end (gencodectx_t gctx, name_t *np)
     expr_node_t *rtnexpr = rtnsym_expr(np);
     LLVMBasicBlockRef lastinfn, prevbb;
     LLVMValueRef exprval;
+    int do_branch = 1;
 
     gctx->curfn = thisfn;
     LLVMPositionBuilderAtEnd(gctx->builder, LLVMGetEntryBasicBlock(thisfn));
@@ -1253,16 +1478,34 @@ gencode_routine_end (gencodectx_t gctx, name_t *np)
     prevbb = LLVMGetPreviousBasicBlock(lastinfn);
     if ((attr->flags & SYM_M_NOVALUE) == 0) {
         exprval = expr_genref(rtnexpr);
-        LLVMAddIncoming(gctx->curfnphi, &exprval, &prevbb, 1);
+        if (exprval != 0) {
+            LLVMAddIncoming(gctx->curfnphi, &exprval, &prevbb, 1);
+        } else if (LLVMGetBasicBlockTerminator(prevbb) == 0) {
+            LLVMValueRef zero = LLVMConstInt(gctx->fullword_type, 0, 0);
+            LLVMAddIncoming(gctx->curfnphi, &zero, &prevbb, 1);
+        } else do_branch = 0;  // XXX assume it's already taken care of
     }
-    LLVMPositionBuilderAtEnd(gctx->builder, prevbb);
-    LLVMBuildBr(gctx->builder, gctx->curfnexit);
+    if (do_branch) {
+        LLVMPositionBuilderAtEnd(gctx->builder, prevbb);
+        LLVMBuildBr(gctx->builder, gctx->curfnexit);
+    }
     LLVMDisposeBuilder(gctx->builder);
-//    LLVMVerifyFunction(thisfn, LLVMPrintMessageAction);
+    LLVMVerifyFunction(thisfn, LLVMPrintMessageAction);
 //    LLVMRunFunctionPassManager(gctx->passmgr, thisfn);
-    gctx->builder = 0;
-    gctx->curfn = 0;
-    gctx->curfnphi = 0;
+    if (gctx->bstkidx > 0) {
+        int i = --gctx->bstkidx;
+        gctx->builder = gctx->stack[i].builder;
+        gctx->tmpidx = gctx->stack[i].tmpidx;
+        gctx->lblidx = gctx->stack[i].lblidx;
+        gctx->curfn = gctx->stack[i].curfn;
+        gctx->curfnexit = gctx->stack[i].curfnexit;
+        gctx->curfnphi = gctx->stack[i].curfnphi;
+        LLVMPositionBuilderAtEnd(gctx->builder, gctx->stack[i].curbldpos);
+    } else {
+        gctx->builder = 0;
+        gctx->curfn = 0;
+        gctx->curfnphi = 0;
+    }
     return 1;
 }
 
@@ -1384,7 +1627,8 @@ gen_initializer_const (gencodectx_t gctx, initval_t *iv, char **buf,
             }
             case IVTYPE_EXPR_EXP:
                 // not allowed
-                return 0;
+                len = 0;
+                break;
         }
         if (is_preset && len > targlen) len = targlen;
         for (i = 0; i < iv->repcount; i++, cp += len) {
@@ -1400,7 +1644,8 @@ gen_initializer_const (gencodectx_t gctx, initval_t *iv, char **buf,
 
 static LLVMValueRef
 gen_initializer_llvmconst (gencodectx_t gctx, initval_t *iv,
-                           unsigned int padcount, LLVMTypeRef *ctype)
+                           unsigned int padcount,
+                           LLVMTypeRef *ctype, int is_local)
 {
     LLVMValueRef v, c, *varr;
     LLVMTypeRef  t = 0;
@@ -1415,7 +1660,8 @@ gen_initializer_llvmconst (gencodectx_t gctx, initval_t *iv,
     for (i = 0; iv != 0; iv = iv->next, i++) {
         switch (iv->type) {
             case IVTYPE_LIST:
-                varr[i] = gen_initializer_llvmconst(gctx, iv->data.listptr, 0, &t);
+                varr[i] = gen_initializer_llvmconst(gctx, iv->data.listptr, 0, &t,
+                                                    is_local);
                 break;
             case IVTYPE_STRING:
                 varr[i] = LLVMConstStringInContext(gctx->llvmctx, iv->data.string->ptr,
@@ -1423,13 +1669,19 @@ gen_initializer_llvmconst (gencodectx_t gctx, initval_t *iv,
                 t = LLVMTypeOf(varr[i]);
                 break;
             case IVTYPE_SCALAR:
-                t = LLVMIntTypeInContext(gctx->llvmctx, iv->data.scalar.width);
+                t = LLVMIntTypeInContext(gctx->llvmctx, iv->data.scalar.width * 8);
                 varr[i] = LLVMConstInt(t, iv->data.scalar.value, iv->data.scalar.signext);
                 break;
-            case IVTYPE_EXPR_EXP:
-                exprgen_gen(gctx, iv->data.scalar.expr);
-                varr[i] = expr_genref(iv->data.scalar.expr);
+            case IVTYPE_EXPR_EXP: {
+                expr_node_t *exp = iv->data.scalar.expr;
+                if (expr_type(exp) == EXPTYPE_PRIM_SEG) {
+                    varr[i] = gen_segment(gctx, exp, 1);
+                    break;
+                }
+                exprgen_gen(gctx, exp);
+                varr[i] = expr_genref(exp);
                 break;
+            }
         }
 
         if (iv->repcount > 1) {
@@ -1445,23 +1697,31 @@ gen_initializer_llvmconst (gencodectx_t gctx, initval_t *iv,
         if (padcount <= machine_scalar_units(gctx->mach)) {
             varr[count-1] = LLVMConstNull(gctx->unit_types[padcount-1]);
         } else {
-            varr[count-1] = LLVMConstNull(LLVMArrayType(LLVMInt8Type(), padcount));
+            varr[count-1] = LLVMConstNull(LLVMArrayType(LLVMInt8TypeInContext(gctx->llvmctx), padcount));
         }
     }
 
     if (count == 1) {
-        v = LLVMAddGlobal(gctx->module, LLVMTypeOf(varr[0]), genglobname(gctx));
-        LLVMSetLinkage(v, LLVMPrivateLinkage);
-        LLVMSetInitializer(v, varr[0]);
+//        if (is_local) {
+            v = varr[0];
+//        } else {
+//            v = LLVMAddGlobal(gctx->module, LLVMTypeOf(varr[0]), genglobname(gctx));
+//            LLVMSetLinkage(v, LLVMPrivateLinkage);
+//            LLVMSetInitializer(v, varr[0]);
+//        }
         *ctype = LLVMTypeOf(v);
         free(varr);
         return v;
     }
 
     c = LLVMConstStructInContext(gctx->llvmctx, varr, count, 1);
-    v = LLVMAddGlobal(gctx->module, LLVMTypeOf(c), genglobname(gctx));
-    LLVMSetLinkage(v, LLVMPrivateLinkage);
-    LLVMSetInitializer(v, c);
+    if (is_local) {
+        v = c;
+    } else {
+        v = LLVMAddGlobal(gctx->module, LLVMTypeOf(c), genglobname(gctx));
+        LLVMSetLinkage(v, LLVMPrivateLinkage);
+        LLVMSetInitializer(v, c);
+    }
     *ctype = LLVMTypeOf(v);
     return v;
 
@@ -1474,25 +1734,42 @@ gen_initialized_datasym (gencodectx_t gctx, name_t *np, gen_datasym_t *gd,
 {
     LLVMValueRef dval, cval;
     LLVMTypeRef dtype;
-    char *ivbuf = 0;
-    unsigned long ivlen;
-    int i;
+    LLVMValueRef xyzval, zero = LLVMConstInt(gctx->fullword_type, 0, 0);
+//    char *ivbuf = 0;
+//    unsigned long ivlen;
+//    int i;
 
-    ivlen = gen_initializer_const(gctx, attr->ivlist, &ivbuf, attr->units);
-    if (ivlen > machine_scalar_units(gctx->mach) || attr->struc != 0) {
-        cval = LLVMConstStringInContext(gctx->llvmctx, ivbuf, attr->units, 1);
-        dtype = LLVMArrayType(gctx->unit_types[0], attr->units);
-        assert(dtype == gd->gentype);
-    } else {
-        unsigned long val = 0;
-        for (i = (int)ivlen-1; i >= 0; i--) {
-            val = (val << 8) | ivbuf[i];
-        }
-        dtype = gd->gentype;
-        cval = LLVMConstInt(dtype, val, gd->signext);
-    }
-    free(ivbuf);
+//    if (gd->type == GDT_PTR || gd->type == GDT_PTR2PTR) {
+        cval = gen_initializer_llvmconst(gctx, attr->ivlist, 0, &dtype, 0);
+    xyzval = LLVMConstGEP(cval, &zero, 1);
+//        if (gd->type == GDT_PTR || gd->type == GDT_PTR2PTR) {
+ //           if (dtype != gd->gentype) {
+ //               if (LLVMGetTypeKind(dtype) == LLVMPointerTypeKind) {
+ //                   cval = LLVMConstPointerCast(cval, gd->gentype);
+ //               } else {
+ //                   cval = LLVMConstIntToPtr(cval, gd->gentype);
+ //               }
+ //           }
+ //       }
+//        dtype = gd->gentype;
+//    } else {
+//        ivlen = gen_initializer_const(gctx, attr->ivlist, &ivbuf, attr->units);
+//        if (ivlen > machine_scalar_units(gctx->mach) || (attr->struc != 0)) {
+//            cval = LLVMConstStringInContext(gctx->llvmctx, ivbuf, attr->units, 1);
+//            dtype = LLVMArrayType(gctx->unit_types[0], attr->units);
+//            assert(dtype == gd->gentype);
+//        } else {
+//            unsigned long val = 0;
+//            for (i = (int)ivlen-1; i >= 0; i--) {
+//                val = (val << 8) | ivbuf[i];
+//            }
+//            dtype = gd->gentype;
+//            cval = LLVMConstInt(dtype, val, gd->signext);
+//        }
+//        free(ivbuf);
+//    }
     dval = LLVMAddGlobal(gctx->module, dtype, name_azstring(np));
+    gd->gentype = dtype;
     LLVMSetInitializer(dval, cval);
     return dval;
 }
@@ -1504,7 +1781,7 @@ gen_initial_assignments (gencodectx_t gctx, name_t *np, gen_datasym_t *gd,
     LLVMValueRef cval, v, args[5];
     LLVMTypeRef ctype, byteptr;
 
-    byteptr = LLVMPointerType(LLVMInt8Type(), 0);
+    byteptr = LLVMPointerType(LLVMInt8TypeInContext(gctx->llvmctx), 0);
     if (attr->ivlist->preset_expr == 0) {
         unsigned int nunits, padcount;
         nunits = (unsigned int)initval_size(gctx->symctx, attr->ivlist);
@@ -1513,9 +1790,15 @@ gen_initial_assignments (gencodectx_t gctx, name_t *np, gen_datasym_t *gd,
         } else {
             padcount = attr->units - nunits;
         }
-        cval = gen_initializer_llvmconst(gctx, attr->ivlist, padcount, &ctype);
+        cval = gen_initializer_llvmconst(gctx, attr->ivlist, padcount, &ctype, 1);
         if (ctype != byteptr) {
-            cval = LLVMBuildPointerCast(gctx->builder, cval, byteptr, gentempname(gctx));
+            if (LLVMGetTypeKind(ctype) == LLVMPointerTypeKind) {
+                cval = LLVMBuildPointerCast(gctx->builder, cval, byteptr,
+                                            gentempname(gctx));
+            } else {
+                cval = LLVMBuildIntToPtr(gctx->builder, cval, byteptr,
+                                         gentempname(gctx));
+            }
         }
         if (gd->genptrtype != byteptr) {
             v = LLVMBuildPointerCast(gctx->builder, gd->value, byteptr,
@@ -1525,9 +1808,10 @@ gen_initial_assignments (gencodectx_t gctx, name_t *np, gen_datasym_t *gd,
         }
         args[0] = v;
         args[1] = cval;
-        args[2] = LLVMConstInt(LLVMInt32Type(), attr->units, 0);
-        args[3] = LLVMConstInt(LLVMInt32Type(), 0, 0);
-        args[4] = LLVMConstInt(LLVMInt1Type(), (attr->flags & SYM_M_VOLATILE) != 0, 0);
+        args[2] = LLVMConstInt(LLVMInt32TypeInContext(gctx->llvmctx), attr->units, 0);
+        args[3] = LLVMConstInt(LLVMInt32TypeInContext(gctx->llvmctx), 0, 0);
+        args[4] = LLVMConstInt(LLVMInt1TypeInContext(gctx->llvmctx),
+                               (attr->flags & SYM_M_VOLATILE) != 0, 0);
         LLVMBuildCall(gctx->builder, gctx->memcpyfn, args, 5, "");
     } else {
         expr_ctx_t ctx = gctx->ectx;
@@ -1535,7 +1819,7 @@ gen_initial_assignments (gencodectx_t gctx, name_t *np, gen_datasym_t *gd,
         expr_node_t *exp;
         initval_t *iv;
 
-        ctype = LLVMArrayType(LLVMInt8Type(), attr->units);
+        ctype = LLVMArrayType(LLVMInt8TypeInContext(gctx->llvmctx), attr->units);
         cval = LLVMAddGlobal(gctx->module, ctype, genglobname(gctx));
         LLVMSetLinkage(cval, LLVMPrivateLinkage);
         LLVMSetInitializer(cval, LLVMConstNull(ctype));
@@ -1547,9 +1831,10 @@ gen_initial_assignments (gencodectx_t gctx, name_t *np, gen_datasym_t *gd,
         }
         args[0] = v;
         args[1] = cval;
-        args[2] = LLVMConstInt(LLVMInt32Type(), attr->units, 0);
-        args[3] = LLVMConstInt(LLVMInt32Type(), 0, 0);
-        args[4] = LLVMConstInt(LLVMInt1Type(), (attr->flags & SYM_M_VOLATILE) != 0, 0);
+        args[2] = LLVMConstInt(LLVMInt32TypeInContext(gctx->llvmctx), attr->units, 0);
+        args[3] = LLVMConstInt(LLVMInt32TypeInContext(gctx->llvmctx), 0, 0);
+        args[4] = LLVMConstInt(LLVMInt1TypeInContext(gctx->llvmctx),
+                               (attr->flags & SYM_M_VOLATILE) != 0, 0);
         LLVMBuildCall(gctx->builder, gctx->memcpyfn, args, 5, "");
 
         exp = expr_node_alloc(ctx, EXPTYPE_OPERATOR, pos);
@@ -1623,12 +1908,14 @@ rtnsym_generator (void *vctx, name_t *np, void *p)
     routine_attr_t *attr = rtnsym_attr(np);
     char *namestr = name_azstring(np);
     LLVMTypeRef *argtypes;
-    LLVMValueRef thisfn;
+    LLVMValueRef thisfn, extantfn;
+    int need_replace = 0;
 
     if (attr->flags & SYM_M_FORWARD) {
         // XXX
         gr->returntype = gctx->fullword_type;
         gr->gentype = LLVMFunctionType(gr->returntype, 0, 0, 1);
+        gr->genfn = LLVMAddFunction(gctx->module, namestr, gr->gentype);
         return 1;
     }
     argtypes = build_argtypes(gctx, &attr->inargs);
@@ -1640,17 +1927,25 @@ rtnsym_generator (void *vctx, name_t *np, void *p)
     if (gr->gentype == 0) {
         return 0;
     }
-    thisfn = LLVMGetNamedFunction(gctx->module, namestr);
-    if (thisfn == 0) {
-        thisfn = LLVMAddFunction(gctx->module, namestr, gr->gentype);
-        if (name_globalname(expr_namectx(gctx->ectx), np) != 0) {
-            LLVMSetLinkage(thisfn, LLVMExternalLinkage);
-        } else {
-            LLVMSetLinkage(thisfn, LLVMInternalLinkage);
-        }
-        if (attr->owner != 0) {
-            LLVMSetSection(thisfn, name_azstring(attr->owner));
-        }
+    extantfn = LLVMGetNamedFunction(gctx->module, namestr);
+    if (extantfn != 0 && LLVMTypeOf(extantfn) != gr->gentype) {
+        LLVMSetValueName(extantfn, "");
+        need_replace = 1;
+    }
+    thisfn = LLVMAddFunction(gctx->module, namestr, gr->gentype);
+    if (need_replace) {
+        LLVMValueRef castfn;
+        castfn = LLVMBuildBitCast(gctx->builder, thisfn, LLVMTypeOf(extantfn), "");
+        LLVMReplaceAllUsesWith(extantfn, castfn);
+        LLVMDeleteFunction(extantfn);
+    }
+    if (name_globalname(expr_namectx(gctx->ectx), np) != 0) {
+        LLVMSetLinkage(thisfn, LLVMExternalLinkage);
+    } else {
+        LLVMSetLinkage(thisfn, LLVMInternalLinkage);
+    }
+    if (attr->owner != 0) {
+        LLVMSetSection(thisfn, name_azstring(attr->owner));
     }
     set_argnames(gctx, thisfn, &attr->inargs);
     gr->genfn = thisfn;
@@ -1707,10 +2002,10 @@ gencode_module_begin (gencodectx_t gctx, name_t *modnp)
     gctx->module = gm->module = LLVMModuleCreateWithNameInContext(name_azstring(modnp),
                                                                   gctx->llvmctx);
     gctx->passmgr = LLVMCreateFunctionPassManagerForModule(gctx->module);
-    memcpyargs[0] = memcpyargs[1] = LLVMPointerType(LLVMInt8Type(), 0);
-    memcpyargs[2] = memcpyargs[3] = LLVMInt32Type();
-    memcpyargs[4] = LLVMInt1Type();
-    memcpytype = LLVMFunctionType(LLVMVoidType(), memcpyargs, 5, 0);
+    memcpyargs[0] = memcpyargs[1] = LLVMPointerType(LLVMInt8TypeInContext(gctx->llvmctx), 0);
+    memcpyargs[2] = memcpyargs[3] = LLVMInt32TypeInContext(gctx->llvmctx);
+    memcpyargs[4] = LLVMInt1TypeInContext(gctx->llvmctx);
+    memcpytype = LLVMFunctionType(LLVMVoidTypeInContext(gctx->llvmctx), memcpyargs, 5, 0);
     gctx->memcpyfn = LLVMAddFunction(gctx->module, "llvm.memcpy.p0i8.p0i8.i32",
                                      memcpytype);
 
@@ -1731,7 +2026,7 @@ gencode_module_end (gencodectx_t gctx, name_t *np)
     if (np != gctx->modnp || gm->module != gctx->module) {
         expr_signal(gctx->ectx, STC__INTCMPERR, "gencode_module_end");
     }
-//    LLVMVerifyModule(gctx->module, LLVMPrintMessageAction, 0);
+    LLVMVerifyModule(gctx->module, LLVMPrintMessageAction, 0);
     LLVMDumpModule(gctx->module);
     LLVMDisposeModule(gctx->module);
 

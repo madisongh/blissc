@@ -19,3 +19,7 @@ using namespace llvm;
 void HelperSetAllocaAlignment(LLVMValueRef Inst, unsigned int Bytes) {
     unwrap<AllocaInst>(Inst)->setAlignment(Bytes);
 }
+
+void HelperRemoveFunction(LLVMValueRef fn) {
+    unwrap<Function>(fn)->removeFromParent();
+}

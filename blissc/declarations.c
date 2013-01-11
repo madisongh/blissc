@@ -569,11 +569,17 @@ plit_items (expr_ctx_t ctx, int defau, int is_static) {
                     if (ltces_ok && !expr_is_ltce(exp)) {
                         expr_signal(ctx, STC__LTCEREQD);
                         expr_node_free(ctx, exp);
-                        return 0;
+                        exp = 0;
                     } else if (!ltces_ok && !expr_is_ctce(exp)) {
                         expr_signal(ctx, STC__EXPCTCE);
                         expr_node_free(ctx, exp);
-                        return 0;
+                        exp = 0;
+                    }
+                    // If it wasn't valid, substitute zero so we can keep going
+                    if (exp == 0) {
+                        exp = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT,
+                                              parser_curpos(pctx));
+                        expr_litval_set(exp, 0);
                     }
                 }
                 ivlist = expr_initval_add(ctx, ivlist, exp, itemau);
@@ -612,6 +618,8 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
     strdesc_t plitname;
     data_attr_t attr;
     initval_t *ivlist;
+    unsigned long size;
+    unsigned int padding;
 
     if (!attr_psect(ctx, &psname)) {
         psname = scope_sclass_psectname(parser_scope_get(pctx), SCLASS_PLIT);
@@ -623,16 +631,15 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
     if (ivlist == 0) {
         return 0;
     }
+    size = initval_size(symctx, ivlist);
+    padding = machine_scalar_units(mach) - (size == 0 ? 0
+                                            : (size % machine_scalar_units(mach)));
+    // Must pad out to integral number of fullwords
+    if (padding != 0) {
+        ivlist = initval_scalar_add(symctx, ivlist, padding, 0, 1, 0);
+    }
     // For counted PLITs, insert the fullword count at the beginning
     if (curlt == LEXTYPE_KWD_PLIT) {
-        unsigned long size;
-        unsigned int padding;
-        size = initval_size(symctx, ivlist);
-        padding = machine_scalar_units(mach) - (size % machine_scalar_units(mach));
-        // Must pad out to integral number of fullwords
-        if (padding != 0) {
-            ivlist = initval_scalar_add(symctx, ivlist, padding, 0, 1, 0);
-        }
         size = initval_size(symctx, ivlist) / machine_scalar_units(mach);
         ivlist = initval_scalar_prepend(symctx, ivlist, 1, size,
                                         machine_scalar_units(mach), 0);
@@ -946,10 +953,13 @@ handle_data_attrs (expr_ctx_t ctx, scopectx_t scope, decltype_t dt,
                                          LEXTYPE_NAME_STRUCTURE, &lex, 1);
             }
             if (saw_stru) {
+                unsigned int nunits;
                 attr->struc = lexeme_ctx_get(lex);
                 structure_allocate(ctx, attr->struc, 0,
-                                   &attr->units, &attr->struscope,
+                                   &nunits, &attr->struscope,
                                    (attr->flags & SYM_M_REF) != 0);
+                attr->units = ((attr->flags & SYM_M_REF) == 0 ? nunits
+                               : machine_scalar_units(mach));
                 saw_au = saw_ext = -1;
                 if (saw_preset == -1) saw_preset = 0;
                 if (saw_field == -1) saw_field = 0;
@@ -1163,6 +1173,7 @@ declare_bind (expr_ctx_t ctx, scopectx_t scope, decltype_t dt)
         } else {
             attr.dclass = DCLASS_STKORREG;
         }
+        attr.units = machine_scalar_units(mach);
         attr.ivlist = expr_initval_add(ctx, 0, exp, machine_scalar_units(mach));
 
         np = datasym_declare(scope, namestr,
@@ -1453,7 +1464,34 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
             }
             if ((is_bind || (attr.flags & SYM_M_NOVALUE) == 0)
                 && !expr_has_value(exp)) {
+                if (expr_type(exp) == EXPTYPE_PRIM_BLK) {
+                    expr_node_t *valexp = expr_blk_valexp(exp);
+                    // Check for final expression being non-semi-terminated
+                    // RETURN with value, and convert it to being just the
+                    // value.
+                    if (valexp != 0 && expr_type(valexp) == EXPTYPE_CTRL_RET) {
+                        expr_node_t *retval = expr_exit_value(valexp);
+                        if (retval != 0) {
+                            valexp = exprseq_remtail(expr_blk_seq(exp));
+                            exprseq_instail(expr_blk_seq(exp), retval);
+                            expr_blk_valexp_set(exp, retval);
+                            expr_has_value_set(exp, 1);
+                            expr_exit_value_set(valexp, 0);
+                            expr_node_free(ctx, valexp);
+                        }
+                    }
+                }
+            }
+            // Now check again, and fake up a return value so
+            // we can keep going
+            if ((is_bind || (attr.flags & SYM_M_NOVALUE) == 0)
+                && !expr_has_value(exp)) {
+                expr_node_t *fakeval;
                 expr_signal(ctx, STC__EXPRVALRQ);
+                // Fake a zero value for t
+                fakeval = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
+                expr_blk_valexp_set(exp, fakeval);
+                exprseq_instail(expr_blk_seq(exp), fakeval);
             }
             if (is_bind) {
                 symctx_t symctx = expr_symctx(ctx);

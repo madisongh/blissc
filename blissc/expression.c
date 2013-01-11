@@ -917,7 +917,7 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
 
     exprseq_append(expr_blk_seq(exp), &seq);
     expr_blk_valexp_set(exp, valexp);
-    expr_has_value_set(exp, (valexp != 0));
+    expr_has_value_set(exp, (valexp != 0 && expr_has_value(valexp)));
     expr_blk_codecomment_set(exp, codecomment);
     labellist = expr_blk_labels(exp);
     *expp = exp;
@@ -1573,7 +1573,7 @@ reduce_op_expr (expr_ctx_t ctx, expr_node_t **nodep) {
     lhs = expr_op_lhs(node);
     if (expr_is_opexp(lhs)) {
         reduce_op_expr(ctx, &lhs);
-        expr_op_rhs_set(node, lhs);
+        expr_op_lhs_set(node, lhs);
     }
     rhs = expr_op_rhs(node);
     if (expr_is_opexp(rhs)) {
