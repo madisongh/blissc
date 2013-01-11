@@ -14,6 +14,7 @@ OWN
     testown : INITIAL (29),
     ch      : VECTOR [4,BYTE] INITIAL(%CHAR(%X'7F'),%CHAR(%X'EE'),
                                       %CHAR(%X'0A'), %CHAR(%x'0D'));
+FORWARD ROUTINE test2;
 
 ROUTINE testrtn (p1) =
 BEGIN
@@ -24,7 +25,7 @@ SELECTONE .p1 OF
 SET
     [1,3,5] : 1;
     [0,2,4] : 0;
-    [OTHERWISE] : 972;
+    [OTHERWISE] : test2(10);
 TES);
 
 .val
@@ -33,7 +34,9 @@ END;
 
 OWN farfel;
 
-GLOBAL ROUTINE testme : NOVALUE =
+ROUTINE test2 (x) = ABS(.x);
+
+GLOBAL ROUTINE testme  =
 BEGIN
     LOCAL
         dsc : BLOCK [DSC$K_S_BLN,BYTE]
@@ -41,16 +44,20 @@ BEGIN
                         [DSC$B_CLASS] = 2,
                         [DSC$W_LENGTH] = 32),
         buf : VECTOR [32,BYTE] INITIAL (1,2,3,4),
-        hello;
+        hello,
+        maxval;
 
     hello = PLIT(REP 37 OF (%STRING('abcde')));
-    farfel = hello;
+
     DECRU i FROM 77 BY 2 DO
     BEGIN
         hello = .hello + .i;
     END;
     
-    farfel = hello + 1;
+    farfel = hello + SIGN(.buf[0]);
+    maxval = MAXU(.farfel, .buf[1], .buf[2]);
+    
+    testrtn(.maxval)
     
 END;
 
