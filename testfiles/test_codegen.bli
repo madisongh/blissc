@@ -1,5 +1,5 @@
 ! Codegen test module
-MODULE test (MAIN=testme) =
+MODULE test  =
 BEGIN
 
 LITERAL
@@ -32,9 +32,17 @@ TES);
 
 END;
 
-OWN farfel;
+OWN farfel : INITIAL (0);
+EXTERNAL ROUTINE DOPRINT : NOVALUE;
 
-ROUTINE test2 (x) = ABS(.x);
+GLOBAL ROUTINE test2 (x,y) =
+BEGIN
+
+DOPRINT(.x);
+DOPRINT(.y);
+
+RETURN MIN(.x,.y);
+END;
 
 GLOBAL ROUTINE testme  =
 BEGIN
@@ -43,7 +51,7 @@ BEGIN
                 PRESET ([DSC$B_DTYPE] = 14,
                         [DSC$B_CLASS] = 2,
                         [DSC$W_LENGTH] = 32),
-        buf : VECTOR [32,BYTE] INITIAL (1,2,3,4),
+        buf : VECTOR [32,BYTE], ! INITIAL (1,2,3,4),
         hello,
         maxval;
 
