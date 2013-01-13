@@ -31,9 +31,11 @@
 #include "symbols.h"
 #include "machinedef.h"
 #include "llvm-c/Core.h"
-#include "llvm_helper.h"
 #include "llvm-c/Analysis.h"
 #include "llvm-c/Transforms/Scalar.h"
+#include "llvm-c/Target.h"
+#include "llvm-c/TargetMachine.h"
+#include "llvm_helper.h"
 #include <stdlib.h>
 #include <assert.h>
 
@@ -133,6 +135,7 @@ struct gencodectx_s {
     unsigned int        lblidx;
     unsigned int        globidx;
     LLVMContextRef      llvmctx;
+    LLVMTargetMachineRef target_machine;
     LLVMModuleRef       module;
     LLVMTypeRef         novalue_type;
     LLVMTypeRef         fullword_type;
@@ -170,6 +173,29 @@ static LLVMIntPredicate pred[] = {
 };
 
 // Utility functions
+
+static const char *
+llvm_section_for_psect (name_t *psname, int has_initializer, int is_extern)
+{
+    static const char *code_section = "__TEXT,__text";
+    static const char *plit_section = "__TEXT,__const";
+    static const char *own_section_init = "__DATA,__data";
+    static const char *own_section_uninit = "__DATA,__bss";
+    static const char *global_section_init = "__DATA,__data";
+    static const char *global_section_uninit = "__DATA,__common";
+    static const char *extern_section = "__DATA,__common";
+    char *namestr = name_azstring(psname);
+
+    if (strcmp(namestr, "$CODE$") == 0) {
+        return code_section;
+    } else if (strcmp(namestr, "$PLIT$") == 0) {
+        return plit_section;
+    } else if (strcmp(namestr, "$OWN$") == 0) {
+        return (has_initializer ? own_section_init : own_section_uninit);
+    } else if (is_extern) {
+        return extern_section;
+    } else return (has_initializer ? global_section_init : global_section_uninit);
+}
 
 static char *
 gentempname (gencodectx_t gctx)
@@ -944,6 +970,7 @@ gencode_expr_EXECFUN (gencodectx_t gctx, expr_node_t *node)
             here = LLVMGetInsertBlock(gctx->builder);
             if (yesdest == exitblk) {
                 update_btrack_phi(gctx, bt, here, v);
+                bt->branchcount += 1;
             } else {
                 LLVMAddIncoming(nextphi, &v, &here, 1);
             }
@@ -1618,8 +1645,13 @@ gen_initial_assignments (gencodectx_t gctx, name_t *np, gen_datasym_t *gd,
                 cval = LLVMBuildPointerCast(gctx->builder, cval,
                                             byteptr, gentempname(gctx));
             } else if (ctk == LLVMStructTypeKind || ctk == LLVMArrayTypeKind) {
-                LLVMValueRef zero = LLVMConstInt(gctx->fullword_type, 0, 0);
-                cval = LLVMConstPointerCast(LLVMConstGEP(cval, &zero, 1), byteptr);
+                LLVMValueRef idx[2];
+                LLVMValueRef gep;
+                unsigned count;
+                idx[0] = idx[1] = LLVMConstInt(LLVMInt32TypeInContext(gctx->llvmctx), 0, 0);
+                count = (ctk == LLVMStructTypeKind ? 2 : 1);
+                gep = LLVMBuildInBoundsGEP(gctx->builder, cval, idx, 2, "");
+                cval = LLVMConstPointerCast(gep, byteptr);
             } else {
                 cval = LLVMBuildIntToPtr(gctx->builder, cval,
                                          byteptr, gentempname(gctx));
@@ -1708,7 +1740,9 @@ datasym_generator (void *vctx, name_t *np, void *p)
             gd->value = LLVMAddGlobal(gctx->module, gd->gentype, namestr);
         }
         if (attr->owner != 0) {
-            LLVMSetSection(gd->value, name_azstring(attr->owner));
+            LLVMSetSection(gd->value, llvm_section_for_psect(attr->owner,
+                                                             attr->ivlist != 0,
+                                                             attr->sc == SYMSCOPE_EXTERNAL));
         }
         if (name_globalname(namectx, np) == 0) {
             LLVMSetVisibility(gd->value, LLVMHiddenVisibility);
@@ -1775,7 +1809,7 @@ rtnsym_generator (void *vctx, name_t *np, void *p)
         LLVMSetLinkage(thisfn, LLVMInternalLinkage);
     }
     if (attr->owner != 0) {
-        LLVMSetSection(thisfn, name_azstring(attr->owner));
+        LLVMSetSection(thisfn, llvm_section_for_psect(attr->owner, 0, 0));
     }
     set_argnames(gctx, thisfn, &attr->inargs);
     gr->genfn = thisfn;
@@ -1827,6 +1861,7 @@ gencode_module_begin (gencodectx_t gctx, name_t *modnp)
     gen_module_t *gm = sym_genspace(modnp);
     LLVMTypeRef memcpytype;
     LLVMTypeRef memcpyargs[5];
+    char *dl;
 
     gctx->modnp = modnp;
     gctx->module = gm->module = LLVMModuleCreateWithNameInContext(name_azstring(modnp),
@@ -1838,6 +1873,11 @@ gencode_module_begin (gencodectx_t gctx, name_t *modnp)
     memcpytype = LLVMFunctionType(LLVMVoidTypeInContext(gctx->llvmctx), memcpyargs, 5, 0);
     gctx->memcpyfn = LLVMAddFunction(gctx->module, "llvm.memcpy.p0i8.p0i8.i32",
                                      memcpytype);
+
+    LLVMSetTarget(gctx->module, LLVMGetTargetMachineTriple(gctx->target_machine));
+    dl = LLVMCopyStringRepOfTargetData(LLVMGetTargetMachineData(gctx->target_machine));
+    LLVMSetDataLayout(gctx->module, dl);
+    LLVMDisposeMessage(dl);
 
     LLVMAddBasicAliasAnalysisPass(gctx->passmgr);
     LLVMAddInstructionCombiningPass(gctx->passmgr);
@@ -1853,11 +1893,20 @@ int
 gencode_module_end (gencodectx_t gctx, name_t *np)
 {
     gen_module_t *gm = sym_genspace(np);
+    char *err;
+
     if (np != gctx->modnp || gm->module != gctx->module) {
         expr_signal(gctx->ectx, STC__INTCMPERR, "gencode_module_end");
     }
+
     LLVMVerifyModule(gctx->module, LLVMPrintMessageAction, 0);
     LLVMDumpModule(gctx->module);
+    err = 0;
+    if (LLVMTargetMachineEmitToFile(gctx->target_machine, gctx->module, "blah.s",
+                                    LLVMAssemblyFile, &err)) {
+        if (err) { fprintf(stderr, "%s\n", err); LLVMDisposeMessage(err); }
+    }
+    LLVMDisposePassManager(gctx->passmgr);
     LLVMDisposeModule(gctx->module);
 
     return 1;
@@ -1873,6 +1922,8 @@ gencodectx_t
 gencode_init (void *ectx, logctx_t logctx, machinedef_t *mach, symctx_t symctx)
 {
     gencodectx_t gctx = malloc(sizeof(struct gencodectx_s));
+    LLVMTargetRef target;
+    char default_triple[64], *err;
 
     static sym_genvec_t vec = {
         symbol_gensize, symbol_generator, 0, 0, 0
@@ -1890,6 +1941,17 @@ gencode_init (void *ectx, logctx_t logctx, machinedef_t *mach, symctx_t symctx)
         return 0;
     }
     symbols_gen_register(symctx, gctx, &vec);
+
+    LLVMInitializeX86TargetInfo();
+    LLVMInitializeX86Target();
+    LLVMInitializeX86TargetMC();
+    LLVMInitializeX86AsmPrinter();
+
+    err = 0;
+    strcpy(default_triple, HelperGetDefaultTriple());
+    target = HelperLookupTarget(default_triple, &err);
+    if (target == 0) { if (err != 0) { fprintf(stderr, "%s\n", err); free(err); }}
+    gctx->target_machine = LLVMCreateTargetMachine(target, default_triple, "", "", LLVMCodeGenLevelNone, LLVMRelocPIC, LLVMCodeModelDefault);
 
     gctx->onebit = LLVMIntTypeInContext(gctx->llvmctx, 1);
     gctx->novalue_type = LLVMVoidTypeInContext(gctx->llvmctx);

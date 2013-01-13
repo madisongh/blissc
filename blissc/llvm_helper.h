@@ -14,7 +14,9 @@
 extern "C" {
 #endif
 
-void HelperSetAllocaAlignment(LLVMValueRef Inst, unsigned int Bytes);
+    void HelperSetAllocaAlignment(LLVMValueRef Inst, unsigned int Bytes);
+    const char *HelperGetDefaultTriple(void);
+    LLVMTargetRef HelperLookupTarget(const char *triple, char **err);
 
 #ifdef __cplusplus
 }
