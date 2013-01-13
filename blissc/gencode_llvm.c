@@ -538,7 +538,7 @@ gencode_expr_PRIM_RTNCALL (gencodectx_t gctx, expr_node_t *node)
     val = LLVMBuildCall(gctx->builder, rtnadr, argvals, exprseq_length(args),
                         (LLVMGetTypeKind(rettype) == LLVMVoidTypeKind
                          ? "" : gentempname(gctx)));
-    expr_genref_set(node, val);
+    expr_genref_set(node, (LLVMGetTypeKind(rettype) == LLVMVoidTypeKind ? 0 : val));
     return 1;
 }
 static int
@@ -1501,99 +1501,6 @@ litsym_generator (void *vctx, name_t *np, void *p)
 
 } /* litsym_generator */
 
-static char *
-calculate_pointer (expr_node_t *pexp, char *base, unsigned int *lenp, int *signextp)
-{
-    char *ptr;
-
-    if (expr_type(pexp) == EXPTYPE_PRIM_STRUREF) {
-        pexp = expr_struref_accexpr(pexp);
-    }
-    if (expr_type(pexp) == EXPTYPE_PRIM_FLDREF) {
-        expr_node_t *p = expr_fldref_pos(pexp), *s = expr_fldref_size(pexp);
-        ptr = calculate_pointer(expr_fldref_addr(pexp), base, 0, 0);
-        if (p != 0) {
-            assert(expr_type(p) == EXPTYPE_PRIM_LIT);
-            ptr += expr_litval(p);
-        }
-        assert(s != 0 && expr_type(s) == EXPTYPE_PRIM_LIT);
-        if (lenp != 0) *lenp = (unsigned int)(expr_litval(s));
-        if (signextp != 0) *signextp = expr_fldref_signext(pexp);
-        return ptr;
-    }
-    assert(expr_type(pexp) == EXPTYPE_PRIM_SEG);
-    if (lenp != 0) *lenp = expr_seg_units(pexp);
-    if (signextp != 0) *signextp = expr_seg_signext(pexp);
-    return base + expr_seg_offset(pexp);
-}
-
-static unsigned long
-gen_initializer_const (gencodectx_t gctx, initval_t *iv, char **buf,
-                       unsigned long segsize)
-{
-    char *cp, *itmbuf;
-    int i, mustfree, is_preset;
-    unsigned long len, allosize = 0;
-
-    is_preset = iv->preset_expr != 0;
-
-    if (*buf == 0) {
-        allosize = (is_preset ? segsize : initval_size(gctx->symctx, iv));
-        if (allosize < segsize) allosize = segsize;
-        *buf = malloc(allosize);
-        memset(*buf, 0, allosize);
-    }
-
-    cp = (is_preset ? 0 : *buf);
-
-    while (iv != 0) {
-        unsigned int targlen;
-        mustfree = 0;
-        if (is_preset) {
-            assert(iv->repcount == 1);
-            cp = calculate_pointer(iv->preset_expr, *buf, &targlen, 0);
-        }
-        itmbuf = 0;
-        switch (iv->type) {
-            case IVTYPE_LIST:
-                assert(!is_preset);
-                len = gen_initializer_const(gctx, iv->data.listptr, &itmbuf, 0);
-                mustfree = 1;
-                break;
-            case IVTYPE_STRING:
-                itmbuf = iv->data.string->ptr;
-                len = iv->data.string->len;
-                break;
-            case IVTYPE_SCALAR: {
-                int i;
-                unsigned long val = iv->data.scalar.value;
-                len = iv->data.scalar.width;
-                itmbuf = malloc(len);
-                memset(itmbuf, 0, len);
-                for (i = 0; i < len && val != 0; i++) {
-                    itmbuf[i] = val & 0xff;
-                    val = val >> 8;
-                }
-                mustfree = 1;
-                break;
-            }
-            case IVTYPE_EXPR_EXP:
-                // not allowed
-                len = 0;
-                break;
-        }
-        if (is_preset && len > targlen) len = targlen;
-        for (i = 0; i < iv->repcount; i++, cp += len) {
-            memcpy(cp, itmbuf, len);
-        }
-        if (mustfree) free(itmbuf);
-        iv = iv->next;
-    }
-
-    return (is_preset ? allosize : cp-*buf);
-
-}
-
 static LLVMValueRef
 gen_initializer_llvmconst (gencodectx_t gctx, initval_t *iv,
                            unsigned int padcount,
@@ -1828,34 +1735,38 @@ rtnsym_generator (void *vctx, name_t *np, void *p)
     char *namestr = name_azstring(np);
     LLVMTypeRef *argtypes;
     LLVMValueRef thisfn, extantfn;
-    int need_replace = 0;
 
-    if (attr->flags & SYM_M_FORWARD) {
-        // XXX
-        gr->returntype = gctx->fullword_type;
+    gr->returntype = ((attr->flags & SYM_M_NOVALUE) != 0
+                      ? gctx->novalue_type
+                      : gctx->fullword_type);
+
+    extantfn = LLVMGetNamedFunction(gctx->module, namestr);
+    
+    if (attr->sc == SYMSCOPE_EXTERNAL || (attr->flags & SYM_M_FORWARD) != 0) {
+        if (extantfn != 0) return 1;
         gr->gentype = LLVMFunctionType(gr->returntype, 0, 0, 1);
         gr->genfn = LLVMAddFunction(gctx->module, namestr, gr->gentype);
         return 1;
     }
     argtypes = build_argtypes(gctx, &attr->inargs);
-    gr->returntype = ((attr->flags & SYM_M_NOVALUE) != 0
-                      ? gctx->novalue_type
-                      : gctx->fullword_type);
     gr->gentype = LLVMFunctionType(gr->returntype, argtypes,
                                    namereflist_length(&attr->inargs), 1);
     if (gr->gentype == 0) {
         return 0;
     }
-    extantfn = LLVMGetNamedFunction(gctx->module, namestr);
-    if (extantfn != 0 && LLVMTypeOf(extantfn) != gr->gentype) {
-        LLVMSetValueName(extantfn, "");
-        need_replace = 1;
+    if (extantfn != 0) {
+        LLVMSetValueName(extantfn, "to.be.deleted");
     }
     thisfn = LLVMAddFunction(gctx->module, namestr, gr->gentype);
-    if (need_replace) {
+    if (extantfn != 0) {
         LLVMValueRef castfn;
-        castfn = LLVMBuildBitCast(gctx->builder, thisfn, LLVMTypeOf(extantfn), "");
-        LLVMReplaceAllUsesWith(extantfn, castfn);
+        LLVMTypeRef extype = LLVMTypeOf(extantfn);
+        if (gr->gentype == extype) {
+            LLVMReplaceAllUsesWith(extantfn, thisfn);
+        } else {
+            castfn = LLVMConstBitCast(thisfn, extype);
+            LLVMReplaceAllUsesWith(extantfn, castfn);
+        }
         LLVMDeleteFunction(extantfn);
     }
     if (name_globalname(expr_namectx(gctx->ectx), np) != 0) {

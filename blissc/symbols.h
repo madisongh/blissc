@@ -126,8 +126,7 @@ void symbols_gen_register(symctx_t ctx, void *genctx, sym_genvec_t *vec);
 name_t *datasym_search(scopectx_t scope, strdesc_t *namedsc,
                        data_attr_t *attrp);
 name_t *datasym_declare(scopectx_t scope, strdesc_t *dsc,
-                        symscope_t sc, data_attr_t *attr,
-                        textpos_t pos);
+                        data_attr_t *attr, textpos_t pos);
 int datasym_attr_update(name_t *np, data_attr_t *attr);
 data_attr_t *datasym_attr(name_t *np);
 name_t *compiletime_declare(scopectx_t scope, strdesc_t *dsc,
@@ -139,15 +138,13 @@ expr_node_t *label_block(name_t *np);
 void label_block_set(name_t *np, expr_node_t *b);
 name_t *litsym_search(scopectx_t scope, strdesc_t *dsc, unsigned long *valp);
 name_t *litsym_declare(scopectx_t scope, strdesc_t *dsc,
-                       symscope_t sc, literal_attr_t *attr,
-                       textpos_t pos);
+                       literal_attr_t *attr, textpos_t pos);
 literal_attr_t *litsym_attr(name_t *np);
 name_t *litsym_special(scopectx_t scope, strdesc_t *dsc,
                        unsigned long value);
 name_t *rtnsym_search(scopectx_t scope, strdesc_t *dsc);
 name_t *rtnsym_declare(scopectx_t scope, strdesc_t *dsc,
-                       symscope_t sc, routine_attr_t *attr,
-                       textpos_t pos);
+                       routine_attr_t *attr, textpos_t pos);
 int rtnsym_attr_update(name_t *np, routine_attr_t *attr);
 expr_node_t *rtnsym_expr(name_t *np);
 void rtnsym_expr_set(name_t *np, expr_node_t *exp);

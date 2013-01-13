@@ -990,7 +990,8 @@ expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
                 attr.units = machine_scalar_units(ctx->mach);
                 attr.flags = (machine_addr_signed(ctx->mach) ? SYM_M_SIGNEXT : 0);
                 attr.ivlist = expr_initval_add(ctx, 0, exp, machine_scalar_units(ctx->mach));
-                tmpsym = datasym_declare(scope, &str, SYMSCOPE_LOCAL, &attr, pos);
+                attr.sc = SYMSCOPE_LOCAL;
+                tmpsym = datasym_declare(scope, &str, &attr, pos);
                 arg = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG, pos);
                 expr_seg_name_set(arg, tmpsym);
             } else if (!expr_parse_expr(ctx, &arg)) {

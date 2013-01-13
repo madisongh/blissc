@@ -512,7 +512,7 @@ parse_incrdecr (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
     }
 
     // Implicit declaration of the index name as LOCAL
-    np = datasym_declare(scope, indexname, SYMSCOPE_LOCAL, 0, pos);
+    np = datasym_declare(scope, indexname, 0, pos);
     if (np == 0) {
         expr_signal(ctx, STC__INTCMPERR, "parse_incrdecr");
         parser_scope_end(pctx);

@@ -273,10 +273,10 @@ declare_literal (expr_ctx_t ctx, scopectx_t scope, decltype_t decltype)
             lt = parser_next(pctx, QL_NORMAL, 0);
         }
 
-        np = litsym_declare(scope, namestr,
-                            (decltype == DCL_GLOBAL ? SYMSCOPE_GLOBAL
-                             : (decltype == DCL_EXTERNAL ? SYMSCOPE_EXTERNAL
-                                : SYMSCOPE_LOCAL)), &attr, pos);
+        attr.sc = (decltype == DCL_GLOBAL ? SYMSCOPE_GLOBAL
+                   : (decltype == DCL_EXTERNAL ? SYMSCOPE_EXTERNAL
+                      : SYMSCOPE_LOCAL));
+        np = litsym_declare(scope, namestr, &attr, pos);
         string_free(expr_strctx(ctx), namestr);
         if (np == 0) {
             expr_signal(ctx, STC__INTCMPERR, "declare_literal");
@@ -654,8 +654,8 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
     attr.dclass = DCLASS_STATIC;
     attr.ivlist = ivlist;
     attr.units = (unsigned int) (initval_size(symctx, ivlist) / machine_scalar_units(mach));
-    np = datasym_declare(parser_scope_get(pctx), &plitname,
-                         SYMSCOPE_LOCAL, &attr, pos);
+    attr.sc = SYMSCOPE_LOCAL;
+    np = datasym_declare(parser_scope_get(pctx), &plitname, &attr, pos);
     if (np == 0) {
         expr_signal(ctx, STC__INTCMPERR, "define_plit[2]");
     }
@@ -1042,7 +1042,7 @@ declare_data (expr_ctx_t ctx, scopectx_t scope, lextype_t lt, decltype_t dt)
     name_t *owner = expr_current_routine(ctx);
     dataclass_t dc;
     int status = 1;
-    static symscope_t sc;
+    symscope_t sc;
     static lextype_t delims[2] = { LEXTYPE_DELIM_SEMI, LEXTYPE_DELIM_COMMA };
 
     switch (lt) {
@@ -1090,7 +1090,8 @@ declare_data (expr_ctx_t ctx, scopectx_t scope, lextype_t lt, decltype_t dt)
         attr.dclass = dc;
         attr.flags = SYM_M_PENDING | (dt == DCL_FORWARD ? SYM_M_FORWARD : 0);
         attr.owner = owner;
-        np = datasym_declare(scope, namestr, sc, &attr, pos);
+        attr.sc = sc;
+        np = datasym_declare(scope, namestr, &attr, pos);
         if (np == 0) {
             expr_signal(ctx, STC__INTCMPERR, "declare_data[1]");
         }
@@ -1175,10 +1176,8 @@ declare_bind (expr_ctx_t ctx, scopectx_t scope, decltype_t dt)
         }
         attr.units = machine_scalar_units(mach);
         attr.ivlist = expr_initval_add(ctx, 0, exp, machine_scalar_units(mach));
-
-        np = datasym_declare(scope, namestr,
-                             (dt == DCL_GLOBAL ? SYMSCOPE_GLOBAL : SYMSCOPE_LOCAL),
-                             &attr, pos);
+        attr.sc = (dt == DCL_GLOBAL ? SYMSCOPE_GLOBAL : SYMSCOPE_LOCAL);
+        np = datasym_declare(scope, namestr, &attr, pos);
         if (np == 0) {
             expr_signal(ctx, STC__INTCMPERR, "declare_bind");
         }
@@ -1234,7 +1233,8 @@ declare_map (expr_ctx_t ctx, scopectx_t scope)
         }
         if (name_scope(np) != scope) {
             attr.flags |= SYM_M_PENDING;
-            np = datasym_declare(scope, namestr, SYMSCOPE_LOCAL, &attr, pos);
+            attr.sc = SYMSCOPE_LOCAL;
+            np = datasym_declare(scope, namestr, &attr, pos);
         }
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
             status = handle_data_attrs(ctx, scope, DCL_MAP, &attr, np);
@@ -1299,11 +1299,12 @@ parse_formals (expr_ctx_t ctx, scopectx_t curscope,
         attr.flags = SYM_M_PENDING;
         attr.dclass = DCLASS_ARG;
         attr.units = machine_scalar_units(mach);
+        attr.sc = SYMSCOPE_LOCAL;
         if (parse_decl_name(pctx, &namestr, &pos)) {
             if (*argtable == 0) {
                 *argtable = scope_begin(expr_namectx(ctx), 0);
             }
-            np = datasym_declare(*argtable, namestr, SYMSCOPE_LOCAL, &attr, pos);
+            np = datasym_declare(*argtable, namestr, &attr, pos);
             string_free(expr_strctx(ctx), namestr);
             if (np == 0) {
                 expr_signal(ctx, STC__INTCMPERR, "parse_formals[1]");
@@ -1426,6 +1427,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
         memset(&attr, 0, sizeof(attr));
         attr.flags = (is_bind ? SYM_M_BIND|SYM_M_PENDING : 0);
         attr.owner = psname;
+        attr.sc = sc;
 
         if (dt != DCL_EXTERNAL && dt != DCL_FORWARD) {
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
@@ -1444,7 +1446,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
             }
         }
         if (dt == DCL_FORWARD) attr.flags |= SYM_M_FORWARD;
-        np = rtnsym_declare(scope, namestr, sc, &attr, pos);
+        np = rtnsym_declare(scope, namestr, &attr, pos);
         if (is_bind || dt == DCL_NORMAL || dt == DCL_GLOBAL) {
             expr_node_t *exp;
 
@@ -1667,13 +1669,14 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
     attr.width = machine_unit_bits(mach);
     attr.flags = SYM_M_RESERVED;
     attr.value = machine_unit_bits(mach);
-    litsym_declare(kwdscope, &bpdsc[0], SYMSCOPE_LOCAL, &attr, 0);
+    attr.sc = SYMSCOPE_LOCAL;
+    litsym_declare(kwdscope, &bpdsc[0], &attr, 0);
     attr.value = machine_addr_bits(mach);
-    litsym_declare(kwdscope, &bpdsc[1], SYMSCOPE_LOCAL, &attr, 0);
+    litsym_declare(kwdscope, &bpdsc[1], &attr, 0);
     attr.value = machine_scalar_bits(mach);
-    litsym_declare(kwdscope, &bpdsc[2], SYMSCOPE_LOCAL, &attr, 0);
+    litsym_declare(kwdscope, &bpdsc[2], &attr, 0);
     attr.value = machine_scalar_units(mach);
-    litsym_declare(kwdscope, &bpdsc[3], SYMSCOPE_LOCAL, &attr, 0);
+    litsym_declare(kwdscope, &bpdsc[3], &attr, 0);
     structures_init(ctx, kwdscope);
     switch_toggle_declare(kwdscope, &errswitch, toggle_errs, 0, 0, &errson, &errsoff);
 

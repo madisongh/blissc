@@ -757,8 +757,7 @@ compare_data_attrs (data_attr_t *a, data_attr_t *b) {
  * EXTERNAL, FORWARD).
  */
 name_t *
-datasym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
-                 data_attr_t *attrp, textpos_t pos)
+datasym_declare (scopectx_t scope, strdesc_t *dsc, data_attr_t *attrp, textpos_t pos)
 {
     namectx_t namectx = scope_namectx(scope);
     symctx_t symctx = nametables_symctx_get(namectx);
@@ -790,7 +789,7 @@ datasym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
         ndef.flags |= NAME_M_FORWARD;
     }
 
-    if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
+    if (attrp->sc == SYMSCOPE_EXTERNAL || attrp->sc == SYMSCOPE_GLOBAL) {
         scopectx_t gscope = nametables_globalscope(namectx);
         gnp = name_search_typed(gscope, dsc->ptr, dsc->len,
                                 LEXTYPE_NAME_DATA, &gsym);
@@ -815,7 +814,7 @@ datasym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
             }
         }
         memcpy(&sym->attr, attrp, sizeof(data_attr_t));
-        if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
+        if (attrp->sc == SYMSCOPE_EXTERNAL || attrp->sc == SYMSCOPE_GLOBAL) {
             sym->globalsym = gnp;
         }
         if (!(attrp->flags & SYM_M_PENDING) && symctx->genvec.genfn != 0) {
@@ -967,8 +966,7 @@ litsym_search (scopectx_t scope, strdesc_t *dsc, unsigned long *valp)
  * Declares a LITERAL.
  */
 name_t *
-litsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
-                literal_attr_t *attrp, textpos_t pos)
+litsym_declare (scopectx_t scope, strdesc_t *dsc, literal_attr_t *attrp, textpos_t pos)
 {
     namectx_t namectx = scope_namectx(scope);
     symctx_t symctx = nametables_symctx_get(namectx);
@@ -989,7 +987,7 @@ litsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     ndef.namelen = dsc->len;
     ndef.flags |= (attrp->flags & SYM_M_RESERVED) ? NAME_M_RESERVED : 0;
 
-    if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
+    if (attrp->sc == SYMSCOPE_EXTERNAL || attrp->sc == SYMSCOPE_GLOBAL) {
         name_t *gnp = 0;
         sym_literal_t *gsym;
         scopectx_t gscope = nametables_globalscope(namectx);
@@ -1094,8 +1092,7 @@ compare_routine_attrs (routine_attr_t *a, routine_attr_t *b) {
  * Declares a routine symbol.
  */
 name_t *
-rtnsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
-                 routine_attr_t *attrp, textpos_t pos)
+rtnsym_declare (scopectx_t scope, strdesc_t *dsc, routine_attr_t *attrp, textpos_t pos)
 {
     namectx_t namectx = scope_namectx(scope);
     symctx_t symctx = nametables_symctx_get(namectx);
@@ -1118,7 +1115,7 @@ rtnsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
         ndef.flags |= NAME_M_FORWARD;
     }
 
-    if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
+    if (attrp->sc == SYMSCOPE_EXTERNAL || attrp->sc == SYMSCOPE_GLOBAL) {
         scopectx_t gscope = nametables_globalscope(namectx);
         gnp = name_search_typed(gscope, dsc->ptr, dsc->len,
                                 LEXTYPE_NAME_ROUTINE, &gsym);
@@ -1136,7 +1133,7 @@ rtnsym_declare (scopectx_t scope, strdesc_t *dsc, symscope_t sc,
     np = name_declare(scope, &ndef, pos, 0, 0, &sym);
     if (np != 0) {
         memcpy(&sym->attr, attrp, sizeof(routine_attr_t));
-        if (sc == SYMSCOPE_EXTERNAL || sc == SYMSCOPE_GLOBAL) {
+        if (attrp->sc == SYMSCOPE_EXTERNAL || attrp->sc == SYMSCOPE_GLOBAL) {
             sym->globalsym = gnp;
         }
         if (!(sym->attr.flags & SYM_M_PENDING) && symctx->genvec.genfn != 0) {
