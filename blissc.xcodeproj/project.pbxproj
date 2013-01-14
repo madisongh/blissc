@@ -16,7 +16,6 @@
 		7A995E0D163C2286003BEAC7 /* lexeme.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A995E0C163C2286003BEAC7 /* lexeme.c */; };
 		7A995E10163C2F82003BEAC7 /* nametable.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A995E0F163C2F82003BEAC7 /* nametable.c */; };
 		7A9D4C9E1635A88F0013AE09 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A9D4C9D1635A88F0013AE09 /* main.c */; };
-		7A9D4CA01635A88F0013AE09 /* blissc.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = 7A9D4C9F1635A88F0013AE09 /* blissc.1 */; };
 		7A9D4CA71635A93A0013AE09 /* fileio.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A9D4CA61635A93A0013AE09 /* fileio.c */; };
 		7A9D4CAB1635CEA30013AE09 /* scanner.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A9D4CAA1635CEA30013AE09 /* scanner.c */; };
 		7A9E1C13163DA445009ACBD0 /* parser.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A9E1C12163DA445009ACBD0 /* parser.c */; };
@@ -40,7 +39,6 @@
 			dstPath = /usr/share/man/man1/;
 			dstSubfolderSpec = 0;
 			files = (
-				7A9D4CA01635A88F0013AE09 /* blissc.1 in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 1;
 		};
@@ -68,7 +66,6 @@
 		7A995E11163C2F8F003BEAC7 /* nametable.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = nametable.h; sourceTree = "<group>"; };
 		7A9D4C991635A88F0013AE09 /* blissc */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = blissc; sourceTree = BUILT_PRODUCTS_DIR; };
 		7A9D4C9D1635A88F0013AE09 /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
-		7A9D4C9F1635A88F0013AE09 /* blissc.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = blissc.1; sourceTree = "<group>"; };
 		7A9D4CA61635A93A0013AE09 /* fileio.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = fileio.c; sourceTree = "<group>"; };
 		7A9D4CA81635ACCA0013AE09 /* fileio.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = fileio.h; sourceTree = "<group>"; };
 		7A9D4CA91635CE970013AE09 /* scanner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = scanner.h; sourceTree = "<group>"; };
@@ -176,7 +173,6 @@
 		7A9D4C9C1635A88F0013AE09 /* blissc */ = {
 			isa = PBXGroup;
 			children = (
-				7A9D4C9F1635A88F0013AE09 /* blissc.1 */,
 				7A2DD25A165009F1002CD078 /* declarations.c */,
 				7AC12EC516593429009C84F5 /* declarations.h */,
 				7A13E03516775C9600C4F14D /* execfuncs.c */,
