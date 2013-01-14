@@ -1595,13 +1595,9 @@ gen_initializer_llvmconst (gencodectx_t gctx, initval_t *iv,
     }
 
     c = LLVMConstStructInContext(gctx->llvmctx, varr, count, 1);
-    if (is_local) {
-        v = c;
-    } else {
-        v = LLVMAddGlobal(gctx->module, LLVMTypeOf(c), genglobname(gctx));
-        LLVMSetLinkage(v, LLVMPrivateLinkage);
-        LLVMSetInitializer(v, c);
-    }
+    v = LLVMAddGlobal(gctx->module, LLVMTypeOf(c), genglobname(gctx));
+    LLVMSetLinkage(v, LLVMPrivateLinkage);
+    LLVMSetInitializer(v, c);
     *ctype = LLVMTypeOf(v);
     return v;
 
@@ -1738,6 +1734,9 @@ datasym_generator (void *vctx, name_t *np, void *p)
             gd->value = gen_initialized_datasym(gctx, np, gd, attr);
         } else {
             gd->value = LLVMAddGlobal(gctx->module, gd->gentype, namestr);
+            // XXX This doesn't seem right, but appears to be needed
+            //     or LLVM complains about setting internal linkage.
+            LLVMSetInitializer(gd->value, LLVMConstNull(gd->gentype));
         }
         if (attr->owner != 0) {
             LLVMSetSection(gd->value, llvm_section_for_psect(attr->owner,
@@ -1745,7 +1744,7 @@ datasym_generator (void *vctx, name_t *np, void *p)
                                                              attr->sc == SYMSCOPE_EXTERNAL));
         }
         if (name_globalname(namectx, np) == 0) {
-            LLVMSetVisibility(gd->value, LLVMHiddenVisibility);
+            LLVMSetLinkage(gd->value, LLVMInternalLinkage);
         }
         if (attr->alignment != 0) {
             LLVMSetAlignment(gd->value, 1<<attr->alignment);

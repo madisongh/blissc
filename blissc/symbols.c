@@ -1701,8 +1701,30 @@ initval_t *
 initval_ivlist_add (symctx_t ctx, initval_t *listhead, unsigned int reps,
                     initval_t *sublist)
 {
-    initval_t *iv = initval_alloc(ctx);
+    initval_t *iv, *nextiv;
 
+
+    // Simplify if there's only one item in the sublist.
+    if (sublist->next == 0) {
+        sublist->repcount = reps * sublist->repcount;
+        reps = 1;
+    }
+
+    // If there's no repeat count, just append the sublist
+    if (reps == 1) {
+        if (listhead == 0) {
+            return sublist;
+        }
+        for (iv = sublist; iv != 0; iv = nextiv) {
+            nextiv = iv->next;
+            iv->next = 0;
+            listhead->lastptr->next = iv;
+            listhead->lastptr = iv;
+        }
+        return listhead;
+    }
+
+    iv = initval_alloc(ctx);
     if (iv == 0) {
         return 0;
     }
