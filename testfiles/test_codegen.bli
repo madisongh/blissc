@@ -32,7 +32,7 @@ TES);
 
 END;
 
-OWN farfel : INITIAL (0);
+OWN farfel;
 EXTERNAL ROUTINE DOPRINT : NOVALUE;
 
 GLOBAL ROUTINE test2 (x,y) =
@@ -51,7 +51,7 @@ BEGIN
                 PRESET ([DSC$B_DTYPE] = 14,
                         [DSC$B_CLASS] = 2,
                         [DSC$W_LENGTH] = 32),
-        buf : VECTOR [32,BYTE], ! INITIAL (1,2,3,4),
+        buf : VECTOR [32,BYTE] INITIAL (BYTE (1,2, REP 5 OF (3) ,4)),
         hello,
         maxval;
 
