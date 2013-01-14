@@ -1427,7 +1427,10 @@ parse_operand (expr_ctx_t ctx, expr_node_t **expp)
         exp = dfunc(ctx, lt, lex);
         if (exp != 0) {
             lexeme_free(ctx->lctx, lex);
-
+            if (expr_is_primary(exp) &&
+                expr_type(exp) != EXPTYPE_PRIM_FLDREF) {
+                parse_fldref(ctx, &exp);
+            }
         }
     }
     if (exp == 0) {
@@ -1437,11 +1440,6 @@ parse_operand (expr_ctx_t ctx, expr_node_t **expp)
             *expp = 0;
             return 0;
         }
-    }
-
-    if (expr_is_primary(exp) &&
-        expr_type(exp) != EXPTYPE_PRIM_FLDREF) {
-        parse_fldref(ctx, &exp);
     }
 
     *expp = exp;
