@@ -41,7 +41,7 @@ BEGIN
 DOPRINT(.x);
 DOPRINT(.y);
 
-RETURN MIN(.x,.y);
+RETURN IF .x LSS .y THEN .x ELSE .y;
 END;
 
 GLOBAL ROUTINE testme  =
