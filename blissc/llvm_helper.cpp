@@ -11,6 +11,7 @@
 #include "llvm-c/Core.h"
 #include "llvm-c/Target.h"
 #include "llvm-c/TargetMachine.h"
+#include "llvm/Target/TargetMachine.h"
 #pragma clang diagnostic pop
 #include "llvm_helper.h"
 #include "llvm/Support/Host.h"
@@ -33,4 +34,8 @@ LLVMTargetRef HelperLookupTarget(const char *triple, char **err) {
     const Target* target = TargetRegistry::lookupTarget(triple, error);
     if (!error.empty()) *err = strdup(error.c_str());
     return wrap(target);
+}
+
+void HelperSetAsmVerbosity(LLVMTargetMachineRef tm, LLVMBool v) {
+    unwrap(tm)->setAsmVerbosityDefault(v);
 }

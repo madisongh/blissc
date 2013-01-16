@@ -699,14 +699,28 @@ gencode_expr_OPERATOR (gencodectx_t gctx, expr_node_t *node)
                 v = LLVMBuildLShr(gctx->builder, v,
                                   expr_genref(expr_fldref_pos(erhs)),
                                   gentempname(gctx));
-                neg1 = LLVMConstAllOnes(gctx->fullword_type);
-                mask = LLVMBuildShl(gctx->builder, neg1,
-                                    expr_genref(expr_fldref_size(erhs)),
-                                    gentempname(gctx));
-                v = LLVMBuildAnd(gctx->builder, v, mask, gentempname(gctx));
-                if (expr_fldref_signext(erhs)) {
-                    v = LLVMBuildSExt(gctx->builder, v,
-                                      gctx->fullword_type, gentempname(gctx));
+                if (expr_type(expr_fldref_size(erhs)) == EXPTYPE_PRIM_LIT) {
+                    unsigned int nbits = (unsigned int)expr_litval(expr_fldref_size(erhs));
+                    LLVMTypeRef ftype = LLVMIntTypeInContext(gctx->llvmctx, nbits);
+                    if (nbits < machine_scalar_units(gctx->mach)) {
+                        v = LLVMBuildTrunc(gctx->builder, v, ftype, gentempname(gctx));
+                        if (expr_fldref_signext(erhs)) {
+                            v = LLVMBuildSExt(gctx->builder, v, gctx->fullword_type, gentempname(gctx));
+                        } else {
+                            v = LLVMBuildZExt(gctx->builder, v, gctx->fullword_type, gentempname(gctx));
+                        }
+                    }
+                } else {
+                    neg1 = LLVMConstAllOnes(gctx->fullword_type);
+                    mask = LLVMBuildShl(gctx->builder, neg1,
+                                        expr_genref(expr_fldref_size(erhs)),
+                                        gentempname(gctx));
+                    mask = LLVMBuildNeg(gctx->builder, mask, gentempname(gctx));
+                    v = LLVMBuildAnd(gctx->builder, v, mask, gentempname(gctx));
+                    if (expr_fldref_signext(erhs)) {
+                        v = LLVMBuildSExt(gctx->builder, v,
+                                          gctx->fullword_type, gentempname(gctx));
+                    }
                 }
             }
             if (LLVMGetIntTypeWidth(LLVMTypeOf(v)) <
@@ -1469,7 +1483,7 @@ gencode_routine_end (gencodectx_t gctx, name_t *np)
     }
     LLVMDisposeBuilder(gctx->builder);
     LLVMVerifyFunction(thisfn, LLVMPrintMessageAction);
-//    LLVMRunFunctionPassManager(gctx->passmgr, thisfn);
+    LLVMRunFunctionPassManager(gctx->passmgr, thisfn);
     if (gctx->bstkidx > 0) {
         int i = --gctx->bstkidx;
         gctx->builder = gctx->stack[i].builder;
@@ -1531,7 +1545,7 @@ litsym_generator (void *vctx, name_t *np, void *p)
 static LLVMValueRef
 gen_initializer_llvmconst (gencodectx_t gctx, initval_t *iv,
                            unsigned int padcount,
-                           LLVMTypeRef *ctype, int is_local)
+                           LLVMTypeRef *ctype)
 {
     LLVMValueRef v, c, *varr;
     LLVMTypeRef  t = 0;
@@ -1546,8 +1560,7 @@ gen_initializer_llvmconst (gencodectx_t gctx, initval_t *iv,
     for (i = 0; iv != 0; iv = iv->next, i++) {
         switch (iv->type) {
             case IVTYPE_LIST:
-                varr[i] = gen_initializer_llvmconst(gctx, iv->data.listptr, 0, &t,
-                                                    is_local);
+                varr[i] = gen_initializer_llvmconst(gctx, iv->data.listptr, 0, &t);
                 break;
             case IVTYPE_STRING:
                 varr[i] = LLVMConstStringInContext(gctx->llvmctx, iv->data.string->ptr,
@@ -1611,7 +1624,7 @@ gen_initialized_datasym (gencodectx_t gctx, name_t *np, gen_datasym_t *gd,
     LLVMValueRef dval, cval;
     LLVMTypeRef dtype;
 
-    cval = gen_initializer_llvmconst(gctx, attr->ivlist, 0, &dtype, 0);
+    cval = gen_initializer_llvmconst(gctx, attr->ivlist, 0, &dtype);
     dval = LLVMAddGlobal(gctx->module, dtype, name_azstring(np));
     gd->gentype = dtype;
     LLVMSetInitializer(dval, cval);
@@ -1634,20 +1647,12 @@ gen_initial_assignments (gencodectx_t gctx, name_t *np, gen_datasym_t *gd,
         } else {
             padcount = attr->units - nunits;
         }
-        cval = gen_initializer_llvmconst(gctx, attr->ivlist, padcount, &ctype, 1);
+        cval = gen_initializer_llvmconst(gctx, attr->ivlist, padcount, &ctype);
         if (ctype != byteptr) {
             LLVMTypeKind ctk = LLVMGetTypeKind(ctype);
             if (ctk == LLVMPointerTypeKind) {
                 cval = LLVMBuildPointerCast(gctx->builder, cval,
                                             byteptr, gentempname(gctx));
-            } else if (ctk == LLVMStructTypeKind || ctk == LLVMArrayTypeKind) {
-                LLVMValueRef idx[2];
-                LLVMValueRef gep;
-                unsigned count;
-                idx[0] = idx[1] = LLVMConstInt(LLVMInt32TypeInContext(gctx->llvmctx), 0, 0);
-                count = (ctk == LLVMStructTypeKind ? 2 : 1);
-                gep = LLVMBuildInBoundsGEP(gctx->builder, cval, idx, 2, "");
-                cval = LLVMConstPointerCast(gep, byteptr);
             } else {
                 cval = LLVMBuildIntToPtr(gctx->builder, cval,
                                          byteptr, gentempname(gctx));
@@ -1783,7 +1788,7 @@ rtnsym_generator (void *vctx, name_t *np, void *p)
     }
     argtypes = build_argtypes(gctx, &attr->inargs);
     gr->gentype = LLVMFunctionType(gr->returntype, argtypes,
-                                   namereflist_length(&attr->inargs), 1);
+                                   namereflist_length(&attr->inargs), 0);
     if (gr->gentype == 0) {
         return 0;
     }
@@ -1951,6 +1956,7 @@ gencode_init (void *ectx, logctx_t logctx, machinedef_t *mach, symctx_t symctx)
     target = HelperLookupTarget(default_triple, &err);
     if (target == 0) { if (err != 0) { fprintf(stderr, "%s\n", err); free(err); }}
     gctx->target_machine = LLVMCreateTargetMachine(target, default_triple, "", "", LLVMCodeGenLevelNone, LLVMRelocPIC, LLVMCodeModelDefault);
+    HelperSetAsmVerbosity(gctx->target_machine, 1);
 
     gctx->onebit = LLVMIntTypeInContext(gctx->llvmctx, 1);
     gctx->novalue_type = LLVMVoidTypeInContext(gctx->llvmctx);
