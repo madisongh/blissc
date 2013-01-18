@@ -5,18 +5,17 @@
  *	Abstract:		File input and output handling.
  *
  *  Module description:
- *		This module implements all file I/O handling.
- *		XXX At the moment, it's only "I".
+ *		This module implements all file I/O and path
+ *      name handling.
  *
  *		The implementation here uses standard C I/O
  *		calls, but abstracts the I/O handling such that
  *		some OS-specific implementation could be used
  *		if needed (e.g., for performance reasons).
  *
- *		Input files are assumed to be text divided up
- *		into lines ending with linemarks (for standard
- *		C I/O, '\n').  Input is fetched one line at a
- *		time.
+ *		The readline/writline routines assume that files
+ *      are text divided into lines ending with linemarks
+ *      (for standard C I/O, '\n').
  *
  *	Author:		M. Madison
  *				Copyright © 2012, Matthew Madison
@@ -31,6 +30,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/uio.h>
+#include <libgen.h>
 #include "blissc/support/fileio.h"
 #include "blissc/support/logging.h"
 #include <errno.h>
@@ -85,6 +85,7 @@ fileio_finish (fioctx_t fio)
     for (ctx = fio->open_files; ctx != 0; ctx = cnext) {
         cnext = ctx->next;
         close(ctx->fd);
+        if (ctx->fname != 0) free(ctx->fname);
         free(ctx);
     }
 
@@ -92,50 +93,128 @@ fileio_finish (fioctx_t fio)
 
 } /* fileio_finish */
 
+char *
+file_canoncialname (fioctx_t fio, const char *orig, int origlen, unsigned int *lenp)
+{
+    char *rpath;
+
+    if (origlen < 0) {
+        rpath = realpath(orig, 0);
+    } else {
+        char *ocopy = malloc((unsigned)(origlen+1));
+        if (ocopy == 0) return 0;
+        memcpy(ocopy, orig, origlen);
+        ocopy[origlen] = '\0';
+        rpath = realpath(ocopy, 0);
+        free(ocopy);
+    }
+    if (rpath != 0 && lenp != 0) *lenp = (unsigned int)strlen(rpath);
+    return rpath;
+}
+
+int
+file_splitname (fioctx_t fio, const char *orig, int origlen, int canonicalize,
+                fio_pathparts_t *parts)
+{
+    unsigned int len, partlen;
+    char *cp;
+
+    memset(parts, 0, sizeof(fio_pathparts_t));
+    if (canonicalize) {
+        parts->path_fullname = file_canoncialname(fio, orig, origlen, &len);
+        if (parts->path_fullname == 0) return 0;
+        parts->path_fullnamelen = len;
+    } else {
+        if (origlen < 0) origlen = (int) strlen(orig);
+        parts->path_fullname = malloc((unsigned int)origlen);
+        if (parts->path_fullname == 0) return 0;
+        memcpy(parts->path_fullname, orig, origlen);
+        parts->path_fullname[origlen] = '\0';
+        len = (unsigned int) origlen;
+    }
+    for (cp = parts->path_fullname + (len-1), partlen = 0;
+         cp >= parts->path_fullname && *cp != '.' && *cp != '/';
+         cp -= 1, partlen += 1);
+    if (cp >= parts->path_fullname) {
+        if (*cp == '.') {
+            parts->path_suffix = cp;
+            parts->path_suffixlen = partlen+1;
+            len = (unsigned int)(cp - parts->path_fullname);
+        }
+    }
+    for (cp = parts->path_fullname + (len-1), partlen = 0;
+         cp >= parts->path_fullname && *cp != '/';
+         cp -= 1, partlen += 1);
+    if (cp >= parts->path_fullname) {
+        parts->path_filename = cp + 1;
+        parts->path_filenamelen = partlen;
+        parts->path_dirname = parts->path_fullname;
+        parts->path_dirnamelen = (unsigned int) (cp - parts->path_fullname) + 1;
+    } else {
+        parts->path_filename = parts->path_fullname;
+        parts->path_filenamelen = len;
+    }
+
+    return 1;
+}
+
+int
+file_combinename (fioctx_t fio, fio_pathparts_t *parts)
+{
+    size_t len;
+    if (parts->path_fullname != 0) free(parts->path_fullname);
+    parts->path_fullname = malloc(parts->path_dirnamelen + parts->path_filenamelen +
+                                  parts->path_suffixlen + 1);
+    if (parts->path_fullname == 0) return 0;
+    len = 0;
+    if (parts->path_dirname != 0) {
+        memcpy(parts->path_fullname, parts->path_dirname, parts->path_dirnamelen);
+        len += parts->path_dirnamelen;
+    }
+    if (parts->path_filename != 0) {
+        memcpy(parts->path_fullname + len, parts->path_filename, parts->path_filenamelen);
+        len += parts->path_filenamelen;
+    }
+    if (parts->path_suffix != 0) {
+        memcpy(parts->path_fullname + len, parts->path_suffix, parts->path_suffixlen);
+        len += parts->path_suffixlen;
+    }
+    parts->path_fullname[len] = '\0';
+    parts->path_fullnamelen = len;
+    return 1;
+}
+
+void
+file_freeparts (fioctx_t fio, fio_pathparts_t *parts)
+{
+    if (parts->path_fullname != 0) {
+        free(parts->path_fullname);
+    }
+    memset(parts, 0, sizeof(fio_pathparts_t));
+}
+
 /*
  * file_open
  *
- * Opens a file with the specified name, appending the
- * specified suffix if the filename does not have one.
+ * Opens a file with the specified name.
  */
 static filectx_t
-file_open (fioctx_t fio, const char *fname, size_t fnlen,
-           const char *suffix, int for_writing)
+file_open (fioctx_t fio, const char *fname, size_t fnlen, int for_writing)
 {
     filectx_t ctx = malloc(sizeof(struct filectx_s));
-    int add_suffix = 0;
+    fio_pathparts_t pp;
 
     if (ctx == 0) {
         return ctx;
 	}
     memset(ctx, 0, sizeof(struct filectx_s));
-
-    if (suffix != 0) {
-		if (fnlen == 0) {
-			ctx->fname = malloc(strlen(suffix)+1);
-			add_suffix = 1;
-		} else {
-			const char *cp = fname + fnlen;
-			while (--cp >= fname && *cp != '.');
-			add_suffix = !(cp >= fname);
-			ctx->fname = malloc(fnlen + (add_suffix ? strlen(suffix) : 0) + 1);
-		}
-	} else if (fnlen == 0) {
-		ctx->fname = 0;
-	} else {
-		ctx->fname = malloc(fnlen+1);
-	}
-    if (ctx->fname == 0) {
+    memset(&pp, 0, sizeof(pp));
+    if (file_splitname(fio, fname, (int) fnlen, 1, &pp) == 0) {
         free(ctx);
         return 0;
     }
-    memcpy(ctx->fname, fname, fnlen);
-    if (add_suffix) {
-        strcpy(ctx->fname+fnlen, suffix);
-    } else {
-        ctx->fname[fnlen] = '\0';
-    }
-    ctx->fnlen = fnlen + (add_suffix ? strlen(suffix) : 0);
+    ctx->fname = pp.path_fullname;
+    ctx->fnlen = pp.path_fullnamelen;
     if (for_writing) {
         ctx->fd = open(ctx->fname, O_CREAT|O_TRUNC|O_WRONLY, 0666);
         ctx->is_output = 1;
@@ -147,6 +226,7 @@ file_open (fioctx_t fio, const char *fname, size_t fnlen,
         errbuf[0] = '\0';
         strerror_r(errno, errbuf, sizeof(errbuf));
         log_signal(fio->logctx, 0, STC__OPENERR, ctx->fname, ctx->fnlen, errbuf);
+        free(ctx->fname);
         free(ctx);
         return 0;
     }
@@ -160,14 +240,12 @@ file_open (fioctx_t fio, const char *fname, size_t fnlen,
 } /* file_open */
 
 filectx_t
-file_open_input (fioctx_t fio, const char *fname, size_t fnlen,
-                 const char *suffix) {
-    return file_open(fio, fname, fnlen, suffix, 0);
+file_open_input (fioctx_t fio, const char *fname, size_t fnlen) {
+    return file_open(fio, fname, fnlen, 0);
 }
 filectx_t
-file_open_output (fioctx_t fio, const char *fname, size_t fnlen,
-                  const char *suffix) {
-    return file_open(fio, fname, fnlen, suffix, 1);
+file_open_output (fioctx_t fio, const char *fname, size_t fnlen) {
+    return file_open(fio, fname, fnlen, 1);
 }
 
 

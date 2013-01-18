@@ -28,12 +28,14 @@
 #include "blissc/support/strings.h"
 #include "blissc/listings.h"
 #include "blissc/support/logging.h"
+#include "blissc/support/fileio.h"
 #include "blissc/machinedef.h"
 #include "blissc/support/utils.h"
 
 // Parser context structure
 struct parse_ctx_s {
     lstgctx_t       lstgctx;
+    fioctx_t        fioctx;
     strctx_t        strctx;
     namectx_t       namectx;
     scopectx_t      kwdscope, curscope;
@@ -51,6 +53,7 @@ struct parse_ctx_s {
     lextype_t       separator;
     lexctx_t        lmemctx;
     logctx_t        logctx;
+    char            *main_filename;
     lexfunc_t       lexfuncs[LEXTYPE_LXF_MAX-LEXTYPE_LXF_MIN+1];
     void           *lxfctx[LEXTYPE_LXF_MAX-LEXTYPE_LXF_MIN+1];
 };
@@ -349,6 +352,7 @@ parser_init (strctx_t strctx, namectx_t namectx, machinedef_t *mach,
     if (pctx != 0) {
         memset(pctx, 0, sizeof(struct parse_ctx_s));
         pctx->lstgctx  = listings_init(kwdscope, logctx);
+        pctx->fioctx   = fioctx;
         pctx->strctx   = strctx;
         pctx->logctx   = logctx;
         pctx->namectx  = namectx;
@@ -456,13 +460,41 @@ parser_lexfunc_register (parse_ctx_t pctx, void *ctx, lextype_t lt, lexfunc_t fn
 /*
  * parser_fopen
  *
- * Begin parsing a file.
+ * Begin parsing a REQUIREd file:
+ *
  */
 int
-parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen,
-              const char *suffix, char **actnamep)
+parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen, char **actnamep)
 {
-    return lexer_fopen(pctx->lexctx, fname, fnlen, suffix, actnamep);
+    fio_pathparts_t pp, mainpp;
+    int status;
+
+    memset(&pp, 0, sizeof(pp));
+    memset(&mainpp, 0, sizeof(mainpp));
+    if (file_splitname(pctx->fioctx, fname, (int)fnlen, 0, &pp) == 0) {
+        return 0;
+    }
+    // XXX - should provide for target-specific suffixes as well
+    if (pp.path_suffixlen == 0) {
+        pp.path_suffix = ".req";
+        pp.path_suffixlen = 4;
+    }
+    // XXX - should provide the equivalent of '-I' paths
+    if (pp.path_dirname == 0) {
+        if (file_splitname(pctx->fioctx, pctx->main_filename, -1, 1, &mainpp)) {
+            pp.path_dirname = mainpp.path_dirname;
+            pp.path_dirnamelen = mainpp.path_dirnamelen;
+        }
+    }
+    if (file_combinename(pctx->fioctx, &pp) == 0) {
+        file_freeparts(pctx->fioctx, &pp);
+        file_freeparts(pctx->fioctx, &mainpp);
+        return 0;
+    }
+    status = lexer_fopen(pctx->lexctx, pp.path_fullname, pp.path_fullnamelen, actnamep);
+    file_freeparts(pctx->fioctx, &pp);
+    file_freeparts(pctx->fioctx, &mainpp);
+    return status;
 
 } /* parser_fopen */
 
@@ -473,15 +505,13 @@ parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen,
  */
 int
 parser_fopen_main (parse_ctx_t pctx, const char *fname, size_t fnlen,
-                   const char *suffix, int do_listing, const char *listfname)
+                   int do_listing, const char *listfname, size_t lfnlen)
 {
-    char *actname;
-
-    if (!lexer_fopen(pctx->lexctx, fname, fnlen, suffix, &actname)) {
+    if (!lexer_fopen(pctx->lexctx, fname, fnlen, &pctx->main_filename)) {
         return 0;
     }
     if (do_listing) {
-        listing_open(pctx->lstgctx, (listfname == 0 ? actname : listfname));
+        listing_open(pctx->lstgctx, listfname, lfnlen);
         scan_listfuncs_set(lexer_scanctx(pctx->lexctx),
                            listing_printsrc, listing_file_close, pctx->lstgctx);
         log_lstgprintfn_set(pctx->logctx, listing_printline, pctx->lstgctx);
@@ -1550,10 +1580,10 @@ parse_REQUIRE (parse_ctx_t pctx, void * ctx, quotelevel_t ql, lextype_t curlt)
         return 1;
     }
     str = lexeme_text(lex);
-    if (!parser_fopen(pctx, str->ptr, str->len, ".req", &fname)) {
+    if (!parser_fopen(pctx, str->ptr, str->len, &fname)) {
         log_signal(pctx->logctx, pctx->curpos, STC__REQFILERR, str);
     } else {
-        listing_require_begin(pctx->lstgctx, fname);
+        listing_require_begin(pctx->lstgctx, fname, strlen(fname));
     }
     lexeme_free(pctx->lmemctx, lex);
     return 1;

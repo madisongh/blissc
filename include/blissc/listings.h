@@ -13,6 +13,7 @@
  */
 #include "nametable.h"
 #include "support/logging.h"
+#include <string.h>
 
 struct lstgctx_s;
 typedef struct lstgctx_s *lstgctx_t;
@@ -41,9 +42,9 @@ void listing_compilerid_set(lstgctx_t ctx, strdesc_t *str);
 void listing_ident_set(lstgctx_t ctx, strdesc_t *str);
 void listing_printline(void *, const char *, size_t, int);
 int listing_printsrc(void *, char *, size_t, unsigned int, char);
-int listing_open(lstgctx_t ctx, const char *fname);
+int listing_open(lstgctx_t ctx, const char *fname, size_t len);
 void listing_file_close(void *);
-void listing_require_begin(lstgctx_t ctx, char *fname);
+void listing_require_begin(lstgctx_t ctx, char *fname, size_t fnlen);
 void listing_newblock(lstgctx_t ctx);
 void listing_endblock(lstgctx_t ctx, scopectx_t this_scope);
 

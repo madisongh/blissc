@@ -193,16 +193,18 @@ listing_endblock (lstgctx_t ctx, scopectx_t this_scope)
  * on a new page, but only if LISTOPT_REQ is set.
  */
 void
-listing_require_begin (lstgctx_t ctx, char *fname)
+listing_require_begin (lstgctx_t ctx, char *fname, size_t fnlen)
 {
     if (ctx->outf == 0) return;
 
     ctx->require_depth += 1;
     if (ctx->cur_state->listopts[LISTOPT_REQ]) {
-        size_t len = strlen(fname);
-        if (len > FNAME_LEN) len = FNAME_LEN;
-        memcpy(ctx->header2+FNAME_POS, fname, len);
-        memset(ctx->header2+(FNAME_POS+len), ' ', FNAME_LEN-len);
+        if (fnlen > FNAME_LEN) {
+            fname += (fnlen-FNAME_LEN);
+            fnlen = FNAME_LEN;
+        }
+        memcpy(ctx->header2+FNAME_POS, fname, fnlen);
+        memset(ctx->header2+(FNAME_POS+fnlen), ' ', FNAME_LEN-fnlen);
         ctx->nlines = LINESPERPAGE;
     }
 
@@ -241,20 +243,20 @@ listing_file_close (void *vctx)
  * a listing file.
  */
 int
-listing_open (lstgctx_t ctx, const char *mainfile)
+listing_open (lstgctx_t ctx, const char *listfile, size_t lflen)
 {
     const char *cp;
-    size_t llen, len;
-    llen = len = strlen(mainfile);
-    for (cp = mainfile+(len-1); cp >= mainfile && *cp != '.'; cp--);
-    if (cp >= mainfile) llen = (cp - mainfile);
-    ctx->outf = file_open_output(ctx->fio, mainfile, llen, ".lis");
+    ctx->outf = file_open_output(ctx->fio, listfile, lflen);
     if (ctx->outf == 0) {
         return 0;
     }
-    if (len > FNAME_LEN) len = FNAME_LEN;
-    memcpy(ctx->main_input, mainfile, len);
-    memset(ctx->main_input+len, ' ', FNAME_LEN-len);
+    // Use the right-most part of the file name if it's too long
+    if (lflen > FNAME_LEN) {
+        listfile += (lflen-FNAME_LEN);
+        lflen = FNAME_LEN;
+    }
+    memcpy(ctx->main_input, listfile, lflen);
+    memset(ctx->main_input+lflen, ' ', FNAME_LEN-lflen);
     memcpy(ctx->header2+FNAME_POS, ctx->main_input, FNAME_LEN);
     ctx->nlines = LINESPERPAGE;
 

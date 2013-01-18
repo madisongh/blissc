@@ -310,7 +310,7 @@ scanctx_t lexer_scanctx(lexer_ctx_t lctx) { return lctx->scnctx; }
  */
 int
 lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen,
-             const char *suffix, char **actnamep)
+             char **actnamep)
 {
     lexchain_t *chain = lexchain_alloc(ctx);
     char *actname;
@@ -319,7 +319,7 @@ lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen,
         log_signal(ctx->logctx, 0, STC__OUTOFMEM, "lexer_fopen");
         return 0;
     }
-    chain->strm = scan_fopen(ctx->scnctx, fname, fnlen, suffix, &actname);
+    chain->strm = scan_fopen(ctx->scnctx, fname, fnlen, &actname);
     if (chain->strm == 0) {
         lexchain_free(ctx, chain);
         return 0;

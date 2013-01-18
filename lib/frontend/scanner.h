@@ -49,8 +49,7 @@ typedef void (*scan_close_fn)(void *ctx);
 scanctx_t scan_init(strctx_t strctx, logctx_t logctx, void *fioctx);
 void scan_listfuncs_set(scanctx_t sctx, scan_list_fn lfunc,
                         scan_close_fn cfunc, void *ctx);
-streamctx_t scan_fopen(scanctx_t ctx, const char *fname, size_t fnlen,
-               const char *suffix, char **actnamep);
+streamctx_t scan_fopen(scanctx_t ctx, const char *fname, size_t fnlen, char **actnamep);
 streamctx_t scan_popen(scanctx_t ctx, scan_input_fn infn, void *fnctx);
 scantype_t scan_getnext(streamctx_t ctx, unsigned int flags,
                         strdesc_t **tok, unsigned int *lineno,

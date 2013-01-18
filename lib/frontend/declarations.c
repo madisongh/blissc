@@ -1545,8 +1545,8 @@ declare_require (parse_ctx_t pctx)
         log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__DELIMEXP, ";");
     }
     str = lexeme_text(lex);
-    if (parser_fopen(pctx, str->ptr, str->len, ".req", &fname)) {
-        listing_require_begin(parser_lstgctx(pctx), fname);
+    if (parser_fopen(pctx, str->ptr, str->len, &fname)) {
+        listing_require_begin(parser_lstgctx(pctx), fname, strlen(fname));
     }
     lexeme_free(parser_lexmemctx(pctx), lex);
     return 1;

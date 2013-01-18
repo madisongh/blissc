@@ -154,7 +154,10 @@
 		7A9D4C8E1635A88F0013AE09 = {
 			isa = PBXGroup;
 			children = (
-				7A9D4C9C1635A88F0013AE09 /* blissc */,
+				7AD5C63D16A981B600B49D81 /* FrontEnd */,
+				7AD5C63C16A9819800B49D81 /* LLVMGen */,
+				7AD3348016A83B1800D6EC13 /* Support */,
+				7AD3347E16A8366500D6EC13 /* Test Files */,
 				7A9D4C9A1635A88F0013AE09 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -165,17 +168,6 @@
 				7A9D4C991635A88F0013AE09 /* blissc */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		7A9D4C9C1635A88F0013AE09 /* blissc */ = {
-			isa = PBXGroup;
-			children = (
-				7AD5C63D16A981B600B49D81 /* FrontEnd */,
-				7AD5C63C16A9819800B49D81 /* LLVMGen */,
-				7AD3348016A83B1800D6EC13 /* Support */,
-				7AD3347E16A8366500D6EC13 /* Test Files */,
-			);
-			path = blissc;
 			sourceTree = "<group>";
 		};
 		7AA04DA01682CDB500A2D348 /* bliss11 */ = {

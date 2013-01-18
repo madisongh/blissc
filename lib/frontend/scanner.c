@@ -179,13 +179,13 @@ scan_finish (scanctx_t ctx)
  */
 streamctx_t
 scan_fopen (scanctx_t ctx, const char *fname, size_t fnlen,
-            const char *suffix, char **actnamep)
+            char **actnamep)
 {
     streamctx_t s = stream_alloc(ctx);
     if (s == 0) {
         return 0;
     }
-    s->fctx = file_open_input(ctx->fioctx, fname, fnlen, suffix);
+    s->fctx = file_open_input(ctx->fioctx, fname, fnlen);
     if (s->fctx == 0) {
         stream_free(s);
         return 0;

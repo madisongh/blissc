@@ -80,7 +80,7 @@ test_scanner (int argc, const char *argv[])
     if (ctx == 0) {
         return 999;
     }
-    if (!(sctx = scan_fopen(ctx, argv[0], strlen(argv[0]), ".bli", 0))) {
+    if (!(sctx = scan_fopen(ctx, argv[0], strlen(argv[0]), 0))) {
         fprintf(stderr, "scan_fopen failed for %s\n", argv[0]);
         return 998;
     }
@@ -195,7 +195,7 @@ test_parser (int argc, const char *argv[])
     fioctx = fileio_init(logctx);
     pctx = parser_init(strctx, 0, &machdef, &kwdscope, logctx, fioctx);
     lctx = parser_lexmemctx(pctx);
-    if (!parser_fopen(pctx, argv[0], strlen(argv[0]), ".bli", 0)) {
+    if (!parser_fopen(pctx, argv[0], strlen(argv[0]), 0)) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
     }
@@ -249,7 +249,7 @@ test_expr (int argc, const char *argv[])
     fioctx = fileio_init(logctx);
     pctx = parser_init(strctx, 0, &machdef, &kwdscope, logctx, fioctx);
     ectx = expr_init(strctx, pctx, kwdscope);
-    if (!parser_fopen_main(pctx, argv[0], strlen(argv[0]), ".bli", 0, 0)) {
+    if (!parser_fopen_main(pctx, argv[0], strlen(argv[0]), 0, 0, 0)) {
         fprintf(stderr, "parser_fopen failed for %s\n", argv[0]);
         return 998;
     }
