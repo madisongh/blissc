@@ -29,21 +29,21 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
-#include "symbols.h"
-#include "parser.h"
-#include "lexer.h"
-#include "nametable.h"
-#include "lexeme.h"
-#include "expression.h"
-#include "gencode.h"
-#include "declarations.h"
-#include "structures.h"
-#include "macros.h"
-#include "switches.h"
-#include "listings.h"
-#include "logging.h"
-#include "strings.h"
-#include "utils.h"
+#include "blissc/symbols.h"
+#include "blissc/parser.h"
+#include "blissc/lexer.h"
+#include "blissc/nametable.h"
+#include "blissc/lexeme.h"
+#include "blissc/expression.h"
+#include "blissc/gencode.h"
+#include "blissc/declarations.h"
+#include "blissc/structures.h"
+#include "blissc/macros.h"
+#include "blissc/switches.h"
+#include "blissc/listings.h"
+#include "blissc/support/logging.h"
+#include "blissc/support/strings.h"
+#include "blissc/support/utils.h"
 
 typedef enum {
     DCL_NORMAL = 0,
@@ -1478,7 +1478,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
                             exprseq_instail(expr_blk_seq(exp), retval);
                             expr_blk_valexp_set(exp, retval);
                             expr_has_value_set(exp, 1);
-                            expr_exit_value_set(valexp, 0);
+                            if (valexp != 0) expr_exit_value_set(valexp, 0);
                             expr_node_free(ctx, valexp);
                         }
                     }

@@ -28,14 +28,14 @@
  */
 #include <stdlib.h>
 #include <stdio.h>
-#include "declarations.h"
-#include "parser.h"
-#include "expression.h"
-#include "lexer.h"
-#include "nametable.h"
-#include "lexeme.h"
-#include "strings.h"
-#include "macros.h"
+#include "blissc/declarations.h"
+#include "blissc/parser.h"
+#include "blissc/expression.h"
+#include "blissc/lexer.h"
+#include "blissc/nametable.h"
+#include "blissc/lexeme.h"
+#include "blissc/support/strings.h"
+#include "blissc/macros.h"
 
 // Macro structure
 typedef enum {

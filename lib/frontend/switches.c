@@ -30,10 +30,10 @@
  *		25-Dec-2012	V1.0	Madison		Initial coding.
  *--
  */
-#include "switches.h"
-#include "parser.h"
-#include "nametable.h"
-#include "lexeme.h"
+#include "blissc/switches.h"
+#include "blissc/parser.h"
+#include "blissc/nametable.h"
+#include "blissc/lexeme.h"
 
 struct switch_special_s {
     switch_parse_handler_fn handler;

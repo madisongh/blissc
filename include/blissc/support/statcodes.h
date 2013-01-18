@@ -155,12 +155,12 @@ STATCODES
 } statcode_t;
 #undef STATCODE
 
-static inline __unused unsigned int stc_severity (statcode_t s) {
+static inline __attribute__((unused)) unsigned int stc_severity (statcode_t s) {
 	return (s >> STC_V_SEVERITY) & ~((-1) << STC_S_SEVERITY); }
-static inline __unused unsigned int stc_msgno (statcode_t s) {
+static inline __attribute__((unused)) unsigned int stc_msgno (statcode_t s) {
 	return (s >> STC_V_MSGNO) & ~((-1) << STC_S_MSGNO); }
-static inline __unused int stc_success (statcode_t s) { return (int) s >= 0; }
-static inline __unused int stc_fail (statcode_t s) { return (int) s < 0; }
+static inline __attribute__((unused)) int stc_success (statcode_t s) { return (int) s >= 0; }
+static inline __attribute__((unused)) int stc_fail (statcode_t s) { return (int) s < 0; }
 
 int stc_msg_format(statcode_t statcode, char *buf, size_t bufsiz, ...);
 int stc_msg_vformat(statcode_t statcode, char *buf, size_t bufsiz, va_list ap);

@@ -26,7 +26,7 @@ struct machinedef_s {
 
 typedef struct machinedef_s machinedef_t;
 
-#define siu static inline __unused
+#define siu static inline __attribute__((unused))
 siu unsigned int machine_unit_bits(machinedef_t *mach) { return mach->bpunit; }
 siu unsigned int machine_scalar_bits(machinedef_t *mach) { return mach->bpval; }
 siu unsigned int machine_scalar_units(machinedef_t *mach) { return mach->bpval/mach->bpunit; }

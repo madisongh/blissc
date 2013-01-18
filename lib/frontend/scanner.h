@@ -11,8 +11,8 @@
  *					All rights reserved.
  *--
  */
-#include "logging.h"
-#include "strings.h"
+#include "blissc/support/logging.h"
+#include "blissc/support/strings.h"
 
 struct scanctx_s;
 typedef struct scanctx_s *scanctx_t;
@@ -37,7 +37,7 @@ typedef enum {
 #define SCAN_M_ERRONEOF (1<<0)
 #define SCAN_M_SIGNOK   (1<<1)
 
-static inline int __unused scan_ok (scantype_t typ) {
+static inline int __attribute__((unused)) scan_ok (scantype_t typ) {
     return (typ < SCANTYPE_ERR_EOF);
 }
 

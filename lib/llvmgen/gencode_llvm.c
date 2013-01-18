@@ -25,11 +25,11 @@
  */
 
 #include <stdio.h>
-#include "gencode.h"
-#include "execfuncs.h"
-#include "expression.h"
-#include "symbols.h"
-#include "machinedef.h"
+#include "blissc/gencode.h"
+#include "blissc/execfuncs.h"
+#include "blissc/expression.h"
+#include "blissc/symbols.h"
+#include "blissc/machinedef.h"
 #include "llvm-c/Core.h"
 #include "llvm-c/Analysis.h"
 #include "llvm-c/Transforms/Scalar.h"
@@ -595,8 +595,7 @@ gencode_expr_PRIM_BLK (gencodectx_t gctx, expr_node_t *node)
 
     bt = 0;
     if (namereflist_length(labels) > 0) {
-        LLVMBasicBlockRef exitblk, curblk;
-        curblk = LLVMGetInsertBlock(gctx->builder);
+        LLVMBasicBlockRef exitblk;
         lbl = namereflist_head(labels);
         exitblk = create_exitblock(gctx, name_azstring(lbl->np));
         bt = new_btrack(gctx, exitblk);

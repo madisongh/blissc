@@ -36,13 +36,13 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
-#include "symbols.h"
-#include "structures.h"
-#include "nametable.h"
-#include "lexeme.h"
-#include "expression.h"
-#include "strings.h"
-#include "utils.h"
+#include "blissc/symbols.h"
+#include "blissc/structures.h"
+#include "blissc/nametable.h"
+#include "blissc/lexeme.h"
+#include "blissc/expression.h"
+#include "blissc/support/strings.h"
+#include "blissc/support/utils.h"
 
 /*
  * The following structures are the extensions to
@@ -846,7 +846,6 @@ datasym_attr_update (name_t *np, data_attr_t *attrp)
         gsym = name_extraspace(sym->globalsym);
         if (!(gsym->attr.flags & SYM_M_PENDING) &&
             !compare_data_attrs(&gsym->attr, attrp)) {
-            symctx_t symctx = nametables_symctx_get(scope_namectx(name_scope(np)));
             log_signal(symctx->logctx, name_defpos(np), STC__ATTRNCMPT, name_string(np));
             return 0;
         }
@@ -1165,7 +1164,6 @@ rtnsym_attr_update (name_t *np, routine_attr_t *attrp)
         gsym = name_extraspace(sym->globalsym);
         if (!(gsym->attr.flags & SYM_M_PENDING) &&
             !compare_routine_attrs(&gsym->attr, attrp)) {
-            symctx_t symctx = nametables_symctx_get(scope_namectx(name_scope(np)));
             log_signal(symctx->logctx, name_defpos(np), STC__ATTRNCMPT, name_string(np));
             return 0;
         }
@@ -1656,7 +1654,7 @@ initval_scalar_prepend (symctx_t ctx, initval_t *listhead, unsigned int reps,
     iv->repcount = reps;
     iv->data.scalar.value = val;
     iv->data.scalar.width = width;
-    iv->data.scalar.signext = 0;
+    iv->data.scalar.signext = signext;
     iv->next = listhead;
     if (listhead == 0) {
         iv->lastptr = iv;

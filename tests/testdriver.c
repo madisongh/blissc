@@ -9,16 +9,16 @@
 #include <stdio.h>
 #include <string.h>
 #include "scanner.h"
-#include "parser.h"
-#include "lexer.h"
-#include "nametable.h"
-#include "lexeme.h"
-#include "machinedef.h"
-#include "expression.h"
-#include "declarations.h"
-#include "listings.h"
-#include "logging.h"
-#include "fileio.h"
+#include "blissc/parser.h"
+#include "blissc/lexer.h"
+#include "blissc/nametable.h"
+#include "blissc/lexeme.h"
+#include "blissc/machinedef.h"
+#include "blissc/expression.h"
+#include "blissc/declarations.h"
+#include "blissc/listings.h"
+#include "blissc/support/logging.h"
+#include "blissc/support/fileio.h"
 
 int test_scanner(int argc, const char *argv[]);
 int test_parser(int argc, const char *argv[]);

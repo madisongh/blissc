@@ -37,10 +37,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "nametable.h"
-#include "logging.h"
-#include "strings.h"
-#include "lexeme.h"
+#include "blissc/nametable.h"
+#include "blissc/support/logging.h"
+#include "blissc/support/strings.h"
+#include "blissc/lexeme.h"
 
 /*
  * Internal flags.

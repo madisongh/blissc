@@ -18,8 +18,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
-#include "statcodes.h"
-#include "strings.h"
+#include "blissc/support/statcodes.h"
+#include "blissc/support/strings.h"
 
 #define STATCODE(msg,typ,nam,txt) #nam,
 static const char *mcnames[] = {
@@ -149,23 +149,23 @@ stc_msg_vformat (statcode_t statcode, char *buf, size_t bufsiz, va_list ap)
             continue;
         }
         if (*fmt == 'S') {
-            unsigned int len;
+            unsigned int slen;
             char *ptr;
             if (*(fmt+1) == 'L') {
                 ptr = va_arg(ap, char *);
-                len = va_arg(ap, unsigned int);
+                slen = va_arg(ap, unsigned int);
             } else if (*(fmt+1) == 'Z') {
                 ptr = va_arg(ap, char *);
-                len = (unsigned int)strlen(ptr);
+                slen = (unsigned int)strlen(ptr);
             } else if (*(fmt+1) == 'D') {
                 strdesc_t *dsc = va_arg(ap, strdesc_t *);
                 ptr = dsc->ptr;
-                len = dsc->len;
+                slen = dsc->len;
             } else continue;
-            if (len >= (unsigned int) bufsiz) len = (unsigned int)bufsiz-1;
-            memcpy(outp, ptr, len);
-            outp += len;
-            bufsiz -= len;
+            if (slen >= (unsigned int) bufsiz) slen = (unsigned int)bufsiz-1;
+            memcpy(outp, ptr, slen);
+            outp += slen;
+            bufsiz -= slen;
             fmt += 2;
             continue;
         }

@@ -12,9 +12,9 @@
  *--
  */
 
-#include "logging.h"
-#include "strings.h"
-#include "utils.h"
+#include "support/logging.h"
+#include "support/strings.h"
+#include "support/utils.h"
 
 /*
  * The following enums represent lexical processing
@@ -266,7 +266,7 @@ int lexemes_match(lexseq_t *a, lexseq_t *b);
 // Getters/settters for lexemes
 
 #undef siu
-#define siu static inline __unused
+#define siu static inline __attribute__((unused))
 siu lexeme_t *lexeme_next (lexeme_t *lex) { return lex->tq_next; }
 siu lextype_t lexeme_boundtype (lexeme_t *lex) { return lex->boundtype; }
 siu lextype_t lexeme_type (lexeme_t *lex) { return lex->type; }

@@ -16,9 +16,9 @@
  *--
  */
 
-#include "expression.h"
-#include "declarations.h"
-#include "symbols.h"
+#include "blissc/expression.h"
+#include "blissc/declarations.h"
+#include "blissc/symbols.h"
 
 static expr_node_t *parse_condexp(expr_ctx_t ctx, lextype_t lt, lexeme_t *lex);
 static expr_node_t *parse_case(expr_ctx_t ctx, lextype_t lt, lexeme_t *lex);

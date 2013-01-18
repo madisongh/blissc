@@ -27,17 +27,17 @@
  */
 #include <stdlib.h>
 #include <stdio.h>
-#include "expression.h"
-#include "gencode.h"
-#include "execfuncs.h"
-#include "declarations.h"
-#include "symbols.h"
-#include "parser.h"
-#include "listings.h"
-#include "nametable.h"
-#include "lexeme.h"
-#include "machinedef.h"
-#include "logging.h"
+#include "blissc/expression.h"
+#include "blissc/gencode.h"
+#include "blissc/execfuncs.h"
+#include "blissc/declarations.h"
+#include "blissc/symbols.h"
+#include "blissc/parser.h"
+#include "blissc/listings.h"
+#include "blissc/nametable.h"
+#include "blissc/lexeme.h"
+#include "blissc/machinedef.h"
+#include "blissc/support/logging.h"
 
 #undef DOEXPTYPE
 #define DOEXPTYPE(t_) "EXPTYPE_" #t_,
@@ -897,7 +897,7 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
             return 1;
         }
         if (exprseq_length(&seq) == 1) {
-            expr_node_t *exp = exprseq_remhead(&seq);
+            exp = exprseq_remhead(&seq);
             if (expr_type(exp) == EXPTYPE_OPERATOR) {
                 reduce_op_expr(ctx, &exp);
             }

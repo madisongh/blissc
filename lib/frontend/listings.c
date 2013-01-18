@@ -17,9 +17,9 @@
  */
 
 #include <stdio.h>
-#include "listings.h"
-#include "switches.h"
-#include "fileio.h"
+#include "blissc/listings.h"
+#include "blissc/switches.h"
+#include "blissc/support/fileio.h"
 
 struct liststate_s {
     struct liststate_s *next;

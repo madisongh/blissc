@@ -25,11 +25,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#include "lexeme.h"
-#include "lexer.h"
+#include "blissc/lexeme.h"
+#include "blissc/lexer.h"
 #include "scanner.h"
-#include "logging.h"
-#include "strings.h"
+#include "blissc/support/logging.h"
+#include "blissc/support/strings.h"
 
 struct saved_filename_s {
     struct saved_filename_s *next;

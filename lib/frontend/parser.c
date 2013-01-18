@@ -21,15 +21,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include "parser.h"
-#include "lexeme.h"
-#include "lexer.h"
-#include "nametable.h"
-#include "strings.h"
-#include "listings.h"
-#include "logging.h"
-#include "machinedef.h"
-#include "utils.h"
+#include "blissc/parser.h"
+#include "blissc/lexeme.h"
+#include "blissc/lexer.h"
+#include "blissc/nametable.h"
+#include "blissc/support/strings.h"
+#include "blissc/listings.h"
+#include "blissc/support/logging.h"
+#include "blissc/machinedef.h"
+#include "blissc/support/utils.h"
 
 // Parser context structure
 struct parse_ctx_s {

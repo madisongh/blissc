@@ -14,8 +14,8 @@
 #include "parser.h"
 #include "nametable.h"
 #include "lexeme.h"
-#include "logging.h"
-#include "utils.h"
+#include "support/logging.h"
+#include "support/utils.h"
 
 // Factory macros for expression types
 #undef DOEXPTYPE
@@ -212,7 +212,7 @@ int oper_is_unary(optype_t op);
  * NB: Use these instead of directly referencing the fields!
  */
 #undef siu
-#define siu static inline __unused
+#define siu static inline __attribute__((unused))
 siu int expr_is_noop(expr_node_t *node) {
 	return (node == 0 ? 1 : node->type == EXPTYPE_NOOP); }
 siu int expr_is_primary(expr_node_t *node) {

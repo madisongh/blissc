@@ -50,7 +50,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <errno.h>
-#include "strings.h"
+#include "blissc/support/strings.h"
 
 #define POOL_NONE   (-1)
 #define POOL_SMALL  0

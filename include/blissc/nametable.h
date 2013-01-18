@@ -15,9 +15,9 @@
 #include <string.h>
 #include <stdint.h>
 #include "lexeme.h"
-#include "logging.h"
-#include "utils.h"
-#include "strings.h"
+#include "support/logging.h"
+#include "support/utils.h"
+#include "support/strings.h"
 
 typedef enum {
     SCLASS_OWN,

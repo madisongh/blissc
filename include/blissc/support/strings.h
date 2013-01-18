@@ -37,7 +37,7 @@ typedef struct {
  * Inline routine for initializing a static string
  * descriptor.
  */
-static inline __unused strdesc_t *
+static inline __attribute__((unused)) strdesc_t *
 strdesc_init (strdesc_t *dsc, char *s, size_t len)
 {
     dsc->flags = STR_M_STATIC;

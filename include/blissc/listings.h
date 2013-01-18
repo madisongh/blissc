@@ -12,7 +12,7 @@
  *--
  */
 #include "nametable.h"
-#include "logging.h"
+#include "support/logging.h"
 
 struct lstgctx_s;
 typedef struct lstgctx_s *lstgctx_t;

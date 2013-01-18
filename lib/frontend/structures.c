@@ -20,14 +20,14 @@
  *--
  */
 #include <stdio.h>
-#include "declarations.h"
-#include "structures.h"
-#include "symbols.h"
-#include "macros.h"
-#include "parser.h"
-#include "expression.h"
-#include "nametable.h"
-#include "lexeme.h"
+#include "blissc/declarations.h"
+#include "blissc/structures.h"
+#include "blissc/symbols.h"
+#include "blissc/macros.h"
+#include "blissc/parser.h"
+#include "blissc/expression.h"
+#include "blissc/nametable.h"
+#include "blissc/lexeme.h"
 
 /*
  * Structure definition.  Contains
@@ -45,7 +45,6 @@ struct strudef_s {
 /*
  * Some commonly-used data used throughout this module.
  */
-static lextype_t delims[] = { LEXTYPE_DELIM_RBRACK, LEXTYPE_DELIM_SEMI };
 static lextype_t bodyends[] = { LEXTYPE_DELIM_COMMA, LEXTYPE_DELIM_SEMI };
 static strdesc_t leftparen = STRDEF("(");
 static strdesc_t rightparen = STRDEF(")");
@@ -464,6 +463,7 @@ declare_structure (expr_ctx_t ctx, scopectx_t scope)
     textpos_t pos;
     namedef_t ndef;
     int which;
+    static lextype_t delims[] = { LEXTYPE_DELIM_RBRACK, LEXTYPE_DELIM_SEMI };
 
     while (term == LEXTYPE_DELIM_COMMA) {
         if (!parse_decl_name(pctx, &struname, &pos)) {

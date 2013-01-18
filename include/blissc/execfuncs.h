@@ -13,7 +13,7 @@
  */
 #include "expression.h"
 #include "nametable.h"
-#include "strings.h"
+#include "support/strings.h"
 
 typedef expr_node_t *(*execfunchandler_fn)(expr_ctx_t ctx,
                         void *fctx, name_t *fnp,

@@ -29,11 +29,11 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
-#include "fileio.h"
+#include "blissc/support/fileio.h"
 #include "scanner.h"
-#include "logging.h"
-#include "strings.h"
-#include "utils.h"
+#include "blissc/support/logging.h"
+#include "blissc/support/strings.h"
+#include "blissc/support/utils.h"
 
 #define SCAN_MAXFILES 16
 #define SCAN_LINESIZE 1024
@@ -78,7 +78,7 @@ typedef enum {
 
 // Lookup table for identifying characters that are
 // valid for BLISS names/keywords.
-const static char valid_ident_char[256] = {
+const static char valid_ident_charmap[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, '$', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -96,6 +96,7 @@ const static char valid_ident_char[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
+static inline char valid_ident_char(char c) { return valid_ident_charmap[(int)c]; }
 
 /*
  * Memory management
@@ -348,10 +349,10 @@ scan_getnext (streamctx_t strm, unsigned int flags, strdesc_t **tok,
                     // The '%' character can be used in a name (typically
                     // as the first character), but only if it is immediately
                     // followed by a normal identifier-type character.
-                    if (valid_ident_char[*cp] ||
-                        (*cp == '%' && remain > 1 && valid_ident_char[*(cp+1)])) {
+                    if (valid_ident_char(*cp) ||
+                        (*cp == '%' && remain > 1 && valid_ident_char(*(cp+1)))) {
                         if (bufsiz > 0) {
-                            *outp++ = (*cp == '%' ? '%' : valid_ident_char[*cp]);
+                            *outp++ = (*cp == '%' ? '%' : valid_ident_char(*cp));
                             bufsiz -= 1;
                         }
                         curstate = STATE_IN_IDENTIFIER;
@@ -398,14 +399,14 @@ scan_getnext (streamctx_t strm, unsigned int flags, strdesc_t **tok,
                     break;
 
                 case STATE_IN_IDENTIFIER:
-                    ch = valid_ident_char[*cp];
+                    ch = valid_ident_char(*cp);
                     if (ch != 0) {
                         if (bufsiz > 0) {
                             *outp++ = ch;
                             bufsiz -= 1;
                         }
                     } else if (*cp == '%' &&
-                               (remain > 1 && valid_ident_char[*(cp+1)])) {
+                               (remain > 1 && valid_ident_char(*(cp+1)))) {
                         rettype = SCANTYPE_ERR_INVID;
                         curstate = STATE_ERRSKIP;
                     } else {
@@ -421,8 +422,8 @@ scan_getnext (streamctx_t strm, unsigned int flags, strdesc_t **tok,
                             *outp++ = *cp;
                             bufsiz -= 1;
                         }
-                    } else if (valid_ident_char[*cp] ||
-                               (remain > 1 && *cp == '%' && valid_ident_char[*(cp+1)])) {
+                    } else if (valid_ident_char(*cp) ||
+                               (remain > 1 && *cp == '%' && valid_ident_char(*(cp+1)))) {
                         rettype = SCANTYPE_ERR_INVLIT;
                         curstate = STATE_ERRSKIP;
                     } else {

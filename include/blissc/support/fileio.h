@@ -12,7 +12,7 @@
  *--
  */
 #include <stdio.h>
-#include "logging.H"
+#include "logging.h"
 
 struct filectx_s;
 typedef struct filectx_s *filectx_t;

@@ -17,11 +17,11 @@
  *--
  */
 #include <stdio.h>
-#include "execfuncs.h"
-#include "expression.h"
-#include "parser.h"
-#include "nametable.h"
-#include "lexeme.h"
+#include "blissc/execfuncs.h"
+#include "blissc/expression.h"
+#include "blissc/parser.h"
+#include "blissc/nametable.h"
+#include "blissc/lexeme.h"
 
 typedef int (*compare_fn)(long, long);
 static int cmplss (long val1, long val2) { return (val1 < val2); }

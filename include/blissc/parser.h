@@ -17,7 +17,7 @@
 #include "scanner.h"
 #include "listings.h"
 #include "machinedef.h"
-#include "logging.h"
+#include "support/logging.h"
 
 typedef enum {
     PUNCT_COMMASEP_NOGROUP,
