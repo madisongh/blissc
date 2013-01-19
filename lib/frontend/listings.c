@@ -245,7 +245,6 @@ listing_file_close (void *vctx)
 int
 listing_open (lstgctx_t ctx, const char *listfile, size_t lflen)
 {
-    const char *cp;
     ctx->outf = file_open_output(ctx->fio, listfile, lflen);
     if (ctx->outf == 0) {
         return 0;

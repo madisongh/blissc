@@ -148,6 +148,9 @@ STATCODE( 95,E,NOCASES,   "CASE bounds result in no case actions") \
 STATCODE( 96,E,MULOTHERW, "multiple OTHERWISE labels in select expression") \
 STATCODE( 97,E,MULALWAYS, "multiple ALWAYS labels in select expression") \
 STATCODE( 98,E,INVTOKEN,  "invalid token encountered") \
+STATCODE( 99,W,EXCFUNARGS,"too many arguments passed to executable function !SD") \
+STATCODE(100,E,CSNOTCONST,"character size is not a compile-time constant") \
+STATCODE(101,E,INVCSIZE,  "invalid character size !UI") \
 
 #define STATCODE(msg,typ,nam,txt) STC__##nam =  STC_CODE_##typ(msg),
 typedef enum {

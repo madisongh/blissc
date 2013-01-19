@@ -16,12 +16,16 @@
 #define MACH_M_SIGNEXT      (1<<1)
 #define MACH_M_LTC_INIT     (1<<2)
 
+#define MACH_K_MAXCSCOUNT   4
+
 struct machine_ctx_s;
 typedef struct machine_ctx_s *machine_ctx_t;
 
 struct machinedef_s {
     machine_ctx_t   machctx;
     unsigned int    bpunit, bpval, bpaddr;
+    unsigned int    charsize_count;
+    unsigned int    charsizes[MACH_K_MAXCSCOUNT];
     unsigned int    max_align; // maximum # of bits for ALIGN() attribute
     unsigned int    reg_count;
     unsigned int    flags;
@@ -46,6 +50,8 @@ siu unsigned int machine_align_max(machinedef_t *mach) { return mach->max_align;
 siu int machine_linktime_constant_initializers(machinedef_t *mach) {
     return (mach->flags & MACH_M_LTC_INIT) != 0; }
 siu machine_ctx_t machine_context(machinedef_t *mach) { return mach->machctx; }
+siu unsigned int machine_cs_count(machinedef_t *mach) { return mach->charsize_count; }
+siu unsigned int machine_charsize(machinedef_t *mach, int idx) { return mach->charsizes[idx]; }
 #undef siu
 
 machinedef_t *machine_init (const char *machspec);

@@ -22,6 +22,7 @@
 #include "blissc/parser.h"
 #include "blissc/nametable.h"
 #include "blissc/lexeme.h"
+#include "blissc/chf.h"
 
 typedef int (*compare_fn)(long, long);
 static int cmplss (long val1, long val2) { return (val1 < val2); }
@@ -113,21 +114,22 @@ function_bind (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         return 0;
     }
 
+    func = name_extraspace(np);
     exprseq_init(&args);
-    if (!parse_func_args(ctx, &args)) {
+    if ((func->flags & FUNC_M_NOPARSE) == 0 && !parse_func_args(ctx, &args)) {
         expr_signal(ctx, STC__SYNTAXERR);
         return 0;
     }
 
-    func = name_extraspace(np);
     if (func->handler == 0) {
-        int varargs = (func->flags & FUNC_M_VARARGS) != 0;
-        if ((varargs && exprseq_length(&args) < func->numargs) ||
-            (!varargs && exprseq_length(&args) != func->numargs)) {
-            expr_signal(ctx, STC__INSFUNARG, name_string(np));
-        } else {
-            result = expr_node_alloc(ctx, EXPTYPE_EXECFUN, pos);
+        if ((func->flags & FUNC_M_NOPARSE) == 0) {
+            int varargs = (func->flags & FUNC_M_VARARGS) != 0;
+            if ((varargs && exprseq_length(&args) < func->numargs) ||
+                (!varargs && exprseq_length(&args) != func->numargs)) {
+                expr_signal(ctx, STC__INSFUNARG, name_string(np));
+            }
         }
+        result = expr_node_alloc(ctx, EXPTYPE_EXECFUN, pos);
         if (result != 0) {
             expr_func_name_set(result, np);
             exprseq_append(expr_func_arglist(result), &args);
@@ -187,6 +189,8 @@ execfunc_init (expr_ctx_t ctx, scopectx_t scope)
         ndef.namelen = stdfuncs[i].namelen;
         name_declare(scope, &ndef, 0, &stdfuncs[i], sizeof(stdfuncs[i]), 0);
     }
+
+    chf_init(ctx, scope);
 
 } /* execfunc_init */
 

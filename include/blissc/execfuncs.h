@@ -21,6 +21,8 @@ typedef expr_node_t *(*execfunchandler_fn)(expr_ctx_t ctx,
 
 #define FUNC_M_VARARGS  (1<<0)
 #define FUNC_M_NOVALUE  (1<<1)
+#define FUNC_M_NOPARSE  (1<<2) // do not parse arguments
+
 struct funcdef_s {
     execfunchandler_fn  handler;
     void                *fnctx;
@@ -35,7 +37,7 @@ typedef struct funcdef_s funcdef_t;
 /*
  * FUNCDEF(name, handler, contextptr, argcount, flags)
  */
-#define FUNCDEF(n_, h_, c_, a_, f_) { (h_), (c_), (a_), (f_), sizeof(n_)-1, (n_) }
+#define FUNCDEF(n_, h_, c_, a_, f_) { (h_), (void *)(c_), (a_), (f_), sizeof(n_)-1, (n_) }
 
 void execfunc_init(expr_ctx_t ctx, scopectx_t scope);
 name_t *execfunc_define(scopectx_t ctx, funcdef_t *funcdef, textpos_t pos);

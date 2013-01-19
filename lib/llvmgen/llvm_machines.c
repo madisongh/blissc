@@ -67,6 +67,8 @@ machine_init (const char *machspec)
     mach->bpaddr = 64;
     mach->bpval  = 64;
     mach->bpunit = 8;
+    mach->charsize_count = 1;
+    mach->charsizes[0] = 8;
     mach->flags = MACH_M_SIGNEXT | MACH_M_LTC_INIT;
     mach->max_align = 4;
     mach->reg_count = 16;
