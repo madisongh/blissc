@@ -22,6 +22,8 @@
 		7AB5ED821642A3AB0063EC94 /* expression.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AB5ED811642A3AB0063EC94 /* expression.c */; };
 		7AB8A9AD16722B3500B91750 /* symbols.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AB8A9AC16722B3500B91750 /* symbols.c */; };
 		7AC12EC01659194A009C84F5 /* utils.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AC12EBF1659194A009C84F5 /* utils.c */; };
+		7AD5C63F16A9E6D100B49D81 /* driver.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AD5C63E16A9E6D100B49D81 /* driver.c */; };
+		7AD5C64316AA083400B49D81 /* llvm_machines.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AD5C64216AA083400B49D81 /* llvm_machines.c */; };
 		7AD8D0FF1666B7EA002AB41D /* structures.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AD8D0FE1666B7E9002AB41D /* structures.c */; };
 		7ADCC897167E23CF00D09FA4 /* statcodes.c in Sources */ = {isa = PBXBuildFile; fileRef = 7ADCC896167E23CF00D09FA4 /* statcodes.c */; };
 		7ADCC89C167E422A00D09FA4 /* logging.c in Sources */ = {isa = PBXBuildFile; fileRef = 7ADCC89B167E422900D09FA4 /* logging.c */; };
@@ -126,6 +128,10 @@
 		7AC12EC316591C0A009C84F5 /* machinedef.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = machinedef.h; path = include/blissc/machinedef.h; sourceTree = SOURCE_ROOT; };
 		7AC12EC516593429009C84F5 /* declarations.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = declarations.h; path = include/blissc/declarations.h; sourceTree = SOURCE_ROOT; };
 		7AD2C0E4168B905200B2B399 /* listings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = listings.h; path = include/blissc/listings.h; sourceTree = SOURCE_ROOT; };
+		7AD5C63E16A9E6D100B49D81 /* driver.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = driver.c; path = lib/driver/driver.c; sourceTree = "<group>"; };
+		7AD5C64116A9E70300B49D81 /* driver.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = driver.h; path = include/blissc/driver.h; sourceTree = "<group>"; };
+		7AD5C64216AA083400B49D81 /* llvm_machines.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = llvm_machines.c; path = lib/llvmgen/llvm_machines.c; sourceTree = "<group>"; };
+		7AD5C64416AA08B800B49D81 /* llvm_machinectx.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = llvm_machinectx.h; path = lib/llvmgen/llvm_machinectx.h; sourceTree = "<group>"; };
 		7AD8D0FE1666B7E9002AB41D /* structures.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = structures.c; path = lib/frontend/structures.c; sourceTree = SOURCE_ROOT; xcLanguageSpecificationIdentifier = xcode.lang.c; };
 		7ADC81891649CD660056600E /* macros.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = macros.h; path = include/blissc/macros.h; sourceTree = SOURCE_ROOT; };
 		7ADCC896167E23CF00D09FA4 /* statcodes.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = statcodes.c; path = lib/support/statcodes.c; sourceTree = SOURCE_ROOT; };
@@ -154,6 +160,7 @@
 		7A9D4C8E1635A88F0013AE09 = {
 			isa = PBXGroup;
 			children = (
+				7AD5C64016A9E6DD00B49D81 /* Driver */,
 				7AD5C63D16A981B600B49D81 /* FrontEnd */,
 				7AD5C63C16A9819800B49D81 /* LLVMGen */,
 				7AD3348016A83B1800D6EC13 /* Support */,
@@ -260,6 +267,8 @@
 				7AE1E623168DDD810085DFF5 /* gencode_llvm.c */,
 				7A381B2116987FC1008588BA /* llvm_helper.cpp */,
 				7A381B2216987FC1008588BA /* llvm_helper.h */,
+				7AD5C64216AA083400B49D81 /* llvm_machines.c */,
+				7AD5C64416AA08B800B49D81 /* llvm_machinectx.h */,
 			);
 			name = LLVMGen;
 			sourceTree = SOURCE_ROOT;
@@ -299,6 +308,15 @@
 			);
 			name = FrontEnd;
 			sourceTree = SOURCE_ROOT;
+		};
+		7AD5C64016A9E6DD00B49D81 /* Driver */ = {
+			isa = PBXGroup;
+			children = (
+				7AD5C63E16A9E6D100B49D81 /* driver.c */,
+				7AD5C64116A9E70300B49D81 /* driver.h */,
+			);
+			name = Driver;
+			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
@@ -373,6 +391,8 @@
 				7AF501C4168A60440057D7CF /* switches.c in Sources */,
 				7AE1E624168DDD810085DFF5 /* gencode_llvm.c in Sources */,
 				7A381B2316987FC1008588BA /* llvm_helper.cpp in Sources */,
+				7AD5C63F16A9E6D100B49D81 /* driver.c in Sources */,
+				7AD5C64316AA083400B49D81 /* llvm_machines.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

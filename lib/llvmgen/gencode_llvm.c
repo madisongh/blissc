@@ -36,6 +36,7 @@
 #include "llvm-c/Target.h"
 #include "llvm-c/TargetMachine.h"
 #include "llvm_helper.h"
+#include "llvm_machinectx.h"
 #include <stdlib.h>
 #include <assert.h>
 
@@ -127,6 +128,7 @@ struct branchtrack_s {
 };
 
 struct gencodectx_s {
+    machine_ctx_t       mctx;
     expr_ctx_t          ectx;
     symctx_t            symctx;
     machinedef_t        *mach;
@@ -135,7 +137,6 @@ struct gencodectx_s {
     unsigned int        lblidx;
     unsigned int        globidx;
     LLVMContextRef      llvmctx;
-    LLVMTargetMachineRef target_machine;
     LLVMModuleRef       module;
     LLVMTypeRef         novalue_type;
     LLVMTypeRef         fullword_type;
@@ -1877,8 +1878,8 @@ gencode_module_begin (gencodectx_t gctx, name_t *modnp)
     gctx->memcpyfn = LLVMAddFunction(gctx->module, "llvm.memcpy.p0i8.p0i8.i32",
                                      memcpytype);
 
-    LLVMSetTarget(gctx->module, LLVMGetTargetMachineTriple(gctx->target_machine));
-    dl = LLVMCopyStringRepOfTargetData(LLVMGetTargetMachineData(gctx->target_machine));
+    LLVMSetTarget(gctx->module, LLVMGetTargetMachineTriple(gctx->mctx->target_machine));
+    dl = LLVMCopyStringRepOfTargetData(LLVMGetTargetMachineData(gctx->mctx->target_machine));
     LLVMSetDataLayout(gctx->module, dl);
     LLVMDisposeMessage(dl);
 
@@ -1905,7 +1906,7 @@ gencode_module_end (gencodectx_t gctx, name_t *np)
     LLVMVerifyModule(gctx->module, LLVMPrintMessageAction, 0);
     LLVMDumpModule(gctx->module);
     err = 0;
-    if (LLVMTargetMachineEmitToFile(gctx->target_machine, gctx->module, "blah.s",
+    if (LLVMTargetMachineEmitToFile(gctx->mctx->target_machine, gctx->module, "blah.s",
                                     LLVMAssemblyFile, &err)) {
         if (err) { fprintf(stderr, "%s\n", err); LLVMDisposeMessage(err); }
     }
@@ -1925,8 +1926,6 @@ gencodectx_t
 gencode_init (void *ectx, logctx_t logctx, machinedef_t *mach, symctx_t symctx)
 {
     gencodectx_t gctx = malloc(sizeof(struct gencodectx_s));
-    LLVMTargetRef target;
-    char default_triple[64], *err;
 
     static sym_genvec_t vec = {
         symbol_gensize, symbol_generator, 0, 0, 0
@@ -1937,25 +1936,10 @@ gencode_init (void *ectx, logctx_t logctx, machinedef_t *mach, symctx_t symctx)
     gctx->ectx = ectx;
     gctx->mach = mach;
     gctx->symctx = symctx;
-    gctx->llvmctx = LLVMContextCreate();
-    if (gctx->llvmctx == 0) {
-        log_signal(logctx, 0, STC__INTCMPERR, "gencode_init");
-        free(gctx);
-        return 0;
-    }
+    gctx->mctx = machine_context(mach);
+    gctx->llvmctx = gctx->mctx->llvmctx;
+
     symbols_gen_register(symctx, gctx, &vec);
-
-    LLVMInitializeX86TargetInfo();
-    LLVMInitializeX86Target();
-    LLVMInitializeX86TargetMC();
-    LLVMInitializeX86AsmPrinter();
-
-    err = 0;
-    strcpy(default_triple, HelperGetDefaultTriple());
-    target = HelperLookupTarget(default_triple, &err);
-    if (target == 0) { if (err != 0) { fprintf(stderr, "%s\n", err); free(err); }}
-    gctx->target_machine = LLVMCreateTargetMachine(target, default_triple, "", "", LLVMCodeGenLevelNone, LLVMRelocPIC, LLVMCodeModelDefault);
-    HelperSetAsmVerbosity(gctx->target_machine, 1);
 
     gctx->onebit = LLVMIntTypeInContext(gctx->llvmctx, 1);
     gctx->novalue_type = LLVMVoidTypeInContext(gctx->llvmctx);

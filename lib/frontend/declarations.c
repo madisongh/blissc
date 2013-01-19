@@ -679,7 +679,7 @@ attr_extension (expr_ctx_t ctx, int *signext)
     static lextype_t attrs[] = { LEXTYPE_ATTR_UNSIGNED,
         LEXTYPE_ATTR_SIGNED };
 
-    if (!mach->signext_supported) {
+    if (!machine_signext_supported(mach)) {
         return -1;
     }
     which = parser_expect_oneof(pctx, QL_NORMAL, attrs,
