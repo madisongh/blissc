@@ -1613,33 +1613,6 @@ declare_builtin (parse_ctx_t pctx, scopectx_t scope)
 
 }
 
-
-/*
- * psects_init
- *
- * Set up the default PSECTs and their predeclared names.
- * XXX this should probably be machine-specific.
- */
-static void
-psects_init (scopectx_t kwdscope, machinedef_t *mach) {
-
-    name_t *np;
-    strdesc_t own = STRDEF("$OWN$");
-    strdesc_t global = STRDEF("$GLOBAL$");
-    strdesc_t plit = STRDEF("$PLIT$");
-    strdesc_t code = STRDEF("$CODE$");
-
-    np = psect_declare(kwdscope, &own, PSECT_M_ATTR_WRITE, 0);
-    scope_sclass_psectname_set(kwdscope, SCLASS_OWN, np);
-    np = psect_declare(kwdscope, &global, PSECT_M_ATTR_WRITE, 0);
-    scope_sclass_psectname_set(kwdscope, SCLASS_GLOBAL, np);
-    np = psect_declare(kwdscope, &plit, 0, 0);
-    scope_sclass_psectname_set(kwdscope, SCLASS_PLIT, np);
-    np = psect_declare(kwdscope, &code, PSECT_M_ATTR_EXEC, 0);
-    scope_sclass_psectname_set(kwdscope, SCLASS_CODE, np);
-
-} /* psects_init */
-
 /*
  * declarations_init
  *
@@ -1664,7 +1637,7 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
     parser_lexfunc_register(pctx, ctx, LEXTYPE_LXF_ASSIGN, parse_ASSIGN);
 
     macros_init(kwdscope, ctx);
-    psects_init(kwdscope, mach);
+    machine_psects_init(mach, kwdscope);
 
     attr.width = machine_unit_bits(mach);
     attr.flags = SYM_M_RESERVED;

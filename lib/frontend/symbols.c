@@ -1750,20 +1750,59 @@ initval_size (symctx_t ctx, initval_t *ivlist)
 {
     initval_t *iv;
     unsigned long totsize = 0;
-    for (iv = ivlist; iv != 0; iv = iv->next) {
-        switch (iv->type) {
-            case IVTYPE_SCALAR:
-            case IVTYPE_EXPR_EXP:
-                totsize += iv->repcount * iv->data.scalar.width;
-                break;
-            case IVTYPE_STRING:
-                totsize += ((iv->repcount * iv->data.string->len +
-                            machine_unit_maxbytes(ctx->mach))-1) /
-                            machine_unit_maxbytes(ctx->mach);
-                break;
-            case IVTYPE_LIST:
-                totsize += iv->repcount * initval_size(ctx, iv->data.listptr);
-                break;
+
+    if (ivlist->preset_expr == 0) {
+        for (iv = ivlist; iv != 0; iv = iv->next) {
+            switch (iv->type) {
+                case IVTYPE_SCALAR:
+                case IVTYPE_EXPR_EXP:
+                    totsize += iv->repcount * iv->data.scalar.width;
+                    break;
+                case IVTYPE_STRING:
+                    totsize += ((iv->repcount * iv->data.string->len +
+                                 machine_unit_maxbytes(ctx->mach))-1) /
+                    machine_unit_maxbytes(ctx->mach);
+                    break;
+                case IVTYPE_LIST:
+                    totsize += iv->repcount * initval_size(ctx, iv->data.listptr);
+                    break;
+            }
+        }
+    } else {
+        machinedef_t *mach = ctx->mach;
+        unsigned long bpunit = machine_unit_bits(mach);
+
+        // For PRESETs, go through each of the preset offset expressions
+        // and locate the furthest one (taking into account the size of
+        // the field, too).
+        //
+        // This should work because the address arithmetic expressions that
+        // come out of a structure reference involve CTCE offsets, so the
+        // constant folding in the expression parser will eliminate the
+        // arithmetic expressions for us.
+        for (iv = ivlist; iv != 0; iv = iv->next) {
+            expr_node_t *exp = iv->preset_expr;
+            unsigned long thissize;
+            if (expr_type(exp) == EXPTYPE_PRIM_SEG) {
+                thissize = expr_seg_offset(exp) + expr_seg_units(exp);
+            } else if (expr_type(exp) == EXPTYPE_PRIM_FLDREF) {
+                expr_node_t *pos = expr_fldref_pos(exp);
+                expr_node_t *siz = expr_fldref_size(exp);
+                thissize = expr_seg_offset(expr_fldref_addr(exp));
+                if (expr_type(pos) != EXPTYPE_PRIM_LIT ||
+                    expr_type(siz) != EXPTYPE_PRIM_LIT) {
+                    expr_signal(ctx->expctx, STC__PROFNCTCE);
+                } else {
+                    // round up to the next unit
+                    thissize += ((expr_litval(pos) + expr_litval(siz) + bpunit-1) /
+                                 bpunit);
+                }
+            } else {
+                expr_signal(ctx->expctx, STC__PRBADEXPR);
+            }
+            if (thissize > totsize) {
+                totsize = thissize;
+            }
         }
     }
     return totsize;

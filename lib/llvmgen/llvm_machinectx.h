@@ -21,6 +21,7 @@
 #include "llvm_helper.h"
 
 struct machine_ctx_s {
+    void                   *genctx;
     LLVMContextRef          llvmctx;
     LLVMTargetMachineRef    target_machine;
 };

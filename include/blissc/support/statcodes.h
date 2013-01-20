@@ -151,6 +151,14 @@ STATCODE( 98,E,INVTOKEN,  "invalid token encountered") \
 STATCODE( 99,W,EXCFUNARGS,"too many arguments passed to executable function !SD") \
 STATCODE(100,E,CSNOTCONST,"character size is not a compile-time constant") \
 STATCODE(101,E,INVCSIZE,  "invalid character size !UI") \
+STATCODE(102,W,INITSZERR, "initializer too large for !SD") \
+STATCODE(103,E,PROFNCTCE, "non-constant field reference found in PRESET") \
+STATCODE(104,E,PRBADEXPR, "unexpected offset expression found in PRESET") \
+STATCODE(105,E,EXCPRLIMIT,"exceeded compiler limit on PRESET expressions") \
+STATCODE(106,E,PRBADVALUE,"non-constant PRESET value expression") \
+STATCODE(107,E,PRINVADSZ, "PRESET field size invalid for address initializer") \
+STATCODE(108,E,PROVERLAP, "overlapping initializer fields found in PRESET") \
+STATCODE(109,E,EXCRTNPARS,"routine !SD exceeds parameter list size limit") \
 
 #define STATCODE(msg,typ,nam,txt) STC__##nam =  STC_CODE_##typ(msg),
 typedef enum {

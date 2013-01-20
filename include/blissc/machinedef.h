@@ -55,5 +55,6 @@ siu unsigned int machine_charsize(machinedef_t *mach, int idx) { return mach->ch
 #undef siu
 
 machinedef_t *machine_init (const char *machspec);
+void machine_psects_init (machinedef_t *mach, void *scope);
 
 #endif /* machinedef_h__ */
