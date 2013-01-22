@@ -43,6 +43,7 @@ llvmgen_assignment (gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs)
     LLVMValueRef rhsvalue, v, lhsaddr;
     LLVMTypeRef  lhstype;
     LLVMBuilderRef builder = (gctx->curfn == 0 ? 0 : gctx->curfn->builder);
+    unsigned int flags = 0;
 
     rhsvalue = llvmgen_expression(gctx, rhs, 0);
     if (rhsvalue == 0) {
@@ -50,7 +51,7 @@ llvmgen_assignment (gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs)
         expr_signal(gctx->ectx, STC__EXPRVALRQ);
         rhsvalue = LLVMConstNull(LLVMIntTypeInContext(gctx->llvmctx, bpval));
     }
-    lhsaddr = llvmgen_addr_expression(gctx, lhs);
+    lhsaddr = llvmgen_addr_expression(gctx, lhs, &flags);
     if (lhsaddr == 0) {
         expr_signal(gctx->ectx, STC__ADDRVALRQ);
         return rhsvalue;
@@ -88,6 +89,7 @@ llvmgen_assignment (gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs)
     }
 
     LLVMBuildStore(builder, v, lhsaddr);
+    if ((flags & LLVMGEN_M_SEG_VOLATILE) != 0) LLVMSetVolatile(v, 1);
 
     return rhsvalue;
 
@@ -98,20 +100,22 @@ gen_fetch (gencodectx_t gctx, expr_node_t *rhs, LLVMTypeRef neededtype)
 {
     LLVMBuilderRef builder = gctx->curfn->builder;
     LLVMValueRef addr, val;
-    int signext = 0;
+    unsigned int flags = 0;
     expr_node_t *base = (expr_type(rhs) == EXPTYPE_PRIM_FLDREF ? expr_fldref_addr(rhs) : rhs);
 
     if (expr_type(base) == EXPTYPE_PRIM_SEG && name_type(expr_seg_name(base)) == LEXTYPE_NAME_DATA) {
         llvm_stgclass_t valclass;
-        addr = llvmgen_segaddress(gctx, expr_seg_name(base), &valclass, &signext);
+        addr = llvmgen_segaddress(gctx, expr_seg_name(base), &valclass, &flags);
         if (valclass == LLVM_REG) {
             val = addr;
         } else {
             val = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
+            if ((flags & LLVMGEN_M_SEG_VOLATILE) != 0) LLVMSetVolatile(val, 1);
         }
     } else {
-        addr = llvmgen_addr_expression(gctx, rhs);
+        addr = llvmgen_addr_expression(gctx, rhs, &flags);
         val = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
+        if ((flags & LLVMGEN_M_SEG_VOLATILE) != 0) LLVMSetVolatile(val, 1);
     }
     // If this is a field reference, do the extraction
     if (rhs != base) {
@@ -122,14 +126,14 @@ gen_fetch (gencodectx_t gctx, expr_node_t *rhs, LLVMTypeRef neededtype)
         val = llvmgen_adjustval(gctx, val, inttype);
         if (!(expr_type(pos) == EXPTYPE_PRIM_LIT && expr_litval(pos) == 0)) {
             LLVMValueRef pval = llvmgen_expression(gctx, pos, inttype);
-            if (signext) {
+            if ((flags & LLVMGEN_M_SEG_SIGNEXT) != 0) {
                 val = LLVMBuildAShr(builder, val, pval, llvmgen_temp(gctx));
             } else {
                 val = LLVMBuildLShr(builder, val, pval, llvmgen_temp(gctx));
             }
         }
 
-        signext = expr_fldref_signext(rhs);
+        if (expr_fldref_signext(rhs)) flags |= LLVMGEN_M_SEG_SIGNEXT;
 
         if (expr_type(size) == EXPTYPE_PRIM_LIT) {
             LLVMTypeRef trunctype = LLVMIntTypeInContext(gctx->llvmctx,
@@ -143,7 +147,9 @@ gen_fetch (gencodectx_t gctx, expr_node_t *rhs, LLVMTypeRef neededtype)
             mask = LLVMBuildShl(builder, neg1, sizeval, llvmgen_temp(gctx));
             mask = LLVMBuildNeg(builder, mask, llvmgen_temp(gctx));
             val = LLVMBuildAnd(builder, val, mask, llvmgen_temp(gctx));
-            if (signext) val = LLVMBuildSExt(builder, val, inttype, llvmgen_temp(gctx));
+            if ((flags & LLVMGEN_M_SEG_SIGNEXT) != 0) {
+                val = LLVMBuildSExt(builder, val, inttype, llvmgen_temp(gctx));
+            }
         }
     }
 

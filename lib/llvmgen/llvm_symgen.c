@@ -27,7 +27,7 @@ typedef struct llvm_litsym_s llvm_litsym_t;
 
 struct llvm_datasym_s {
     LLVMValueRef        value;
-    int                 signext;
+    unsigned int        flags;
     llvm_stgclass_t     vclass;
 };
 typedef struct llvm_datasym_s llvm_datasym_t;
@@ -78,6 +78,25 @@ machine_psects_init (machinedef_t *mach, void *scope) {
     gctx->extern_psect = psect_declare(kwdscope, &datacommon, PSECT_M_ATTR_WRITE, 0);
 
 } /* machine_psects_init */
+
+llvm_btrack_t *
+llvmgen_label_btrack (name_t *np)
+{
+    llvm_label_t *lbl = sym_genspace(np);
+    if (name_type(np) != LEXTYPE_NAME_LABEL) return 0;
+    return lbl->btrack;
+
+} /* llvmgen_label_btrack */
+
+void
+llvmgen_label_btrack_set (name_t *np, llvm_btrack_t *bt)
+{
+    llvm_label_t *lbl = sym_genspace(np);
+    if (name_type(np) == LEXTYPE_NAME_LABEL) {
+        lbl->btrack = bt;
+    }
+
+} /* llvmegen_label_btrack_set */
 
 /*
  * litsym_generator
@@ -533,7 +552,8 @@ datasym_generator (void *vctx, name_t *np, void *p)
         if (attr->alignment != 0) {
             HelperSetAllocaAlignment(ld->value, 1<<attr->alignment);
         }
-        ld->signext = (attr->flags & SYM_M_SIGNEXT) != 0;
+        ld->flags = (((attr->flags & SYM_M_SIGNEXT) != 0 ? LLVMGEN_M_SEG_SIGNEXT : 0) |
+                     ((attr->flags & SYM_M_VOLATILE) != 0 ? LLVMGEN_M_SEG_VOLATILE : 0));
         if (attr->ivlist != 0) {
             handle_initializer(gctx, ld, np);
         }
@@ -616,20 +636,20 @@ rtnsym_generator (void *vctx, name_t *np, void *p)
  * llvmgen_segaddress
  */
 LLVMValueRef
-llvmgen_segaddress (gencodectx_t gctx, name_t *np, llvm_stgclass_t *segclassp, int *signedp)
+llvmgen_segaddress (gencodectx_t gctx, name_t *np, llvm_stgclass_t *segclassp, unsigned int *flagsp)
 {
     lextype_t ntype = name_type(np);
 
     if (ntype == LEXTYPE_NAME_ROUTINE) {
         llvm_rtnsym_t *lr = sym_genspace(np);
         if (segclassp != 0) *segclassp = LLVM_GLOBAL;
-        if (signedp != 0) *signedp = machine_addr_signed(gctx->mach);
+        if (flagsp != 0) *flagsp = machine_addr_signed(gctx->mach) ? LLVMGEN_M_SEG_SIGNEXT : 0;
         return lr->func;
     }
     if (ntype == LEXTYPE_NAME_DATA) {
         llvm_datasym_t *ld = sym_genspace(np);
         if (segclassp != 0) *segclassp = ld->vclass;
-        if (signedp != 0) *signedp = ld->signext;
+        if (flagsp != 0) *flagsp = ld->flags;
         return ld->value;
     }
     // Should never be called on any other name types
