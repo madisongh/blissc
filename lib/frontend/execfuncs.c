@@ -22,6 +22,7 @@
 #include "blissc/parser.h"
 #include "blissc/nametable.h"
 #include "blissc/lexeme.h"
+#include "blissc/gencode.h"
 #include "blissc/chf.h"
 
 typedef int (*compare_fn)(long, long);

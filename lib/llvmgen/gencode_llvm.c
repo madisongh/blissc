@@ -702,7 +702,7 @@ gencode_expr_OPERATOR (gencodectx_t gctx, expr_node_t *node)
                 if (expr_type(expr_fldref_size(erhs)) == EXPTYPE_PRIM_LIT) {
                     unsigned int nbits = (unsigned int)expr_litval(expr_fldref_size(erhs));
                     LLVMTypeRef ftype = LLVMIntTypeInContext(gctx->llvmctx, nbits);
-                    if (nbits < machine_scalar_units(gctx->mach)) {
+                    if (nbits < machine_scalar_bits(gctx->mach)) {
                         v = LLVMBuildTrunc(gctx->builder, v, ftype, gentempname(gctx));
                         if (expr_fldref_signext(erhs)) {
                             v = LLVMBuildSExt(gctx->builder, v, gctx->fullword_type, gentempname(gctx));

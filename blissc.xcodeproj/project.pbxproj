@@ -12,6 +12,10 @@
 		7A2DD25B165009F1002CD078 /* declarations.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A2DD25A165009F1002CD078 /* declarations.c */; };
 		7A381B2316987FC1008588BA /* llvm_helper.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7A381B2116987FC1008588BA /* llvm_helper.cpp */; };
 		7A4EAAD716AAD945003FB0D8 /* chf_generic.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A4EAAD616AAD945003FB0D8 /* chf_generic.c */; };
+		7A53E04C16AD7A07006C1DAE /* llvm_ctrlexpgen.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A53E04B16AD7A07006C1DAE /* llvm_ctrlexpgen.c */; };
+		7A53E04F16AD7AFE006C1DAE /* llvm_expgen.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A53E04E16AD7AFE006C1DAE /* llvm_expgen.c */; };
+		7A53E05116AD7B6C006C1DAE /* llvm_opexpgen.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A53E05016AD7B6C006C1DAE /* llvm_opexpgen.c */; };
+		7A53E05316AE008B006C1DAE /* llvm_execfuncgen.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A53E05216AE008B006C1DAE /* llvm_execfuncgen.c */; };
 		7A5588FF16AB353B000D9FE2 /* llvm_symgen.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A5588FE16AB353B000D9FE2 /* llvm_symgen.c */; };
 		7A7FD5151636C29C00B2D7FC /* lexer.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A7FD5141636C29C00B2D7FC /* lexer.c */; };
 		7A95BCEC1641CC2F002F851E /* strings.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A95BCEB1641CC2F002F851E /* strings.c */; };
@@ -59,6 +63,10 @@
 		7A4EAAD616AAD945003FB0D8 /* chf_generic.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = chf_generic.c; path = lib/frontend/chf_generic.c; sourceTree = "<group>"; };
 		7A4EAAD916AAF798003FB0D8 /* chf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = chf.h; path = include/blissc/chf.h; sourceTree = "<group>"; };
 		7A5351E91656FE7B00BE4B99 /* test_decl.bli */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_decl.bli; path = testfiles/test_decl.bli; sourceTree = SOURCE_ROOT; };
+		7A53E04B16AD7A07006C1DAE /* llvm_ctrlexpgen.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = llvm_ctrlexpgen.c; path = lib/llvmgen/llvm_ctrlexpgen.c; sourceTree = "<group>"; };
+		7A53E04E16AD7AFE006C1DAE /* llvm_expgen.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = llvm_expgen.c; path = lib/llvmgen/llvm_expgen.c; sourceTree = "<group>"; };
+		7A53E05016AD7B6C006C1DAE /* llvm_opexpgen.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = llvm_opexpgen.c; path = lib/llvmgen/llvm_opexpgen.c; sourceTree = "<group>"; };
+		7A53E05216AE008B006C1DAE /* llvm_execfuncgen.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = llvm_execfuncgen.c; path = lib/llvmgen/llvm_execfuncgen.c; sourceTree = "<group>"; };
 		7A548D681646E9E500A2A20F /* test_req.req */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test_req.req; path = testfiles/test_req.req; sourceTree = SOURCE_ROOT; };
 		7A5588FE16AB353B000D9FE2 /* llvm_symgen.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = llvm_symgen.c; path = lib/llvmgen/llvm_symgen.c; sourceTree = "<group>"; };
 		7A7FD5141636C29C00B2D7FC /* lexer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = lexer.c; path = lib/frontend/lexer.c; sourceTree = SOURCE_ROOT; };
@@ -273,6 +281,10 @@
 				7AE1E623168DDD810085DFF5 /* gencode_llvm.c */,
 				7A19786C16AB145F009FE9EE /* llvmgen.h */,
 				7A5588FE16AB353B000D9FE2 /* llvm_symgen.c */,
+				7A53E04B16AD7A07006C1DAE /* llvm_ctrlexpgen.c */,
+				7A53E05216AE008B006C1DAE /* llvm_execfuncgen.c */,
+				7A53E04E16AD7AFE006C1DAE /* llvm_expgen.c */,
+				7A53E05016AD7B6C006C1DAE /* llvm_opexpgen.c */,
 				7A381B2116987FC1008588BA /* llvm_helper.cpp */,
 				7A381B2216987FC1008588BA /* llvm_helper.h */,
 				7AD5C64216AA083400B49D81 /* llvm_machines.c */,
@@ -405,6 +417,10 @@
 				7AD5C64316AA083400B49D81 /* llvm_machines.c in Sources */,
 				7A4EAAD716AAD945003FB0D8 /* chf_generic.c in Sources */,
 				7A5588FF16AB353B000D9FE2 /* llvm_symgen.c in Sources */,
+				7A53E04C16AD7A07006C1DAE /* llvm_ctrlexpgen.c in Sources */,
+				7A53E04F16AD7AFE006C1DAE /* llvm_expgen.c in Sources */,
+				7A53E05116AD7B6C006C1DAE /* llvm_opexpgen.c in Sources */,
+				7A53E05316AE008B006C1DAE /* llvm_execfuncgen.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

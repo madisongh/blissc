@@ -159,6 +159,7 @@ STATCODE(106,E,PRBADVALUE,"non-constant PRESET value expression") \
 STATCODE(107,E,PRINVADSZ, "PRESET field size invalid for address initializer") \
 STATCODE(108,E,PROVERLAP, "overlapping initializer fields found in PRESET") \
 STATCODE(109,E,EXCRTNPARS,"routine !SD exceeds parameter list size limit") \
+STATCODE(110,E,ADDRVALRQ, "address expression required in this context") \
 
 #define STATCODE(msg,typ,nam,txt) STC__##nam =  STC_CODE_##typ(msg),
 typedef enum {

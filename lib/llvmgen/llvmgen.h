@@ -52,6 +52,8 @@ struct llvm_rtntrack_s {
     LLVMBuilderRef           builder;
     LLVMValueRef             func;
     LLVMBasicBlockRef        bldpos;
+    unsigned int             tmpidx;
+    unsigned int             lblidx;
 };
 typedef struct llvm_rtntrack_s llvm_rtntrack_t;
 
@@ -70,20 +72,26 @@ struct gencodectx_s {
     LLVMModuleRef       module;
     LLVMPassManagerRef  passmgr;
 
-    unsigned int        tmpidx;
-    unsigned int        lblidx;
     unsigned int        globidx;
 
     char                tmpnambuf[NAME_SIZE];
 };
 
+typedef enum {
+    LLVM_REG,
+    LLVM_LOCAL,
+    LLVM_GLOBAL
+} llvm_stgclass_t;
+
+typedef LLVMValueRef (*llvmgen_expgen_fn)(gencodectx_t, expr_node_t *, LLVMTypeRef);
+
 #define siu static inline __attribute__((unused))
 siu char *llvmgen_temp(gencodectx_t gctx) {
-    snprintf(gctx->tmpnambuf, sizeof(gctx->tmpnambuf), "tmp.%u", gctx->tmpidx++);
+    snprintf(gctx->tmpnambuf, sizeof(gctx->tmpnambuf), "tmp.%u", gctx->curfn->tmpidx++);
     return gctx->tmpnambuf;
 }
 siu char *llvmgen_label(gencodectx_t gctx) {
-    snprintf(gctx->tmpnambuf, sizeof(gctx->tmpnambuf), "label.%u", gctx->lblidx++);
+    snprintf(gctx->tmpnambuf, sizeof(gctx->tmpnambuf), "label.%u", gctx->curfn->lblidx++);
     return gctx->tmpnambuf;
 }
 siu char *llvmgen_global(gencodectx_t gctx) {
@@ -103,4 +111,17 @@ void llvmgen_btrack_update_phi(gencodectx_t gctx, llvm_btrack_t *bt,
 void llvmgen_btrack_free(gencodectx_t gctx, llvm_btrack_t *bt);
 LLVMValueRef llvmgen_btrack_finalize(gencodectx_t gctx, llvm_btrack_t *bt);
 void llvmgen_symgen_init(gencodectx_t gctx);
+void llvmgen_memcpy(gencodectx_t gctx, LLVMValueRef dest, LLVMValueRef src, char *name);
+void llvmgen_memset(gencodectx_t gctx, LLVMValueRef dest, LLVMValueRef val, char *name);
+LLVMValueRef llvmgen_assignment(gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs);
+LLVMValueRef llvmgen_segaddress(gencodectx_t gctx, name_t *np, llvm_stgclass_t *segclass, int *signext);
+LLVMValueRef llvmgen_expression(gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype);
+LLVMValueRef llvmgen_addr_expression(gencodectx_t gctx, expr_node_t *exp);
+LLVMValueRef llvmgen_adjustval(gencodectx_t gctx, LLVMValueRef val, LLVMTypeRef neededtype);
+void llvmgen_expgen_register(gencodectx_t gctx, exprtype_t type, llvmgen_expgen_fn func);
+void llvmgen_opexpgen_init(gencodectx_t gctx);
+void llvmgen_ctrlexpgen_init(gencodectx_t gctx);
+void llvmgen_execfuncgen_init(gencodectx_t gctx);
+void llvmgen_expgen_init(gencodectx_t gctx);
+LLVMIntPredicate llvmgen_predfromop(optype_t op, int addrsigned);
 #endif
