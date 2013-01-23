@@ -174,8 +174,7 @@ gen_ABS (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
     val = LLVMBuildSub(builder, LLVMConstNull(LLVMTypeOf(val)), val, llvmgen_temp(gctx));
     llvmgen_btrack_update(gctx, bt, val);
     result = llvmgen_btrack_finalize(gctx, bt);
-    if (neededtype != 0) result = llvmgen_adjustval(gctx, result, neededtype);
-    return result;
+    return llvmgen_adjustval(gctx, result, neededtype);
 
 } /* gen_SIGN */
 
@@ -230,9 +229,7 @@ gen_MINMAX (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededty
     }
 
     result = llvmgen_btrack_finalize(gctx, bt);
-    if (neededtype != 0) result = llvmgen_adjustval(gctx, result, neededtype);
-
-    return result;
+    return llvmgen_adjustval(gctx, result, neededtype);
 
 } /* gen_MINMAX */
 

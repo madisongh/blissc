@@ -19,6 +19,14 @@
 #include "llvmgen.h"
 
 
+void
+llvmgen_expgen_register (gencodectx_t gctx, exprtype_t type, llvmgen_expgen_fn func)
+{
+    gctx->expgen_funcs[type] = func;
+
+} /* llvmgen_expgen_register */
+
+
 LLVMValueRef
 llvmgen_expression (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -46,11 +54,12 @@ llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp, unsigned int *flag
     }
 
     if (flagsp != 0) *flagsp = 0;
+
     return llvmgen_expression(gctx, exp, gctx->unitptrtype);
 
 } /* llvmgen_addr_expression */
 
-LLVMValueRef
+static LLVMValueRef
 gen_literal (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
     strdesc_t *str = expr_litstring(exp);
@@ -68,9 +77,7 @@ gen_literal (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
         result = LLVMConstStringInContext(gctx->llvmctx, str->ptr, str->len, 1);
     }
 
-    if (neededtype != 0) result = llvmgen_adjustval(gctx, result, neededtype);
-
-    return result;
+    return llvmgen_adjustval(gctx, result, neededtype);
 
 } /* gen_literal */
 
@@ -82,14 +89,12 @@ gen_literal (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
  * in all other cases where a field reference appears, its value is simply the
  * address; the field parameters are ignored.
  */
-LLVMValueRef
+static LLVMValueRef
 gen_fieldref (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
     LLVMValueRef result = llvmgen_addr_expression(gctx, expr_fldref_addr(exp), 0);
 
-    if (neededtype != 0) result = llvmgen_adjustval(gctx, result, neededtype);
-
-    return result;
+    return llvmgen_adjustval(gctx, result, neededtype);
 
 } /* gen_fieldref */
 
@@ -100,14 +105,14 @@ gen_fieldref (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
  * parenthesize a structure-reference expression, so it's treated as a unit
  * by the expression code.  No special handling required here.
  */
-LLVMValueRef
+static LLVMValueRef
 gen_struref (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
     return llvmgen_expression(gctx, expr_struref_accexpr(exp), neededtype);
 
 } /* gen_struref */
 
-LLVMValueRef
+static LLVMValueRef
 gen_block (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
     exprseq_t *seq = expr_blk_seq(exp);
@@ -151,19 +156,55 @@ gen_block (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
             val = LLVMConstNull(neededtype);
         }
     } else {
-        if (neededtype) val = llvmgen_adjustval(gctx, val, neededtype);
+        val = llvmgen_adjustval(gctx, val, neededtype);
     }
 
     return val;
     
 } /* gen_block */
 
-void
-llvmgen_expgen_register (gencodectx_t gctx, exprtype_t type, llvmgen_expgen_fn func)
+static LLVMValueRef
+gen_routine_call (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
-    gctx->expgen_funcs[type] = func;
+    expr_node_t *rtnexp = expr_rtnaddr(exp);
+    exprseq_t *args = expr_rtn_inargs(exp);
+    expr_node_t *arg;
+    LLVMValueRef rtnadr, result, argvals[LLVMGEN_K_MAXARGS];
+    LLVMTypeRef type, rettype, argtypes[LLVMGEN_K_MAXARGS];
+    unsigned int i, argcount = exprseq_length(args), formalcount;
 
-} /* llvmgen_expgen_register */
+    if (expr_type(rtnexp) == EXPTYPE_PRIM_SEG &&
+        name_type(expr_seg_name(rtnexp)) == LEXTYPE_NAME_ROUTINE) {
+        rtnadr = LLVMGetNamedFunction(gctx->module, name_azstring(expr_seg_name(rtnexp)));
+        type = LLVMTypeOf(rtnadr);
+        rettype = LLVMGetReturnType(type);
+        formalcount = LLVMCountParamTypes(type);
+    } else {
+        rettype = gctx->fullwordtype;
+        type = LLVMFunctionType(rettype, 0, 0, 1);
+        rtnadr = llvmgen_expression(gctx, rtnexp, type);
+        formalcount = 0;
+    }
+    if (argcount > LLVMGEN_K_MAXARGS) {
+        log_signal(expr_logctx(gctx->ectx), expr_textpos(exp), STC__EXCCALPARS);
+        argcount = LLVMGEN_K_MAXARGS;
+    }
+    if (formalcount != 0) LLVMGetParamTypes(type, argtypes);
+    for (i = 0, arg = exprseq_head(args); i < argcount && arg != 0; i++, arg = arg->tq_next) {
+        if (i >= formalcount) argtypes[i] = 0;
+        argvals[i] = llvmgen_expression(gctx, arg, argtypes[i]);
+    }
+    if (argcount < formalcount) {
+        log_signal(expr_logctx(gctx->ectx), expr_textpos(exp), STC__INSFPARS);
+        for (i = argcount; i < formalcount; i++) argvals[i] = LLVMConstNull(argtypes[i]);
+        argcount = formalcount;
+    }
+
+    result = LLVMBuildCall(gctx->curfn->builder, rtnadr, argvals, argcount, llvmgen_temp(gctx));
+
+    return llvmgen_adjustval(gctx, result, neededtype);
+
+} /* gen_routine_call */
 
 void
 llvmgen_expgen_init (gencodectx_t gctx)
@@ -178,6 +219,7 @@ llvmgen_expgen_init (gencodectx_t gctx)
     llvmgen_expgen_register(gctx, EXPTYPE_PRIM_FLDREF, gen_fieldref);
     llvmgen_expgen_register(gctx, EXPTYPE_PRIM_STRUREF, gen_struref);
     llvmgen_expgen_register(gctx, EXPTYPE_PRIM_BLK, gen_block);
+    llvmgen_expgen_register(gctx, EXPTYPE_PRIM_RTNCALL, gen_routine_call);
     llvmgen_opexpgen_init(gctx);
     llvmgen_ctrlexpgen_init(gctx);
     llvmgen_execfuncgen_init(gctx);

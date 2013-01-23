@@ -153,11 +153,7 @@ gen_fetch (gencodectx_t gctx, expr_node_t *rhs, LLVMTypeRef neededtype)
         }
     }
 
-    if (neededtype != 0) {
-        val = llvmgen_adjustval(gctx, val, neededtype);
-    }
-
-    return val;
+    return llvmgen_adjustval(gctx, val, neededtype);
 
 } /* gen_fetch */
 
@@ -234,10 +230,7 @@ gen_operator_expression (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef needed
 
     if (op == OPER_ASSIGN) {
         LLVMValueRef val = llvmgen_assignment(gctx, lhs, rhs);
-        if (neededtype != 0) {
-            val = llvmgen_adjustval(gctx, val, neededtype);
-        }
-        return val;
+        return llvmgen_adjustval(gctx, val, neededtype);
     }
 
     if (op == OPER_SHIFT) {
@@ -298,11 +291,8 @@ gen_operator_expression (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef needed
             }
             break;
     }
-    if (neededtype != 0) {
-        result = llvmgen_adjustval(gctx, result, neededtype);
-    }
 
-    return result;
+    return llvmgen_adjustval(gctx, result, neededtype);
 
 } /* gen_operator_expression */
 

@@ -18,7 +18,6 @@
 #include "llvmgen.h"
 
 #define LLVMGEN_K_MAXPRESETS 128
-#define LLVMGEN_K_MAXARGS    16
 
 struct llvm_litsym_s {
     LLVMValueRef        value;
