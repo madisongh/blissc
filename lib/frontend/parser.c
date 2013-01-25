@@ -54,6 +54,7 @@ struct parse_ctx_s {
     lexctx_t        lmemctx;
     logctx_t        logctx;
     char            *main_filename;
+    unsigned int    variant;
     lexfunc_t       lexfuncs[LEXTYPE_LXF_MAX-LEXTYPE_LXF_MIN+1];
     void           *lxfctx[LEXTYPE_LXF_MAX-LEXTYPE_LXF_MIN+1];
 };
@@ -83,7 +84,8 @@ struct parse_ctx_s {
     DODEF(PRINT, parse_msgfunc) \
     DODEF(INFORM, parse_msgfunc) DODEF(ERROR, parse_msgfunc) \
     DODEF(WARN, parse_msgfunc) DODEF(MESSAGE, parse_msgfunc) \
-    DODEF(TITLE, parse_titlefunc) DODEF(SBTTL, parse_titlefunc)
+    DODEF(TITLE, parse_titlefunc) DODEF(SBTTL, parse_titlefunc) \
+    DODEF(VARIANT, parse_variant)
 
 // Forward declarations for the routines; fortunately, multiple forward
 // declarations aren't a problem.
@@ -398,6 +400,7 @@ void
 parser_finish (parse_ctx_t pctx)
 {
     scope_end(pctx->curscope);
+    nametables_finish(pctx->namectx);
     if (pctx->lexctx != 0) {
         lexer_finish(pctx->lexctx);
     }
@@ -422,6 +425,7 @@ void parser_decr_erroneof (parse_ctx_t pctx) { pctx->no_eof -= 1; }
 void parser_skipmode_set (parse_ctx_t pctx, int val) { pctx->macroskip = val; }
 scopectx_t parser_kwdscope (parse_ctx_t pctx) { return pctx->kwdscope; }
 lstgctx_t parser_lstgctx (parse_ctx_t pctx) { return pctx->lstgctx; }
+void parser_variant_set (parse_ctx_t pctx, unsigned int val) { pctx->variant = val; }
 
 /*
  * parser_condstate_push
@@ -505,13 +509,13 @@ parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen, char **actnamep
  */
 int
 parser_fopen_main (parse_ctx_t pctx, const char *fname, size_t fnlen,
-                   int do_listing, const char *listfname, size_t lfnlen)
+                   unsigned int listopts, const char *listfname, size_t lfnlen)
 {
     if (!lexer_fopen(pctx->lexctx, fname, fnlen, &pctx->main_filename)) {
         return 0;
     }
-    if (do_listing) {
-        listing_open(pctx->lstgctx, listfname, lfnlen);
+    if (listopts != 0) {
+        listing_open(pctx->lstgctx, listfname, lfnlen, listopts);
         scan_listfuncs_set(lexer_scanctx(pctx->lexctx),
                            listing_printsrc, listing_file_close, pctx->lstgctx);
         log_lstgprintfn_set(pctx->logctx, listing_printline, pctx->lstgctx);
@@ -1710,3 +1714,20 @@ parse_titlefunc (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
     return 1;
     
 } /* parse_titlefunc */
+
+/*
+ * parse_variant
+ *
+ * %VARIANT
+ */
+int
+parse_variant (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
+{
+    strdesc_t *str;
+
+    str = string_printf(pctx->strctx, 0, "%ld", pctx->variant);
+    parser_lexeme_add(pctx, LEXTYPE_NUMERIC, str);
+    string_free(pctx->strctx, str);
+    return 1;
+    
+} /* parse_variant */

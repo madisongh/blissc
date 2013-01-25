@@ -293,8 +293,8 @@ gencode_module_end (gencodectx_t gctx, name_t *np)
     LLVMVerifyModule(gctx->module, LLVMPrintMessageAction, 0);
     LLVMDumpModule(gctx->module);
     err = 0;
-    if (LLVMTargetMachineEmitToFile(gctx->mctx->target_machine, gctx->module, "blah.s",
-                                    LLVMAssemblyFile, &err)) {
+    if (LLVMTargetMachineEmitToFile(gctx->mctx->target_machine, gctx->module,
+                                    gctx->mctx->outfile, gctx->mctx->outputtype, &err)) {
         if (err) { fprintf(stderr, "%s\n", err); LLVMDisposeMessage(err); }
     }
     LLVMDisposePassManager(gctx->passmgr);
@@ -334,4 +334,3 @@ gencode_init (void *ectx, logctx_t logctx, machinedef_t *mach, symctx_t symctx)
     return gctx;
 
 } /* gencode_init */
-

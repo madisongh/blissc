@@ -24,6 +24,8 @@ struct machine_ctx_s {
     void                   *genctx;
     LLVMContextRef          llvmctx;
     LLVMTargetMachineRef    target_machine;
+    LLVMCodeGenFileType     outputtype;
+    char                    *outfile;
 };
 
 

@@ -42,7 +42,8 @@ void listing_compilerid_set(lstgctx_t ctx, strdesc_t *str);
 void listing_ident_set(lstgctx_t ctx, strdesc_t *str);
 void listing_printline(void *, const char *, size_t, int);
 int listing_printsrc(void *, char *, size_t, unsigned int, char);
-int listing_open(lstgctx_t ctx, const char *fname, size_t len);
+int listing_open(lstgctx_t ctx, const char *fname, size_t len,
+                 unsigned int flags);
 void listing_file_close(void *);
 void listing_require_begin(lstgctx_t ctx, char *fname, size_t fnlen);
 void listing_newblock(lstgctx_t ctx);

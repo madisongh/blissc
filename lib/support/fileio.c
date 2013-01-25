@@ -94,7 +94,7 @@ fileio_finish (fioctx_t fio)
 } /* fileio_finish */
 
 char *
-file_canoncialname (fioctx_t fio, const char *orig, int origlen, unsigned int *lenp)
+file_canonicalname (fioctx_t fio, const char *orig, int origlen, unsigned int *lenp)
 {
     char *rpath;
 
@@ -121,7 +121,7 @@ file_splitname (fioctx_t fio, const char *orig, int origlen, int canonicalize,
 
     memset(parts, 0, sizeof(fio_pathparts_t));
     if (canonicalize) {
-        parts->path_fullname = file_canoncialname(fio, orig, origlen, &len);
+        parts->path_fullname = file_canonicalname(fio, orig, origlen, &len);
         if (parts->path_fullname == 0) return 0;
         parts->path_fullnamelen = len;
     } else {

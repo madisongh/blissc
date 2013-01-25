@@ -243,8 +243,11 @@ listing_file_close (void *vctx)
  * a listing file.
  */
 int
-listing_open (lstgctx_t ctx, const char *listfile, size_t lflen)
+listing_open (lstgctx_t ctx, const char *listfile, size_t lflen,
+              unsigned int flags)
 {
+    int i;
+
     ctx->outf = file_open_output(ctx->fio, listfile, lflen);
     if (ctx->outf == 0) {
         return 0;
@@ -258,6 +261,11 @@ listing_open (lstgctx_t ctx, const char *listfile, size_t lflen)
     memset(ctx->main_input+lflen, ' ', FNAME_LEN-lflen);
     memcpy(ctx->header2+FNAME_POS, ctx->main_input, FNAME_LEN);
     ctx->nlines = LINESPERPAGE;
+
+    // Bits in the flags passed in map to the listopt_type_t enum
+    for (i = 0; flags != 0; i++, flags = flags >> 1) {
+        ctx->main_state.listopts[i] = (flags & 1);
+    }
 
     return 1;
 

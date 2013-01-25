@@ -18,6 +18,7 @@
 #include "llvm_machinectx.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 machinedef_t *
 machine_init (const char *machspec)
@@ -77,4 +78,33 @@ machine_init (const char *machspec)
     
 } /* machine_init */
 
+void
+machine_output_set (machinedef_t *mach, machine_output_t outtype, char *fname, int fnlen)
+{
+    machine_ctx_t m = machine_context(mach);
+
+    m->outputtype = (outtype == MACH_K_OUTPUT_ASM ? LLVMAssemblyFile : LLVMObjectFile);
+    if (fnlen < 0) {
+        fnlen = (int) strlen(fname);
+    }
+    m->outfile = malloc(fnlen+1);
+    memcpy(m->outfile, fname, fnlen);
+    fname[fnlen] = '\0';
+
+} /* machine_output_set */
+
+void
+machine_finish (machinedef_t *mach)
+{
+    machine_ctx_t m;
+
+    if (mach == 0) return;
+    m = machine_context(mach);
+    if (m == 0) return;
+
+    if (m->target_machine != 0) LLVMDisposeTargetMachine(m->target_machine);
+    if (m->llvmctx != 0) LLVMContextDispose(m->llvmctx);
+    free(m);
+    
+} /* machine_finish */
 

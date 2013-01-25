@@ -37,7 +37,7 @@ parse_ctx_t parser_init(strctx_t strctx, namectx_t namectx, machinedef_t *mach,
 void parser_lexfunc_register(parse_ctx_t pctx, void *ctx,
                              lextype_t lt, lexfunc_t fn);
 int parser_fopen_main(parse_ctx_t pctx, const char *fname, size_t fnlen,
-                      int do_listing, const char *listfname, size_t lfnlen);
+                      unsigned int listopts, const char *listfname, size_t lfnlen);
 int parser_fopen(parse_ctx_t pctx, const char *fname, size_t fnlen,
                  char **actnamep);
 int parser_popen(parse_ctx_t pctx, scan_input_fn infn, void *fnctx);
@@ -76,4 +76,5 @@ void parser_punctclass_get(parse_ctx_t pctx, punctclass_t *clp, lextype_t *ltp);
 lexeme_t *parser_punct_grouper(parse_ctx_t pctx, int docloser);
 lexeme_t *parser_punct_separator(parse_ctx_t pctx);
 lexeme_t *parse_string_params(parse_ctx_t pctx, int openparenparsed);
+void parser_variant_set(parse_ctx_t pctx, unsigned int val);
 #endif /* parser_h__ */
