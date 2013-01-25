@@ -24,9 +24,10 @@ gen_conditional (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     LLVMBuilderRef builder = gctx->curfn->builder;
     LLVMBasicBlockRef exitblk = llvmgen_exitblock_create(gctx, llvmgen_label(gctx));
     llvm_btrack_t *bt = llvmgen_btrack_create(gctx, exitblk);
+    int hasval = expr_has_value(exp);
     LLVMBasicBlockRef consblk, altblk;
     LLVMValueRef consval, altval, test, result;
-    LLVMTypeRef resulttype = neededtype;
+    LLVMTypeRef resulttype;
 
     test = llvmgen_expression(gctx, expr_cond_test(exp), gctx->int1type);
     if (expr_cond_alternative(exp) != 0) {
@@ -39,11 +40,12 @@ gen_conditional (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     LLVMBuildCondBr(builder, test, consblk, (altblk == 0 ? exitblk : altblk));
     if (altblk == 0) llvmgen_btrack_update_brcount(gctx, bt);
     LLVMPositionBuilderAtEnd(builder, consblk);
-    consval = llvmgen_expression(gctx, expr_cond_consequent(exp), neededtype);
-    if (neededtype == 0 && consval != 0) {
+    resulttype = (hasval ? neededtype : 0);
+    consval = llvmgen_expression(gctx, expr_cond_consequent(exp), resulttype);
+    if (hasval && resulttype == 0 && consval != 0) {
         resulttype = LLVMTypeOf(consval);
     }
-    llvmgen_btrack_update(gctx, bt, (altblk == 0 ? 0 : consval));
+    llvmgen_btrack_update(gctx, bt, (hasval ? consval : 0));
     if (altblk != 0) {
         LLVMPositionBuilderAtEnd(builder, altblk);
         altval = llvmgen_expression(gctx, expr_cond_alternative(exp), resulttype);
@@ -90,7 +92,7 @@ gen_case (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     for (i = 0; i < actioncount; i++) {
         bbvec[i] = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
         LLVMPositionBuilderAtEnd(builder, bbvec[i]);
-        actval = llvmgen_expression(gctx, actions[i], gctx->fullwordtype);
+        actval = llvmgen_expression(gctx, actions[i], (hasval ? gctx->fullwordtype : 0));
         llvmgen_btrack_update(gctx, bt, (hasval ? actval : 0));
     }
     LLVMPositionBuilderAtEnd(builder, curblk);
@@ -159,10 +161,12 @@ gen_select (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     exprseq_t *selseq = expr_sel_selectors(exp);
     unsigned int numtests = exprseq_length(selseq);
     int is_selectone = expr_sel_oneonly(exp);
+    int hasval = expr_has_value(exp);
     expr_node_t *sel, *otherwexp;
     LLVMIntPredicate eqlpred, geqpred, leqpred;
     LLVMBasicBlockRef curblk, otherwise, always, insertpoint, testinspoint;
     LLVMValueRef idxval, v, result;
+    LLVMTypeRef actiontype = (hasval ? gctx->fullwordtype : 0);
     struct seltrack_s {
         LLVMValueRef testval, matchval;
         LLVMBasicBlockRef testblk, testend;
@@ -187,7 +191,7 @@ gen_select (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     if (expr_sel_alwaysaction(exp) != 0) {
         always = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
         LLVMPositionBuilderAtEnd(builder, always);
-        v = llvmgen_expression(gctx, expr_sel_alwaysaction(exp), gctx->fullwordtype);
+        v = llvmgen_expression(gctx, expr_sel_alwaysaction(exp), actiontype);
         llvmgen_btrack_update(gctx, bt, v);
         insertpoint = always;
     } else {
@@ -199,7 +203,7 @@ gen_select (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
         otherwise = LLVMInsertBasicBlockInContext(gctx->llvmctx, insertpoint,
                                                   llvmgen_label(gctx));
         LLVMPositionBuilderAtEnd(builder, otherwise);
-        v = llvmgen_expression(gctx, otherwexp, gctx->fullwordtype);
+        v = llvmgen_expression(gctx, otherwexp, actiontype);
         if (always == 0) {
             llvmgen_btrack_update(gctx, bt, v);
         } else {
@@ -214,14 +218,15 @@ gen_select (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
         LLVMPositionBuilderAtEnd(builder, curblk);
         if (otherwise == 0) {
             if (always == 0) {
-                llvmgen_btrack_update(gctx, bt, LLVMConstAllOnes(gctx->fullwordtype));
+                llvmgen_btrack_update(gctx, bt,
+                                      (hasval ? LLVMConstAllOnes(gctx->fullwordtype) : 0));
             } else {
                 LLVMBuildBr(builder, always);
             }
         } else {
             LLVMBuildBr(builder, otherwise);
         }
-        result = llvmgen_btrack_finalize(gctx, bt, gctx->fullwordtype);
+        result = llvmgen_btrack_finalize(gctx, bt, (hasval ? actiontype : 0));
         return llvmgen_adjustval(gctx, result, neededtype, 1);
     }
 
@@ -241,7 +246,7 @@ gen_select (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
                                                             llvmgen_label(gctx));
             LLVMPositionBuilderAtEnd(builder, st[i].matchdest);
             st[i].matchval = llvmgen_expression(gctx, expr_selector_action(sel),
-                                                gctx->fullwordtype);
+                                                actiontype);
             st[i].matchdestend = LLVMGetInsertBlock(builder);
             if (testinspoint == insertpoint) {
                 testinspoint = st[i].matchdest;
@@ -281,7 +286,10 @@ gen_select (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
         if (sel->tq_next == 0) {
             if (otherwise == 0) {
                 if (always == 0) {
-                    llvmgen_btrack_update_phi(gctx, bt, 0, LLVMConstAllOnes(gctx->fullwordtype));
+                    if (hasval) {
+                        llvmgen_btrack_update_phi(gctx, bt, 0,
+                                                  LLVMConstAllOnes(gctx->fullwordtype));
+                    }
                     nextifnomatch = exitblk;
                 } else {
                     nextifnomatch = always;
@@ -308,7 +316,7 @@ gen_select (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
         }
     }
 
-    result = llvmgen_btrack_finalize(gctx, bt, gctx->fullwordtype);
+    result = llvmgen_btrack_finalize(gctx, bt, actiontype);
 
     if (st != stlocal) {
         free(st);

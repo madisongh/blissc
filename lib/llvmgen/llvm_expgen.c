@@ -139,7 +139,7 @@ gen_block (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 
     for (e = exprseq_head(seq); e != 0; e = e->tq_next) {
         if (e->tq_next == 0) {
-            val = llvmgen_expression(gctx, e, gctx->fullwordtype);
+            val = llvmgen_expression(gctx, e, (expr_has_value(exp) ? gctx->fullwordtype : 0));
             if (bt != 0) llvmgen_btrack_update(gctx, bt, val);
         } else {
             llvmgen_expression(gctx, e, 0);
@@ -157,7 +157,12 @@ gen_block (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 
     if (val == 0) {
         if (neededtype != 0) {
-            log_signal(expr_logctx(gctx->ectx), expr_textpos(exp), STC__EXPRVALRQ);
+            // XXX This may or may not be a problem - if the block is exited with
+            //     values via RETURN, LEAVE, or EXITLOOP, and all paths are handled,
+            //     then there's no problem.  Keep quiet about this for now; when
+            //     I can figure out how to determine definitively that there's a
+            //     dangling exit path, add it back.
+            //log_signal(expr_logctx(gctx->ectx), expr_textpos(exp), STC__EXPRVALRQ);
             val = LLVMConstNull(neededtype);
         }
     } else {

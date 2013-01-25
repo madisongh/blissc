@@ -2,25 +2,20 @@
  *++
  *	File:			gencode_llvm.c
  *
- *	Abstract:		Generates LLVM IR.
+ *	Abstract:		Common codegen to LLVM IR.
  *
  *  Module description:
  *
- *       This module generates LLVM from the expression tree.
- *
- *  All computations are performed on fullwords.  Registers are
- *  assumed to have fullword width.  All fetches return fullword
- *  values, so anything smaller needs to be 0- or sign-extended.
- *
- *  OPER_ASSIGN performs a store operation, which will need to
- *  truncate the value if the data segment has a smaller-than-fullword
- *  width.
+ *      This module contains the main code generation entry
+ *      points and some common routines shared by the other
+ *      llvmgen modules.
  *
  *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
+ *				Copyright © 2012, 2013  Matthew Madison
  *				All rights reserved.
  *	Modification history:
  *		28-Dec-2012	V1.0	Madison		Initial coding.
+ *      24-Jan-2013 V1.1    Madison     After refactoring.
  *--
  */
 

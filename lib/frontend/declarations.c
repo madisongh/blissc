@@ -1488,6 +1488,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
                     }
                 }
             }
+#if 0
             // Now check again, and fake up a return value so
             // we can keep going
             if ((is_bind || (attr.flags & SYM_M_NOVALUE) == 0)
@@ -1499,6 +1500,7 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
                 expr_blk_valexp_set(exp, fakeval);
                 exprseq_instail(expr_blk_seq(exp), fakeval);
             }
+#endif
             if (is_bind) {
                 symctx_t symctx = expr_symctx(ctx);
                 attr.ivlist = initval_expr_add(symctx, 0, 1, exp, 32, 0);
