@@ -33,10 +33,8 @@
 struct llvm_btrack_s {
     struct llvm_btrack_s    *next;
     LLVMBasicBlockRef        exitblock;
-    struct {
-        LLVMBasicBlockRef       source;
-        LLVMValueRef            value;
-    }                        phirefs[LLVMGEN_K_PHIREFMAX];
+    LLVMBasicBlockRef        phisources[LLVMGEN_K_PHIREFMAX];
+    LLVMValueRef             phivals[LLVMGEN_K_PHIREFMAX];
     unsigned int             branchcount;
     unsigned int             phirefcount;
 };
@@ -79,6 +77,12 @@ struct gencodectx_s {
     LLVMTypeRef         unitptrtype;
     LLVMTypeRef         fullwordtype;
     LLVMTypeRef         int1type;
+    LLVMTypeRef         intptrtszype;
+
+    LLVMValueRef        memcpyfn;
+    LLVMTypeRef         memcpyargtypes[5];
+    LLVMValueRef        memsetfn;
+    LLVMTypeRef         memsetargtypes[5];
 
     unsigned int        globidx;
 
@@ -114,8 +118,8 @@ siu void llvmgen_btrack_update_brcount(gencodectx_t gctx, llvm_btrack_t *bt) {
 siu void llvmgen_btrack_update_phi(gencodectx_t gctx, llvm_btrack_t *bt,
                                    LLVMBasicBlockRef pos, LLVMValueRef val) {
     if (pos == 0) pos = LLVMGetInsertBlock(gctx->curfn->builder);
-    bt->phirefs[bt->phirefcount].source = pos;
-    bt->phirefs[bt->phirefcount].value = val;
+    bt->phisources[bt->phirefcount] = pos;
+    bt->phivals[bt->phirefcount] = val;
     bt->phirefcount += 1;
 }
 siu void llvmgen_btrack_update(gencodectx_t gctx, llvm_btrack_t *bt, LLVMValueRef val) {
@@ -128,23 +132,25 @@ siu void llvmgen_btrack_update(gencodectx_t gctx, llvm_btrack_t *bt, LLVMValueRe
     }
 }
 
-LLVMValueRef llvmgen_cast(gencodectx_t gctx, LLVMValueRef val, LLVMTypeRef neededtype);
+LLVMValueRef llvmgen_cast_trunc_ext(gencodectx_t gctx, LLVMValueRef val,
+                                    LLVMTypeRef neededtype, int signext);
 
-siu LLVMValueRef llvmgen_adjustval(gencodectx_t gctx, LLVMValueRef val, LLVMTypeRef neededtype) {
-    if (neededtype == 0 || LLVMTypeOf(val) == neededtype) return val;
-    return llvmgen_cast(gctx, val, neededtype);
+siu LLVMValueRef llvmgen_adjustval(gencodectx_t gctx, LLVMValueRef val,
+                                   LLVMTypeRef neededtype, int signext) {
+    if (val == 0 || neededtype == 0 || LLVMTypeOf(val) == neededtype) return val;
+    return llvmgen_cast_trunc_ext(gctx, val, neededtype, signext);
 }
 #undef siu
 
 LLVMBasicBlockRef llvmgen_exitblock_create(gencodectx_t gctx, char *label);
 llvm_btrack_t *llvmgen_btrack_create(gencodectx_t gctx, LLVMBasicBlockRef exitpoint);
 void llvmgen_btrack_free(gencodectx_t gctx, llvm_btrack_t *bt);
-LLVMValueRef llvmgen_btrack_finalize(gencodectx_t gctx, llvm_btrack_t *bt);
+LLVMValueRef llvmgen_btrack_finalize(gencodectx_t gctx, llvm_btrack_t *bt, LLVMTypeRef neededtype);
 void llvmgen_symgen_init(gencodectx_t gctx);
 llvm_btrack_t *llvmgen_label_btrack(name_t *np);
 void llvmgen_label_btrack_set(name_t *np, llvm_btrack_t *bt);
-void llvmgen_memcpy(gencodectx_t gctx, LLVMValueRef dest, LLVMValueRef src, char *name);
-void llvmgen_memset(gencodectx_t gctx, LLVMValueRef dest, LLVMValueRef val, char *name);
+void llvmgen_memcpy(gencodectx_t gctx, LLVMValueRef dest, LLVMValueRef src, LLVMValueRef len);
+void llvmgen_memset(gencodectx_t gctx, LLVMValueRef dest, LLVMValueRef val, LLVMValueRef len);
 LLVMValueRef llvmgen_assignment(gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs);
 LLVMValueRef llvmgen_segaddress(gencodectx_t gctx, name_t *np, llvm_stgclass_t *segclass,
                                 unsigned int *flagsp);

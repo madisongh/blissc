@@ -26,6 +26,7 @@ gen_conditional (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     llvm_btrack_t *bt = llvmgen_btrack_create(gctx, exitblk);
     LLVMBasicBlockRef consblk, altblk;
     LLVMValueRef consval, altval, test, result;
+    LLVMTypeRef resulttype = neededtype;
 
     test = llvmgen_expression(gctx, expr_cond_test(exp), gctx->int1type);
     if (expr_cond_alternative(exp) != 0) {
@@ -39,14 +40,16 @@ gen_conditional (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     if (altblk == 0) llvmgen_btrack_update_brcount(gctx, bt);
     LLVMPositionBuilderAtEnd(builder, consblk);
     consval = llvmgen_expression(gctx, expr_cond_consequent(exp), neededtype);
+    if (neededtype == 0 && consval != 0) {
+        resulttype = LLVMTypeOf(consval);
+    }
     llvmgen_btrack_update(gctx, bt, (altblk == 0 ? 0 : consval));
     if (altblk != 0) {
         LLVMPositionBuilderAtEnd(builder, altblk);
-        altval = llvmgen_expression(gctx, expr_cond_alternative(exp),
-                                    (neededtype == 0 ? LLVMTypeOf(consval) : neededtype));
+        altval = llvmgen_expression(gctx, expr_cond_alternative(exp), resulttype);
         llvmgen_btrack_update(gctx, bt, altval);
     }
-    result = llvmgen_btrack_finalize(gctx, bt);
+    result = llvmgen_btrack_finalize(gctx, bt, resulttype);
     if (neededtype != 0 && result == 0) {
         log_signal(expr_logctx(gctx->ectx), expr_textpos(exp), STC__EXPRVALRQ);
         result = LLVMConstNull(neededtype);
@@ -101,7 +104,12 @@ gen_case (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     for (i = 0; i < casecount; i++) {
         LLVMAddCase(swval, LLVMConstInt(gctx->fullwordtype, i, 0), bbvec[cases[i]]);
     }
-    result = llvmgen_btrack_finalize(gctx, bt);
+    result = llvmgen_btrack_finalize(gctx, bt, gctx->fullwordtype);
+
+    if (bbvec != localvec) {
+        free(bbvec);
+    }
+
     if (result == 0) {
         if (neededtype != 0) {
             log_signal(expr_logctx(gctx->ectx), expr_textpos(exp), STC__EXPRVALRQ);
@@ -110,7 +118,7 @@ gen_case (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
         return 0;
     }
     
-    return llvmgen_adjustval(gctx, result, neededtype);
+    return llvmgen_adjustval(gctx, result, neededtype, 1);
 
 } /* gen_case */
 
@@ -132,13 +140,293 @@ static LLVMValueRef
 gen_return (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
     expr_node_t *retexp = expr_exit_value(exp);
-    LLVMValueRef retval = (retexp == 0 ? 0 : llvmgen_expression(gctx, retexp, neededtype));
+    LLVMValueRef retval = (retexp == 0 ? 0 : llvmgen_expression(gctx, retexp, gctx->fullwordtype));
 
     llvmgen_btrack_update(gctx, gctx->curfn->btrack[LLVMGEN_K_BT_FUNC], retval);
 
+    if (retval != 0) retval = llvmgen_adjustval(gctx, retval, neededtype, 0);
     return retval;
 
 } /* gen_return */
+
+static LLVMValueRef
+gen_select (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    LLVMBasicBlockRef exitblk = llvmgen_exitblock_create(gctx, llvmgen_label(gctx));
+    llvm_btrack_t *bt = llvmgen_btrack_create(gctx, exitblk);
+    LLVMBuilderRef builder = gctx->curfn->builder;
+    optype_t op = expr_sel_cmptype(exp);
+    exprseq_t *selseq = expr_sel_selectors(exp);
+    unsigned int numtests = exprseq_length(selseq);
+    int is_selectone = expr_sel_oneonly(exp);
+    expr_node_t *sel, *otherwexp;
+    LLVMIntPredicate eqlpred, geqpred, leqpred;
+    LLVMBasicBlockRef curblk, otherwise, always, insertpoint, testinspoint;
+    LLVMValueRef idxval, v, result;
+    struct seltrack_s {
+        LLVMValueRef testval, matchval;
+        LLVMBasicBlockRef testblk, testend;
+        LLVMBasicBlockRef matchdest, matchdestend;
+    } *st, stlocal[32];
+    unsigned int i;
+
+    if (op == OPER_CMP_EQLA) {
+        op = (machine_addr_signed(gctx->mach) ? OPER_CMP_EQL : OPER_CMP_EQLU);
+    }
+    eqlpred = LLVMIntEQ;
+    if (op == OPER_CMP_EQL) {
+        leqpred = LLVMIntSLE;
+        geqpred = LLVMIntSGE;
+    } else {
+        leqpred = LLVMIntULE;
+        geqpred = LLVMIntUGE;
+    }
+    insertpoint = exitblk;
+    idxval = llvmgen_expression(gctx, expr_sel_index(exp), gctx->fullwordtype);
+    curblk = LLVMGetInsertBlock(builder);
+    if (expr_sel_alwaysaction(exp) != 0) {
+        always = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
+        LLVMPositionBuilderAtEnd(builder, always);
+        v = llvmgen_expression(gctx, expr_sel_alwaysaction(exp), gctx->fullwordtype);
+        llvmgen_btrack_update(gctx, bt, v);
+        insertpoint = always;
+    } else {
+        always = 0;
+    }
+
+    otherwexp = expr_sel_otherwiseaction(exp);
+    if (otherwexp != 0) {
+        otherwise = LLVMInsertBasicBlockInContext(gctx->llvmctx, insertpoint,
+                                                  llvmgen_label(gctx));
+        LLVMPositionBuilderAtEnd(builder, otherwise);
+        v = llvmgen_expression(gctx, otherwexp, gctx->fullwordtype);
+        if (always == 0) {
+            llvmgen_btrack_update(gctx, bt, v);
+        } else {
+            LLVMBuildBr(builder, always);
+        }
+        insertpoint = otherwise;
+    } else {
+        otherwise = 0;
+    }
+
+    if (numtests == 0) {
+        LLVMPositionBuilderAtEnd(builder, curblk);
+        if (otherwise == 0) {
+            if (always == 0) {
+                llvmgen_btrack_update(gctx, bt, LLVMConstAllOnes(gctx->fullwordtype));
+            } else {
+                LLVMBuildBr(builder, always);
+            }
+        } else {
+            LLVMBuildBr(builder, otherwise);
+        }
+        result = llvmgen_btrack_finalize(gctx, bt, gctx->fullwordtype);
+        return llvmgen_adjustval(gctx, result, neededtype, 1);
+    }
+
+    if (numtests > 32) {
+        st = malloc(numtests * sizeof(struct seltrack_s));
+    } else {
+        st = stlocal;
+    }
+    memset(st, 0, numtests * sizeof(struct seltrack_s));
+    testinspoint = insertpoint;
+    for (i = 0, sel = exprseq_head(selseq); sel != 0; i++, sel = sel->tq_next) {
+        expr_node_t *subsel;
+        if (otherwexp != 0 && expr_selector_action(sel) == otherwexp) {
+            st[i].matchdest = otherwise;
+        } else {
+            st[i].matchdest = LLVMInsertBasicBlockInContext(gctx->llvmctx, insertpoint,
+                                                            llvmgen_label(gctx));
+            LLVMPositionBuilderAtEnd(builder, st[i].matchdest);
+            st[i].matchval = llvmgen_expression(gctx, expr_selector_action(sel),
+                                                gctx->fullwordtype);
+            st[i].matchdestend = LLVMGetInsertBlock(builder);
+            if (testinspoint == insertpoint) {
+                testinspoint = st[i].matchdest;
+            }
+        }
+        st[i].testblk = (i == 0 ? curblk
+                         : LLVMInsertBasicBlockInContext(gctx->llvmctx, testinspoint,
+                                                         llvmgen_label(gctx)));
+        LLVMPositionBuilderAtEnd(builder, st[i].testblk);
+        for (subsel = sel; subsel != 0; subsel = expr_selector_next(subsel)) {
+            LLVMValueRef loval, hival;
+            loval = llvmgen_expression(gctx, expr_selector_low(subsel), gctx->fullwordtype);
+            if (expr_selector_high(subsel) == 0) {
+                hival = 0;
+            } else {
+                hival = llvmgen_expression(gctx, expr_selector_high(subsel), gctx->fullwordtype);
+            }
+            v = LLVMBuildICmp(builder, (hival == 0 ? eqlpred : geqpred),
+                              idxval, loval, llvmgen_temp(gctx));
+            if (hival != 0) {
+                LLVMValueRef hitest;
+                hitest = LLVMBuildICmp(builder, leqpred, idxval, hival, llvmgen_temp(gctx));
+                v = LLVMBuildAnd(builder, v, hitest, llvmgen_temp(gctx));
+            }
+            if (st[i].testval == 0) {
+                st[i].testval = v;
+            } else {
+                st[i].testval = LLVMBuildOr(builder, st[i].testval, v, llvmgen_temp(gctx));
+            }
+        }
+        st[i].testend = LLVMGetInsertBlock(builder);
+    }
+
+    for (i = 0, sel = exprseq_head(selseq); sel != 0; i++, sel = sel->tq_next) {
+        LLVMBasicBlockRef nextifnomatch, nextaftermatchaction;
+        LLVMPositionBuilderAtEnd(builder, st[i].testend);
+        if (sel->tq_next == 0) {
+            if (otherwise == 0) {
+                if (always == 0) {
+                    llvmgen_btrack_update_phi(gctx, bt, 0, LLVMConstAllOnes(gctx->fullwordtype));
+                    nextifnomatch = exitblk;
+                } else {
+                    nextifnomatch = always;
+                }
+            } else {
+                nextifnomatch = otherwise;
+            }
+            nextaftermatchaction = (always == 0 ? exitblk : always);
+        } else {
+            nextifnomatch = st[i+1].testblk;
+            nextaftermatchaction = (is_selectone ? exitblk : nextifnomatch);
+        }
+        LLVMBuildCondBr(builder, st[i].testval, st[i].matchdest, nextifnomatch);
+        if (nextifnomatch == exitblk) {
+            llvmgen_btrack_update_brcount(gctx, bt);
+        }
+        if (otherwise == 0 || st[i].matchdest != otherwise) {
+            LLVMPositionBuilderAtEnd(builder, st[i].matchdestend);
+            if (nextaftermatchaction == exitblk) {
+                llvmgen_btrack_update(gctx, bt, st[i].matchval);
+            } else if (LLVMGetBasicBlockTerminator(st[i].matchdestend) == 0) {
+                LLVMBuildBr(builder, nextaftermatchaction);
+            }
+        }
+    }
+
+    result = llvmgen_btrack_finalize(gctx, bt, gctx->fullwordtype);
+
+    if (st != stlocal) {
+        free(st);
+    }
+
+    return llvmgen_adjustval(gctx, result, neededtype, 1);
+
+} /* gen_select */
+
+static LLVMValueRef
+gen_while_until_loop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    LLVMBasicBlockRef exitblk = llvmgen_exitblock_create(gctx, llvmgen_label(gctx));
+    llvm_btrack_t *bt = llvmgen_btrack_create(gctx, exitblk);
+    LLVMBuilderRef builder = gctx->curfn->builder;
+    LLVMBasicBlockRef loopblk, testblk;
+    LLVMValueRef result, val;
+
+    if (expr_wuloop_type(exp) == LOOP_PRETEST) {
+        loopblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
+        testblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, loopblk, llvmgen_label(gctx));
+        LLVMBuildBr(builder, testblk);
+    } else {
+        testblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
+        loopblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, testblk, llvmgen_label(gctx));
+        LLVMBuildBr(builder, loopblk);
+    }
+    LLVMPositionBuilderAtEnd(builder, testblk);
+    val = llvmgen_expression(gctx, expr_wuloop_test(exp), gctx->int1type);
+    LLVMBuildCondBr(builder, val, loopblk, exitblk);
+    llvmgen_btrack_update_brcount(gctx, bt);
+    llvmgen_btrack_update_phi(gctx, bt, LLVMGetInsertBlock(builder),
+                              LLVMConstAllOnes(gctx->fullwordtype));
+    LLVMPositionBuilderAtEnd(builder, loopblk);
+    bt->next = gctx->curfn->btrack[LLVMGEN_K_BT_LOOP];
+    gctx->curfn->btrack[LLVMGEN_K_BT_LOOP] = bt;
+    llvmgen_expression(gctx, expr_wuloop_body(exp), 0);
+    if (LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder)) == 0) {
+        LLVMBuildBr(builder, testblk);
+    }
+    gctx->curfn->btrack[LLVMGEN_K_BT_LOOP] = bt->next;
+    bt->next = 0;
+    result = llvmgen_btrack_finalize(gctx, bt, gctx->fullwordtype);
+
+    return llvmgen_adjustval(gctx, result, neededtype, 1);
+
+} /* gen_while_until_loop */
+
+static LLVMValueRef
+gen_incr_decr_loop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    LLVMBasicBlockRef exitblk = llvmgen_exitblock_create(gctx, llvmgen_label(gctx));
+    llvm_btrack_t *bt = llvmgen_btrack_create(gctx, exitblk);
+    LLVMBuilderRef builder = gctx->curfn->builder;
+    optype_t compareop = expr_idloop_cmptype(exp);
+    LLVMValueRef neg1 = LLVMConstAllOnes(gctx->fullwordtype);
+    LLVMValueRef zero = LLVMConstNull(gctx->fullwordtype);
+    LLVMValueRef loopidx = llvmgen_segaddress(gctx, expr_idloop_index(exp), 0, 0);
+    int addrsigned = machine_addr_signed(gctx->mach);
+    LLVMValueRef initval, endval, stepval, testphi, cmpval, result;
+    LLVMBasicBlockRef loopblk, testblk, curblk;
+    int is_decr;
+
+    is_decr = (compareop == OPER_CMP_GEQ || compareop == OPER_CMP_GEQU
+               || compareop == OPER_CMP_GEQA);
+    loopblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
+    testblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, loopblk, llvmgen_label(gctx));
+    if (expr_idloop_init(exp) != 0) {
+        initval = llvmgen_expression(gctx, expr_idloop_init(exp), gctx->fullwordtype);
+    } else {
+        initval = (is_decr ? neg1 : zero); // -1 (unsigned) is +Infinity
+    }
+    if (expr_idloop_term(exp) != 0) {
+        endval = llvmgen_expression(gctx, expr_idloop_term(exp), gctx->fullwordtype);
+    } else {
+        endval = (is_decr ? zero : neg1);
+    }
+    if (expr_idloop_step(exp) != 0) {
+        stepval = llvmgen_expression(gctx, expr_idloop_step(exp), gctx->fullwordtype);
+    } else {
+        stepval = LLVMConstInt(gctx->fullwordtype, 1, 0);  // subtracted for DECR
+    }
+    curblk = LLVMGetInsertBlock(builder);
+    LLVMBuildBr(builder, testblk);
+
+    LLVMPositionBuilderAtEnd(builder, testblk);
+    testphi = LLVMBuildPhi(builder, gctx->fullwordtype, llvmgen_temp(gctx));
+    LLVMAddIncoming(testphi, &initval, &curblk, 1);
+    LLVMBuildStore(builder, testphi, loopidx);
+    cmpval = LLVMBuildICmp(builder, llvmgen_predfromop(compareop, addrsigned),
+                           testphi, endval, llvmgen_temp(gctx));
+    LLVMBuildCondBr(builder, cmpval, loopblk, exitblk);
+    llvmgen_btrack_update_phi(gctx, bt, LLVMGetInsertBlock(builder), neg1);
+    llvmgen_btrack_update_brcount(gctx, bt);
+
+    bt->next = gctx->curfn->btrack[LLVMGEN_K_BT_LOOP];
+    gctx->curfn->btrack[LLVMGEN_K_BT_LOOP] = bt;
+    LLVMPositionBuilderAtEnd(builder, loopblk);
+    llvmgen_expression(gctx, expr_idloop_body(exp), 0);
+    if (LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder)) == 0) {
+        LLVMValueRef v;
+        v = LLVMBuildLoad(builder, loopidx, llvmgen_temp(gctx));
+        if (is_decr) {
+            v = LLVMBuildSub(builder, v, stepval, llvmgen_temp(gctx));
+        } else {
+            v = LLVMBuildAdd(builder, v, stepval, llvmgen_temp(gctx));
+        }
+        LLVMBuildBr(builder, testblk);
+        curblk = LLVMGetInsertBlock(builder);
+        LLVMAddIncoming(testphi, &v, &curblk, 1);
+    }
+    gctx->curfn->btrack[LLVMGEN_K_BT_LOOP] = bt->next;
+    bt->next = 0;
+    result = llvmgen_btrack_finalize(gctx, bt, gctx->fullwordtype);
+
+    return llvmgen_adjustval(gctx, result, neededtype, 1);
+
+} /* gen_incr_decr_loop */
 
 void
 llvmgen_ctrlexpgen_init (gencodectx_t gctx)
@@ -148,5 +436,8 @@ llvmgen_ctrlexpgen_init (gencodectx_t gctx)
     llvmgen_expgen_register(gctx, EXPTYPE_CTRL_CASE, gen_case);
     llvmgen_expgen_register(gctx, EXPTYPE_CTRL_EXIT, gen_loop_or_block_exit);
     llvmgen_expgen_register(gctx, EXPTYPE_CTRL_RET, gen_return);
+    llvmgen_expgen_register(gctx, EXPTYPE_CTRL_SELECT, gen_select);
+    llvmgen_expgen_register(gctx, EXPTYPE_CTRL_LOOPWU, gen_while_until_loop);
+    llvmgen_expgen_register(gctx, EXPTYPE_CTRL_LOOPID, gen_incr_decr_loop);
 
 } /* llvmgen_ctrlexpgen_init */

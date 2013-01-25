@@ -552,7 +552,7 @@ bind_data (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
     } else {
         exp = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG, parser_curpos(pctx));
         expr_seg_name_set(exp, lexeme_ctx_get(lex));
-        expr_seg_units_set(exp, sym->attr.units);
+        expr_seg_width_set(exp, sym->attr.width);
         expr_seg_signext_set(exp, (sym->attr.flags & SYM_M_SIGNEXT) != 0);
         expr_is_ltce_set(exp, sym->attr.dclass == DCLASS_STATIC);
         expr_has_value_set(exp, 1);
@@ -579,7 +579,7 @@ bind_routine (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
     }
     exp = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG, parser_curpos(pctx));
     expr_seg_name_set(exp, np);
-    expr_seg_units_set(exp, machine_scalar_units(mach));
+    expr_seg_width_set(exp, machine_addr_bits(mach));
     expr_seg_signext_set(exp, machine_addr_signed(mach));
     expr_is_ltce_set(exp, 1);
     expr_has_value_set(exp, 1);
@@ -617,6 +617,7 @@ symbols_init (expr_ctx_t ctx)
     symctx->data_defaults.dclass = DCLASS_STKORREG;
     symctx->data_defaults.sc = SYMSCOPE_LOCAL;
     symctx->data_defaults.units = machine_scalar_units(mach);
+    symctx->data_defaults.width = machine_scalar_bits(mach);
     symctx->literal_defaults.width = machine_scalar_bits(mach);
     symctx->data_defaults.alignment = log2(symctx->data_defaults.units);
     nametables_symctx_set(namectx, symctx);
@@ -729,6 +730,7 @@ compare_data_attrs (data_attr_t *a, data_attr_t *b) {
     nameref_t *aref, *bref;
 
     if (a->units != b->units ||
+        a->width != b->width ||
         a->struc != b->struc ||
         a->owner != b->owner ||
         a->flags != b->flags ||
@@ -777,6 +779,9 @@ datasym_declare (scopectx_t scope, strdesc_t *dsc, data_attr_t *attrp, textpos_t
                 // XXX should this be another machine setting?
                 attrp->alignment = log2(machine_scalar_units(symctx->mach));
             }
+        }
+        if (attrp->width == 0) {
+            attrp->width = machine_scalar_bits(symctx->mach);
         }
     }
 
@@ -851,6 +856,9 @@ datasym_attr_update (name_t *np, data_attr_t *attrp)
         }
     }
     memcpy(&sym->attr, attrp, sizeof(data_attr_t));
+    if (attrp->width == 0) {
+        sym->attr.width = machine_scalar_bits(symctx->mach);
+    }
     if (gsym != 0 && (gsym->attr.flags & SYM_M_PENDING)) {
         memcpy(&gsym->attr, attrp, sizeof(data_attr_t));
     }
@@ -1784,7 +1792,7 @@ initval_size (symctx_t ctx, initval_t *ivlist)
             expr_node_t *exp = iv->preset_expr;
             unsigned long thissize;
             if (expr_type(exp) == EXPTYPE_PRIM_SEG) {
-                thissize = expr_seg_offset(exp) + expr_seg_units(exp);
+                thissize = expr_seg_offset(exp) + (expr_seg_width(exp)/bpunit);
             } else if (expr_type(exp) == EXPTYPE_PRIM_FLDREF) {
                 expr_node_t *pos = expr_fldref_pos(exp);
                 expr_node_t *siz = expr_fldref_size(exp);

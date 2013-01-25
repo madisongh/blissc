@@ -1045,6 +1045,24 @@ expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
 } /* parse_arglist */
 
 /*
+ * size_ok
+ *
+ * Checks a field size to see if we can do constant folding
+ * on a reference.
+ */
+static int
+size_ok (unsigned int nbits, unsigned int bpunit, unsigned int upval) {
+    unsigned int n;
+    if (nbits == 0 || nbits % bpunit != 0) return 0;
+    nbits /= bpunit;
+    for (n = 1; n <= upval; n = n * 2) {
+        if (nbits == n) return 1;
+    }
+    return 0;
+
+} /* size_ok */
+
+/*
  * parse_fldref
  *
  * Looks for the opening angle bracket of a field reference, and
@@ -1097,31 +1115,32 @@ parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
 	//     the field-extraction now.
 	//  2. If the expression being field-referenced is a segment, and
 	//     the position aligns to an addressable boundary, and
-	//     the size is an even multiple of addressable-unit bits,
+	//     the size is a power-of-2 number of addressable-unit bits,
 	// 	   stash the offset and number of AUs directly into the
 	//	   segment expression.
 	//  We can only do this if the position and size fields are CTCEs.
 	//
     if (expr_type(pos) == EXPTYPE_PRIM_LIT && expr_type(size) == EXPTYPE_PRIM_LIT) {
         machinedef_t *mach = parser_get_machinedef(pctx);
+        unsigned int bpunit = machine_unit_bits(mach);
+        unsigned int upval  = machine_scalar_units(mach);
+        unsigned int sz = (unsigned int) expr_litval(size);
 
         // Can operate on CTCEs directly
         if (expr_type(*expp) == EXPTYPE_PRIM_LIT) {
             expr_litval_set(*expp, getvalue(expr_litval(*expp) >> expr_litval(pos),
-                                            (unsigned int) expr_litval(size),
-                                            (signext != 0)));
+                                            sz, (signext != 0)));
             expr_node_free(ctx, pos);
             expr_node_free(ctx, size);
             return 1;
         }
         if (expr_type(*expp) == EXPTYPE_PRIM_SEG &&
-            expr_litval(pos) % machine_unit_bits(mach) == 0 &&
-            expr_litval(size) == machine_scalar_bits(mach)) {
+            expr_litval(pos) % bpunit == 0 && size_ok(sz, bpunit, upval)) {
             data_attr_t *attr = datasym_attr(expr_seg_name(*expp));
             if (attr->dclass != DCLASS_ARG && attr->dclass != DCLASS_REGISTER) {
                 expr_seg_offset_set(*expp, expr_seg_offset(*expp) +
                                     expr_litval(pos) / machine_unit_bits(mach));
-                expr_seg_units_set(*expp, machine_scalar_units(mach));
+                expr_seg_width_set(*expp, sz);
                 expr_seg_signext_set(*expp, (signext != 0));
                 expr_node_free(ctx, pos);
                 expr_node_free(ctx, size);
@@ -1500,7 +1519,7 @@ parse_op_expr (expr_ctx_t ctx, optype_t curop, expr_node_t *lhs, expr_node_t *rh
     normal = 1;
 
     // If the LHS operator expression has higher precedence, or
-    // equal precedence but right-to-left associativity, it should
+    // equal precedence and left-to-right associativity, it should
     // just stay as the current operator's LHS.  Hence, 'normal'.
     // Otherwise, we need to make this node the RHS of the
     // LHS's operator, and put the RHS of the LHS's operator in as
@@ -1510,7 +1529,7 @@ parse_op_expr (expr_ctx_t ctx, optype_t curop, expr_node_t *lhs, expr_node_t *rh
         normal = 0;
         op = expr_op_type(lhs);
         if (op_priority(op) > op_priority(curop) ||
-            (op_priority(op) == op_priority(curop) && op_is_r2l(curop))) {
+            (op_priority(op) == op_priority(curop) && !op_is_r2l(curop))) {
             normal = 1;
         }
     }

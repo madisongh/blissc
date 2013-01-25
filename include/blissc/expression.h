@@ -160,7 +160,7 @@ struct expr_sel_s {
 struct expr_seg_s {
     name_t          *name;
     long            offset;
-    unsigned int    units;
+    unsigned int    width;
     int             signext;
 };
 
@@ -265,9 +265,9 @@ siu void expr_struref_accexpr_set(expr_node_t *node, expr_node_t *e) {
     node->data.srdata.accexpr = e; }
 
 // PRIM_SEG
-siu unsigned int expr_seg_units(expr_node_t *node) { return node->data.segdata.units; }
-siu void expr_seg_units_set(expr_node_t *node, unsigned int u) {
-    node->data.segdata.units = u; }
+siu unsigned int expr_seg_width(expr_node_t *node) { return node->data.segdata.width; }
+siu void expr_seg_width_set(expr_node_t *node, unsigned int u) {
+    node->data.segdata.width = u; }
 siu int expr_seg_signext(expr_node_t *node) { return node->data.segdata.signext; }
 siu void expr_seg_signext_set(expr_node_t *node, int s) {
 	node->data.segdata.signext = s; }

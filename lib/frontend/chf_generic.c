@@ -286,7 +286,7 @@ chf_TRANSTABLE (expr_ctx_t ctx, void *fctx, name_t *fnp,
 
     e = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG, curpos);
     expr_seg_name_set(e, np);
-    expr_seg_units_set(e, attr.units);
+    expr_seg_width_set(e, machine_unit_bits(mach));
     expr_has_value_set(e, 1);
     expr_is_ltce_set(e, 1);
 

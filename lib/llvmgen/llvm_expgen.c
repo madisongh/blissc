@@ -77,12 +77,12 @@ gen_literal (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
         result = LLVMConstStringInContext(gctx->llvmctx, str->ptr, str->len, 1);
     }
 
-    return llvmgen_adjustval(gctx, result, neededtype);
+    return llvmgen_adjustval(gctx, result, neededtype, 0);
 
 } /* gen_literal */
 
 /*
- * gen_fieldref
+ * gen_seg_or_fieldref
  *
  * The fetch and assignment operator expression code handle the special cases
  * where we have to apply the field parameters (position, size, sign extension);
@@ -90,11 +90,12 @@ gen_literal (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
  * address; the field parameters are ignored.
  */
 static LLVMValueRef
-gen_fieldref (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
+gen_seg_or_fieldref (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
-    LLVMValueRef result = llvmgen_addr_expression(gctx, expr_fldref_addr(exp), 0);
+    expr_node_t *base = (expr_type(exp) == EXPTYPE_PRIM_FLDREF ? expr_fldref_addr(exp) : exp);
+    LLVMValueRef result = llvmgen_addr_expression(gctx, base, 0);
 
-    return llvmgen_adjustval(gctx, result, neededtype);
+    return llvmgen_adjustval(gctx, result, neededtype, machine_addr_signed(gctx->mach));
 
 } /* gen_fieldref */
 
@@ -137,14 +138,18 @@ gen_block (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     }
 
     for (e = exprseq_head(seq); e != 0; e = e->tq_next) {
-        val = llvmgen_expression(gctx, e, 0);
-        if (bt != 0) llvmgen_btrack_update(gctx, bt, val);
+        if (e->tq_next == 0) {
+            val = llvmgen_expression(gctx, e, gctx->fullwordtype);
+            if (bt != 0) llvmgen_btrack_update(gctx, bt, val);
+        } else {
+            llvmgen_expression(gctx, e, 0);
+        }
     }
 
     if (bt != 0) {
         gctx->curfn->btrack[LLVMGEN_K_BT_BLK] = bt->next;
         bt->next = 0;
-        val = llvmgen_btrack_finalize(gctx, bt);
+        val = llvmgen_btrack_finalize(gctx, bt, gctx->fullwordtype);
         for (lbl = namereflist_head(labels); lbl != 0; lbl = lbl->tq_next) {
             llvmgen_label_btrack_set(lbl->np, 0);
         }
@@ -156,7 +161,7 @@ gen_block (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
             val = LLVMConstNull(neededtype);
         }
     } else {
-        val = llvmgen_adjustval(gctx, val, neededtype);
+        val = llvmgen_adjustval(gctx, val, neededtype, 0);
     }
 
     return val;
@@ -176,7 +181,7 @@ gen_routine_call (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     if (expr_type(rtnexp) == EXPTYPE_PRIM_SEG &&
         name_type(expr_seg_name(rtnexp)) == LEXTYPE_NAME_ROUTINE) {
         rtnadr = LLVMGetNamedFunction(gctx->module, name_azstring(expr_seg_name(rtnexp)));
-        type = LLVMTypeOf(rtnadr);
+        type = LLVMGetElementType(LLVMTypeOf(rtnadr));
         rettype = LLVMGetReturnType(type);
         formalcount = LLVMCountParamTypes(type);
     } else {
@@ -200,11 +205,27 @@ gen_routine_call (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
         argcount = formalcount;
     }
 
-    result = LLVMBuildCall(gctx->curfn->builder, rtnadr, argvals, argcount, llvmgen_temp(gctx));
+    if (LLVMGetTypeKind(rettype) == LLVMVoidTypeKind) {
+        result = 0;
+        LLVMBuildCall(gctx->curfn->builder, rtnadr, argvals, argcount, "");
+        if (neededtype != 0) {
+            log_signal(expr_logctx(gctx->ectx), expr_textpos(rtnexp), STC__EXPRVALRQ);
+            result = LLVMConstNull(neededtype);
+        }
+    } else {
+        result = LLVMBuildCall(gctx->curfn->builder, rtnadr, argvals, argcount, llvmgen_temp(gctx));
+    }
 
-    return llvmgen_adjustval(gctx, result, neededtype);
+    return (result == 0 ? 0 : llvmgen_adjustval(gctx, result, neededtype, 0));
 
 } /* gen_routine_call */
+
+static LLVMValueRef
+gen_noop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    return (neededtype == 0 ? 0 : LLVMConstNull(neededtype));
+    
+} /* gen_noop */
 
 void
 llvmgen_expgen_init (gencodectx_t gctx)
@@ -216,10 +237,12 @@ llvmgen_expgen_init (gencodectx_t gctx)
     gctx->fullwordtype = LLVMIntTypeInContext(gctx->llvmctx, bpval);
 
     llvmgen_expgen_register(gctx, EXPTYPE_PRIM_LIT, gen_literal);
-    llvmgen_expgen_register(gctx, EXPTYPE_PRIM_FLDREF, gen_fieldref);
+    llvmgen_expgen_register(gctx, EXPTYPE_PRIM_SEG, gen_seg_or_fieldref);
+    llvmgen_expgen_register(gctx, EXPTYPE_PRIM_FLDREF, gen_seg_or_fieldref);
     llvmgen_expgen_register(gctx, EXPTYPE_PRIM_STRUREF, gen_struref);
     llvmgen_expgen_register(gctx, EXPTYPE_PRIM_BLK, gen_block);
     llvmgen_expgen_register(gctx, EXPTYPE_PRIM_RTNCALL, gen_routine_call);
+    llvmgen_expgen_register(gctx, EXPTYPE_NOOP, gen_noop);
     llvmgen_opexpgen_init(gctx);
     llvmgen_ctrlexpgen_init(gctx);
     llvmgen_execfuncgen_init(gctx);

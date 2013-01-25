@@ -90,7 +90,7 @@ gen_execfunc (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
         expr_signal(gctx->ectx, STC__INTCMPERR, "gen_execfunc");
         return LLVMConstNull(type);
     }
-    return (*realfnptr)(gctx, fd->fnctx, exp, neededtype);
+    return (*realfnptr)(gctx, fd->genfnctx, exp, neededtype);
 
 } /* gen_execfunc */
 
@@ -151,7 +151,7 @@ gen_SIGN (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype
     LLVMPositionBuilderAtEnd(builder, negblk);
     llvmgen_btrack_update(gctx, bt, LLVMConstAllOnes(neededtype));
 
-    return llvmgen_btrack_finalize(gctx, bt);
+    return llvmgen_btrack_finalize(gctx, bt, neededtype);
 
 } /* gen_SIGN */
 
@@ -173,8 +173,10 @@ gen_ABS (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
     LLVMPositionBuilderAtEnd(builder, negblk);
     val = LLVMBuildSub(builder, LLVMConstNull(LLVMTypeOf(val)), val, llvmgen_temp(gctx));
     llvmgen_btrack_update(gctx, bt, val);
-    result = llvmgen_btrack_finalize(gctx, bt);
-    return llvmgen_adjustval(gctx, result, neededtype);
+
+    result = llvmgen_btrack_finalize(gctx, bt, LLVMTypeOf(val));
+
+    return llvmgen_adjustval(gctx, result, neededtype, 0);
 
 } /* gen_SIGN */
 
@@ -228,8 +230,9 @@ gen_MINMAX (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededty
         val = nextphi;
     }
 
-    result = llvmgen_btrack_finalize(gctx, bt);
-    return llvmgen_adjustval(gctx, result, neededtype);
+    result = llvmgen_btrack_finalize(gctx, bt, inttype);
+    return llvmgen_adjustval(gctx, result, neededtype,
+                             (pred == LLVMIntSLT || pred == LLVMIntSGT));
 
 } /* gen_MINMAX */
 

@@ -65,6 +65,7 @@ struct data_attr_s {
     namereflist_t     fields;
     unsigned int      flags;
     unsigned int      alignment;
+    unsigned int      width;
     symscope_t        sc;
 };
 typedef struct data_attr_s data_attr_t;

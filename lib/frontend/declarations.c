@@ -653,7 +653,8 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
     attr.flags = 0;
     attr.dclass = DCLASS_STATIC;
     attr.ivlist = ivlist;
-    attr.units = (unsigned int) (initval_size(symctx, ivlist) / machine_scalar_units(mach));
+    attr.units = (unsigned int) initval_size(symctx, ivlist);
+    attr.width = machine_scalar_bits(mach);
     attr.sc = SYMSCOPE_LOCAL;
     np = datasym_declare(parser_scope_get(pctx), &plitname, &attr, pos);
     if (np == 0) {
@@ -1022,7 +1023,9 @@ handle_data_attrs (expr_ctx_t ctx, scopectx_t scope, decltype_t dt,
         expr_signal(ctx, STC__FLDNOSTRU);
         namereflist_free(expr_namectx(ctx), &attr->fields);
     }
-
+    if (saw_au > 0) {
+        attr->width = attr->units * machine_unit_bits(mach);
+    }
     return 1;
 
 } /* handle_data_attrs */
@@ -1299,6 +1302,7 @@ parse_formals (expr_ctx_t ctx, scopectx_t curscope,
         attr.flags = SYM_M_PENDING;
         attr.dclass = DCLASS_ARG;
         attr.units = machine_scalar_units(mach);
+        attr.width = machine_scalar_bits(mach);
         attr.sc = SYMSCOPE_LOCAL;
         if (parse_decl_name(pctx, &namestr, &pos)) {
             if (*argtable == 0) {

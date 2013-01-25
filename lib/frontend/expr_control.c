@@ -93,7 +93,8 @@ parse_condexp (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
         }
     }
 
-    // Optimize away constant tests
+    // Optimize away constant tests, as well as conditionals
+    // that have no consequent or alternative
     if (expr_type(test) == EXPTYPE_PRIM_LIT) {
         if (expr_litval(test) & 1) {
             exp = cons;
@@ -104,6 +105,10 @@ parse_condexp (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
             expr_node_free(ctx, cons);
         }
         expr_node_free(ctx, test);
+    } else if (expr_type(cons) == EXPTYPE_NOOP && (alt == 0 || expr_type(alt) == EXPTYPE_NOOP)) {
+        if (alt != 0) expr_node_free(ctx, alt);
+        expr_node_free(ctx, test);
+        exp = cons;
     } else {
         exp = expr_node_alloc(ctx, EXPTYPE_CTRL_COND, parser_curpos(pctx));
         expr_cond_test_set(exp, test);

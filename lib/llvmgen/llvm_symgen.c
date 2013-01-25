@@ -167,7 +167,7 @@ llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount
 {
     unsigned int arrsize;
     unsigned int bpunit = machine_unit_bits(gctx->mach);
-    LLVMValueRef *valarr, *valp, oneval, initconst, *savep;
+    LLVMValueRef *valarr, *valp, *lastvalp, oneval, initconst;
     initval_t *iv;
     int allsametype = 1;
 
@@ -181,11 +181,27 @@ llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount
             valarr = &oneval;
         }
     }
-    for (iv = ivlist, valp = valarr; iv != 0; iv = iv->next, valp += 1) {
+    for (iv = ivlist, valp = valarr, lastvalp = 0; iv != 0; iv = iv->next) {
+        int count = iv->repcount;
+        LLVMValueRef thisval;
         switch (iv->type) {
-            case IVTYPE_LIST:
+            case IVTYPE_LIST: {
+                LLVMValueRef *savep = valp;
+                LLVMValueRef *srcp, *dstp;
                 savep = valp;
                 llvmgen_initializer(gctx, iv->data.listptr, 0, &valp);
+                dstp = valp;
+                // Handle (> 1) repeat count by appending copies of the pointer(s) just inserted
+                while (--count > 0) {
+                    for (srcp = savep; srcp < valp; srcp++) *dstp++ = *srcp;
+                }
+                valp = dstp;
+                // Compare first here against the last iteration of the loop
+                if (allsametype && lastvalp != 0 && LLVMTypeOf(*lastvalp) != LLVMTypeOf(*savep)) {
+                    allsametype = 0;
+                }
+                lastvalp = savep;
+                // Now check all of the values just inserted
                 while (allsametype && savep != valp) {
                     if (savep != valarr && LLVMTypeOf(*savep) != LLVMTypeOf(*(savep-1))) {
                         allsametype = 0;
@@ -193,23 +209,30 @@ llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount
                     savep += 1;
                 }
                 break;
+            }
             case IVTYPE_STRING:
-                *valp = LLVMConstStringInContext(gctx->llvmctx, iv->data.string->ptr,
+                thisval = LLVMConstStringInContext(gctx->llvmctx, iv->data.string->ptr,
                                                  iv->data.string->len, 1);
                 break;
             case IVTYPE_SCALAR:
-                *valp = LLVMConstInt(LLVMIntTypeInContext(gctx->llvmctx,
+                thisval = LLVMConstInt(LLVMIntTypeInContext(gctx->llvmctx,
                                                           iv->data.scalar.width * bpunit),
                                      iv->data.scalar.value, iv->data.scalar.signext);
                 break;
             case IVTYPE_EXPR_EXP: {
                 expr_node_t *exp = iv->data.scalar.expr;
-                *valp = llvmgen_expression(gctx, exp, 0);
+                thisval = llvmgen_expression(gctx, exp, 0);
                 break;
             }
         }
-        if (allsametype && valp != valarr && LLVMTypeOf(*valp) != LLVMTypeOf(*(valp-1))) {
-            allsametype = 0;
+        if (iv->type != IVTYPE_LIST) {
+            LLVMValueRef *dstp = valp;
+            while (count-- > 0) *dstp++ = thisval;
+            if (allsametype && lastvalp != 0 && LLVMTypeOf(thisval) != LLVMTypeOf(*lastvalp)) {
+                allsametype = 0;
+            }
+            lastvalp = valp;
+            valp = dstp;
         }
     }
 
@@ -259,7 +282,8 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
         LLVMValueRef val;
     } pcells[LLVMGEN_K_MAXPRESETS];
     struct preset_s *parr[LLVMGEN_K_MAXPRESETS];
-    unsigned int pcount, i, curoff, curbitpos, arrsize;
+    unsigned int curoff, curbitpos, arrsize;
+    int pcount, i;
     initval_t *iv;
     LLVMValueRef *varr, *valp, oneval, initconst;
 
@@ -270,7 +294,7 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
         if (expr_type(exp) == EXPTYPE_PRIM_SEG) {
             this->o = (unsigned int) expr_seg_offset(exp);
             this->p = 0;
-            this->s = expr_seg_units(exp) * bpunit;
+            this->s = expr_seg_width(exp);
             this->e = expr_seg_signext(exp);
         } else if (expr_type(exp) == EXPTYPE_PRIM_FLDREF) {
             this->o = (unsigned int) expr_seg_offset(expr_fldref_addr(exp));
@@ -315,16 +339,16 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
             continue;
         }
         // Insert in order by offset+position
-        for (i = 0; i < pcount-1; i++) {
+        for (i = 0; i < pcount; i++) {
             if (this->o < parr[i]->o ||
                 (this->o == parr[i]->o && this->p < parr[i]->p)) {
                 break;
             }
         }
         // If we are inserting into the middle of the list, make room
-        if (i < pcount-1) {
+        if (i < pcount) {
             int j;
-            for (j = pcount; j > i; j--) {
+            for (j = pcount+1; j > i; j--) {
                 parr[j] = parr[j-1];
             }
         }
@@ -442,7 +466,7 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
  * handle_initializer
  */
 static void
-handle_initializer (gencodectx_t gctx, llvm_datasym_t *ld, name_t *np)
+handle_initializer (gencodectx_t gctx, llvm_datasym_t *ld, name_t *np, unsigned int typesize)
 {
     unsigned int bpunit = machine_unit_bits(gctx->mach);
     data_attr_t *attr = datasym_attr(np);
@@ -450,12 +474,16 @@ handle_initializer (gencodectx_t gctx, llvm_datasym_t *ld, name_t *np)
     LLVMValueRef initval;
 
     nunits = (unsigned int)initval_size(gctx->symctx, attr->ivlist);
-    if (nunits > attr->units) {
-        log_signal(expr_logctx(gctx->ectx), name_defpos(np),
-                   STC__INITSZERR, name_string(np));
+    if (nunits > typesize) {
+        if (typesize != 0) {
+            log_signal(expr_logctx(gctx->ectx), name_defpos(np), STC__INITSZERR, name_string(np));
+        }
         padding = 0;
     } else {
-        padding = attr->units - nunits;
+        padding = typesize - nunits;
+        if (padding > 1024) {
+            expr_signal(gctx->ectx, STC__INTCMPERR, "handle_initializer[1]");
+        }
     }
     if (attr->ivlist->preset_expr == 0) {
         initval = llvmgen_initializer(gctx, attr->ivlist, padding, 0);
@@ -468,18 +496,22 @@ handle_initializer (gencodectx_t gctx, llvm_datasym_t *ld, name_t *np)
         if (iv == 0) {
             initval = llvmgen_presetter(gctx, attr->ivlist, padding);
         } else {
-            llvmgen_memset(gctx, ld->value, LLVMConstNull(LLVMIntTypeInContext(gctx->llvmctx, bpunit)), 0);
+            llvmgen_memset(gctx, ld->value, LLVMConstNull(LLVMIntTypeInContext(gctx->llvmctx, bpunit)),
+                           LLVMConstInt(gctx->fullwordtype, attr->units, 0));
             for (iv = attr->ivlist; iv != 0; iv = iv->next) {
                 llvmgen_assignment(gctx, iv->preset_expr, iv->data.scalar.expr);
             }
         }
     }
     if (ld->vclass == LLVM_GLOBAL) {
-        ld->value = LLVMAddGlobal(gctx->module, LLVMTypeOf(initval),
-                                  name_azstring(np));
+        ld->value = LLVMAddGlobal(gctx->module, LLVMTypeOf(initval), name_azstring(np));
         LLVMSetInitializer(ld->value, initval);
     } else {
-        llvmgen_memcpy(gctx, ld->value, initval, 0);
+        llvmgen_memcpy(gctx, ld->value, initval, LLVMConstInt(gctx->fullwordtype, attr->units, 0));
+    }
+
+    if (typesize == 0 && attr->units == 0) {
+        attr->units = nunits;
     }
 
 } /* handle_initializer */
@@ -488,18 +520,20 @@ handle_initializer (gencodectx_t gctx, llvm_datasym_t *ld, name_t *np)
  * gendatatype
  */
 static LLVMTypeRef
-gendatatype (gencodectx_t gctx, data_attr_t *attr)
+gendatatype (gencodectx_t gctx, data_attr_t *attr, unsigned int *ucountp)
 {
     unsigned int bpunit = machine_unit_bits(gctx->mach);
     unsigned int refbind = (attr->flags & (SYM_M_REF|SYM_M_BIND));
 
     if (refbind != 0) {
         LLVMTypeRef basetype = LLVMIntTypeInContext(gctx->llvmctx, bpunit);
+        if (ucountp != 0) *ucountp = machine_addr_bits(gctx->mach)/bpunit;
         if (refbind == (SYM_M_REF|SYM_M_BIND)) {
             return LLVMPointerType(LLVMPointerType(basetype, 0), 0);
         }
         return LLVMPointerType(basetype, 0);
     }
+    if (ucountp != 0) *ucountp = attr->units;
     if (attr->struc != 0 || attr->units > machine_scalar_units(gctx->mach)) {
         return LLVMArrayType(LLVMIntTypeInContext(gctx->llvmctx, bpunit), attr->units);
     }
@@ -518,6 +552,7 @@ datasym_generator (void *vctx, name_t *np, void *p)
     llvm_datasym_t *ld = p;
     data_attr_t *attr = datasym_attr(np);
     LLVMTypeRef type;
+    unsigned int units;
 
     if ((attr->flags & SYM_M_FORWARD) != 0) {
         return 1;
@@ -526,12 +561,14 @@ datasym_generator (void *vctx, name_t *np, void *p)
         ld->vclass = LLVM_REG;
     } else if (attr->dclass == DCLASS_STATIC) {
         ld->vclass = LLVM_GLOBAL;
+        type = gendatatype(gctx, attr, &units);
         if (attr->ivlist != 0) {
-            handle_initializer(gctx, ld, np);
+            handle_initializer(gctx, ld, np, units);
         } else {
-            type = gendatatype(gctx, attr);
             ld->value = LLVMAddGlobal(gctx->module, type, name_azstring(np));
-            LLVMSetInitializer(ld->value, LLVMConstNull(type));
+            if (attr->sc != SYMSCOPE_EXTERNAL) {
+                LLVMSetInitializer(ld->value, LLVMConstNull(type));
+            }
         }
         if (attr->owner != 0) {
             LLVMSetSection(ld->value, name_azstring(attr->owner));
@@ -545,8 +582,8 @@ datasym_generator (void *vctx, name_t *np, void *p)
     } else {
         // Everything else is LOCAL, with an alloca, even REGISTER
         // declarations. XXX revisit later
-        type = gendatatype(gctx, attr);
         ld->vclass = LLVM_LOCAL;
+        type = gendatatype(gctx, attr, &units);
         ld->value = LLVMBuildAlloca(gctx->curfn->builder, type, name_azstring(np));
         if (attr->alignment != 0) {
             HelperSetAllocaAlignment(ld->value, 1<<attr->alignment);
@@ -554,7 +591,7 @@ datasym_generator (void *vctx, name_t *np, void *p)
         ld->flags = (((attr->flags & SYM_M_SIGNEXT) != 0 ? LLVMGEN_M_SEG_SIGNEXT : 0) |
                      ((attr->flags & SYM_M_VOLATILE) != 0 ? LLVMGEN_M_SEG_VOLATILE : 0));
         if (attr->ivlist != 0) {
-            handle_initializer(gctx, ld, np);
+            handle_initializer(gctx, ld, np, units);
         }
     }
 
@@ -595,7 +632,7 @@ rtnsym_generator (void *vctx, name_t *np, void *p)
         argcount = LLVMGEN_K_MAXARGS;
     }
     for (i = 0, ref = namereflist_head(&attr->inargs); i < argcount; i++, ref = ref->tq_next) {
-        argtypes[i] = gendatatype(gctx, datasym_attr(ref->np));
+        argtypes[i] = gendatatype(gctx, datasym_attr(ref->np), 0);
     }
     // XXX need machine-specific VARARG linkage attribute
     lr->type = LLVMFunctionType(lr->returntype, argtypes, argcount, 0);
