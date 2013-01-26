@@ -421,6 +421,7 @@ expr_node_copy (expr_ctx_t ctx, expr_node_t *node)
             break;
         case EXPTYPE_PRIM_STRUREF:
             expr_struref_accexpr_set(dst, expr_node_copy(ctx, expr_struref_accexpr(node)));
+            expr_struref_referer_set(dst, expr_struref_referer(node));
             break;
         case EXPTYPE_PRIM_FLDREF:
             expr_fldref_addr_set(dst, expr_node_copy(ctx, expr_fldref_addr(node)));
@@ -938,6 +939,35 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
 } /* parse_block */
 
 /*
+ * expr_block_simplify
+ *
+ * Called to de-block a simple block.
+ */
+expr_node_t *
+expr_block_simplify (expr_ctx_t ctx, expr_node_t *exp)
+{
+    expr_node_t *tmp;
+
+    if (expr_type(exp) != EXPTYPE_PRIM_BLK) return exp;
+
+    if (exprseq_length(expr_blk_seq(exp)) == 1 &&
+        expr_blk_codecomment(exp) == 0 &&
+        expr_blk_scope(exp) == 0 &&
+        namereflist_length(expr_blk_labels(exp)) == 0) {
+        tmp = exprseq_remhead(expr_blk_seq(exp));
+        expr_node_free(ctx, exp);
+        exp = tmp;
+        // we can also simplify an operator expression here
+        if (expr_type(exp) == EXPTYPE_OPERATOR) {
+            reduce_op_expr(ctx, &exp);
+        }
+    }
+
+    return exp;
+
+} /* expr_block_simplify */
+
+/*
  * expr_parse_arglist
  *
  * Parses the actual parameters for a routine call (ordinary
@@ -1084,7 +1114,7 @@ static int
 parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
 
     parse_ctx_t pctx = ctx->pctx;
-    expr_node_t *pos, *size, *exp;
+    expr_node_t *pos, *size, *exp, *base;
     long signext = 0;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LANGLE, 0, 1)) {
@@ -1113,6 +1143,9 @@ parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
         expr_signal(ctx, STC__DELIMEXP, ">");
     }
 
+    // Field-references auto-parenthesize
+    base = expr_block_simplify(ctx, *expp);
+
 	// Handle degenerate cases:
 	//	1. If the expression being field-referenced is a literal, do
 	//     the field-extraction now.
@@ -1130,31 +1163,34 @@ parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
         unsigned int sz = (unsigned int) expr_litval(size);
 
         // Can operate on CTCEs directly
-        if (expr_type(*expp) == EXPTYPE_PRIM_LIT) {
-            expr_litval_set(*expp, getvalue(expr_litval(*expp) >> expr_litval(pos),
+        if (expr_type(base) == EXPTYPE_PRIM_LIT) {
+            expr_litval_set(base, getvalue(expr_litval(*expp) >> expr_litval(pos),
                                             sz, (signext != 0)));
             expr_node_free(ctx, pos);
             expr_node_free(ctx, size);
+            *expp = base;
             return 1;
         }
-        if (expr_type(*expp) == EXPTYPE_PRIM_SEG &&
+        if (expr_type(base) == EXPTYPE_PRIM_SEG &&
             expr_litval(pos) % bpunit == 0 && size_ok(sz, bpunit, upval)) {
-            data_attr_t *attr = datasym_attr(expr_seg_name(*expp));
-            if (attr->dclass != DCLASS_ARG && attr->dclass != DCLASS_REGISTER) {
-                expr_seg_offset_set(*expp, expr_seg_offset(*expp) +
+            data_attr_t *attr = datasym_attr(expr_seg_name(base));
+// XXX Defer the decision about how to handle the offset & size to code generation.
+//            if (attr->dclass != DCLASS_ARG && attr->dclass != DCLASS_REGISTER) {
+                expr_seg_offset_set(base, expr_seg_offset(base) +
                                     expr_litval(pos) / machine_unit_bits(mach));
-                expr_seg_width_set(*expp, sz);
-                expr_seg_signext_set(*expp, (signext != 0));
+                expr_seg_width_set(base, sz);
+                expr_seg_signext_set(base, (signext != 0));
                 expr_node_free(ctx, pos);
                 expr_node_free(ctx, size);
+                *expp = base;
                 return 1;
-            }
+//            }
         }
     }
     exp = expr_node_alloc(ctx, EXPTYPE_PRIM_FLDREF, parser_curpos(pctx));
-    expr_fldref_addr_set(exp, *expp);
-    expr_is_ctce_set(exp, expr_is_ctce(*expp));
-    expr_is_ltce_set(exp, expr_is_ltce(*expp));
+    expr_fldref_addr_set(exp, base);
+    expr_is_ctce_set(exp, expr_is_ctce(base));
+    expr_is_ltce_set(exp, expr_is_ltce_only(base));
     expr_fldref_pos_set(exp, pos);
     expr_fldref_size_set(exp, size);
     expr_fldref_signext_set(exp, (signext != 0));
@@ -1756,7 +1792,10 @@ reduce_op_expr (expr_ctx_t ctx, expr_node_t **nodep) {
             }
             if (expr_type(lhs) == EXPTYPE_PRIM_SEG) {
                 data_attr_t *attr = datasym_attr(expr_seg_name(lhs));
-                if (attr->dclass != DCLASS_REGISTER && attr->dclass != DCLASS_ARG) {
+                // We can do this for register values if they are REFs, since
+                // indirection will occur.  (Note that BINDs are never registers.)
+                if ((attr->dclass != DCLASS_REGISTER && attr->dclass != DCLASS_ARG)
+                    || (attr->flags & SYM_M_REF) != 0) {
                     expr_node_t *tmp = lhs;
                     expr_op_lhs_set(node, 0);
                     expr_seg_name_set(tmp, expr_seg_name(lhs));

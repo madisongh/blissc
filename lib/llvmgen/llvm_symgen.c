@@ -28,6 +28,7 @@ struct llvm_datasym_s {
     LLVMValueRef        value;
     unsigned int        flags;
     llvm_stgclass_t     vclass;
+    int                 deref;
 };
 typedef struct llvm_datasym_s llvm_datasym_t;
 
@@ -507,7 +508,12 @@ handle_initializer (gencodectx_t gctx, llvm_datasym_t *ld, name_t *np, unsigned 
         ld->value = LLVMAddGlobal(gctx->module, LLVMTypeOf(initval), name_azstring(np));
         LLVMSetInitializer(ld->value, initval);
     } else {
-        llvmgen_memcpy(gctx, ld->value, initval, LLVMConstInt(gctx->fullwordtype, attr->units, 0));
+        if (typesize <= machine_scalar_bits(gctx->mach)) {
+            LLVMValueRef addr = llvmgen_adjustval(gctx, ld->value, LLVMPointerType(LLVMTypeOf(initval), 0), 0);
+            LLVMBuildStore(gctx->curfn->builder, initval, addr);
+        } else {
+            llvmgen_memcpy(gctx, ld->value, initval, LLVMConstInt(gctx->fullwordtype, typesize, 0));
+        }
     }
 
     if (typesize == 0 && attr->units == 0) {
@@ -524,9 +530,14 @@ gendatatype (gencodectx_t gctx, data_attr_t *attr, unsigned int *ucountp)
 {
     unsigned int bpunit = machine_unit_bits(gctx->mach);
     unsigned int refbind = (attr->flags & (SYM_M_REF|SYM_M_BIND));
+    LLVMTypeRef basetype;
 
+    if (attr->struc != 0 || attr->units > machine_scalar_units(gctx->mach)) {
+        basetype = LLVMArrayType(LLVMIntTypeInContext(gctx->llvmctx, bpunit), attr->units);
+    } else {
+        basetype = LLVMIntTypeInContext(gctx->llvmctx, attr->units * bpunit);
+    }
     if (refbind != 0) {
-        LLVMTypeRef basetype = LLVMIntTypeInContext(gctx->llvmctx, bpunit);
         if (ucountp != 0) *ucountp = machine_addr_bits(gctx->mach)/bpunit;
         if (refbind == (SYM_M_REF|SYM_M_BIND)) {
             return LLVMPointerType(LLVMPointerType(basetype, 0), 0);
@@ -534,10 +545,7 @@ gendatatype (gencodectx_t gctx, data_attr_t *attr, unsigned int *ucountp)
         return LLVMPointerType(basetype, 0);
     }
     if (ucountp != 0) *ucountp = attr->units;
-    if (attr->struc != 0 || attr->units > machine_scalar_units(gctx->mach)) {
-        return LLVMArrayType(LLVMIntTypeInContext(gctx->llvmctx, bpunit), attr->units);
-    }
-    return LLVMIntTypeInContext(gctx->llvmctx, attr->units * bpunit);
+    return basetype;
 
 } /* gendatatype */
 
@@ -668,6 +676,31 @@ rtnsym_generator (void *vctx, name_t *np, void *p)
 
 } /* rtnsym_generator */
 
+
+void
+llvmgen_deref_push (gencodectx_t gctx, name_t *np)
+{
+    lextype_t ntype = name_type(np);
+    llvm_datasym_t *ld;
+    if (ntype != LEXTYPE_NAME_DATA) {
+        expr_signal(gctx->ectx, STC__INTCMPERR, "llvmgen_deref_push");
+    }
+    ld = sym_genspace(np);
+    ld->deref += 1;
+}
+
+void
+llvmgen_deref_pop (gencodectx_t gctx, name_t *np)
+{
+    lextype_t ntype = name_type(np);
+    llvm_datasym_t *ld;
+    if (ntype != LEXTYPE_NAME_DATA) {
+        expr_signal(gctx->ectx, STC__INTCMPERR, "llvmgen_deref_pop");
+    }
+    ld = sym_genspace(np);
+    ld->deref -= 1;
+}
+
 /*
  * llvmgen_segaddress
  */
@@ -684,9 +717,21 @@ llvmgen_segaddress (gencodectx_t gctx, name_t *np, llvm_stgclass_t *segclassp, u
     }
     if (ntype == LEXTYPE_NAME_DATA) {
         llvm_datasym_t *ld = sym_genspace(np);
+        data_attr_t *attr = datasym_attr(np);
+        LLVMValueRef val;
         if (segclassp != 0) *segclassp = ld->vclass;
         if (flagsp != 0) *flagsp = ld->flags;
-        return ld->value;
+        val = ld->value;
+        if (ld->flags & SYM_M_BIND) {
+            val = LLVMBuildLoad(gctx->curfn->builder, val, llvmgen_temp(gctx));
+        }
+        if (ld->deref != 0 && (attr->flags & SYM_M_REF) != 0) {
+            if (flagsp != 0) *flagsp |= LLVMGEN_M_SEG_DEREFED;
+            if (ld->vclass != LLVM_REG) {
+                val = LLVMBuildLoad(gctx->curfn->builder, val, llvmgen_temp(gctx));
+            }
+        }
+        return val;
     }
     // Should never be called on any other name types
     expr_signal(gctx->ectx, STC__INTCMPERR, "llvm_segaddress");

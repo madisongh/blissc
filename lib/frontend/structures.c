@@ -48,7 +48,6 @@ struct strudef_s {
 static lextype_t bodyends[] = { LEXTYPE_DELIM_COMMA, LEXTYPE_DELIM_SEMI };
 static strdesc_t leftparen = STRDEF("(");
 static strdesc_t rightparen = STRDEF(")");
-static strdesc_t dot = STRDEF(".");
 static strdesc_t zero = STRDEF("0");
 static namedef_t mynames[] = {
     NAMEDEF("%FIELDEXPAND", LEXTYPE_LXF_FIELDEXPAND, NAME_M_RESERVED),
@@ -755,7 +754,7 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
     // allocation part, but may only be used for accessing
     // storage allocated in some other way.
     if (lexseq_length(&stru->allobody) == 0) {
-        *nunits = (is_ref ? machine_addr_units(mach) : 0);
+        *nunits = 0;
     } else {
         long val;
         lexseq_init(&tmpseq);
@@ -828,16 +827,20 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
             expr_signal(ctx, STC__INTCMPERR, "structure_reference[1]");
             return 0;
         }
+#if TRYTHISANOTHERWAY
 		// For REF symbols, we construct the fetch expression to get
 		// the address stored at the symbol's location.
         if (attr->flags & SYM_M_REF) {
             lexseq_instail(&seq, lexeme_create(lctx, LEXTYPE_DELIM_LPAR, &leftparen));
             lexseq_instail(&seq, lexeme_create(lctx, LEXTYPE_OP_FETCH, &dot));
         }
+#endif
         lexseq_instail(&seq,lexeme_copy(lctx, curlex));
+#if TRYTHISANOTHERWAY
         if (attr->flags & SYM_M_REF) {
             lexseq_instail(&seq, lexeme_create(lctx, LEXTYPE_DELIM_RPAR, &rightparen));
         }
+#endif
         // Semicolons (and allocation-formals) not allowed in this case
         ndelims = 2;
         delim = LEXTYPE_DELIM_COMMA;
@@ -953,9 +956,15 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
     }
 
     parser_scope_end(pctx);
+
+    // Since STRUREF auto-parenthesizes the expression, we can
+    // simplify a resultant block expression if it only contains
+    // one expression and has no declarations, labels, or codecomments.
+    exp = expr_block_simplify(ctx, exp);
     resexp = expr_node_alloc(ctx, EXPTYPE_PRIM_STRUREF, pos);
     expr_struref_accexpr_set(resexp, exp);
-    return exp;
+    expr_struref_referer_set(resexp, symname);
+    return resexp;
 
 } /* structure_reference */
 

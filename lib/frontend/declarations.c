@@ -959,8 +959,7 @@ handle_data_attrs (expr_ctx_t ctx, scopectx_t scope, decltype_t dt,
                 structure_allocate(ctx, attr->struc, 0,
                                    &nunits, &attr->struscope,
                                    (attr->flags & SYM_M_REF) != 0);
-                attr->units = ((attr->flags & SYM_M_REF) == 0 ? nunits
-                               : machine_scalar_units(mach));
+                attr->units = nunits;
                 saw_au = saw_ext = -1;
                 if (saw_preset == -1) saw_preset = 0;
                 if (saw_field == -1) saw_field = 0;

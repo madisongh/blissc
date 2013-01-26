@@ -98,7 +98,7 @@ typedef enum {
 
 #define LLVMGEN_M_SEG_SIGNEXT  (1<<0)
 #define LLVMGEN_M_SEG_VOLATILE (1<<1)
-
+#define LLVMGEN_M_SEG_DEREFED  (1<<2)
 
 #define siu static inline __attribute__((unused))
 siu char *llvmgen_temp(gencodectx_t gctx) {
@@ -157,6 +157,8 @@ LLVMValueRef llvmgen_segaddress(gencodectx_t gctx, name_t *np, llvm_stgclass_t *
                                 unsigned int *flagsp);
 LLVMValueRef llvmgen_expression(gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype);
 LLVMValueRef llvmgen_addr_expression(gencodectx_t gctx, expr_node_t *exp, unsigned int *flagsp);
+void llvmgen_deref_push(gencodectx_t gctx, name_t *np);
+void llvmgen_deref_pop(gencodectx_t gctx, name_t *np);
 void llvmgen_expgen_register(gencodectx_t gctx, exprtype_t type, llvmgen_expgen_fn func);
 void llvmgen_opexpgen_init(gencodectx_t gctx);
 void llvmgen_ctrlexpgen_init(gencodectx_t gctx);

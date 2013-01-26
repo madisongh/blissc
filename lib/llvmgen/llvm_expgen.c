@@ -46,7 +46,15 @@ llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp, unsigned int *flag
     exprtype_t type = expr_type(exp);
 
     if (type == EXPTYPE_PRIM_SEG) {
-        return llvmgen_segaddress(gctx, expr_seg_name(exp), 0, flagsp);
+        LLVMValueRef addr = llvmgen_segaddress(gctx, expr_seg_name(exp), 0, flagsp);
+        if (expr_seg_offset(exp) != 0) {
+            addr = llvmgen_adjustval(gctx, addr, gctx->fullwordtype, 0);
+            addr = LLVMBuildAdd(gctx->curfn->builder, addr,
+                                LLVMConstInt(gctx->fullwordtype, expr_seg_offset(exp), 0),
+                                llvmgen_temp(gctx));
+            return llvmgen_adjustval(gctx, addr, gctx->unitptrtype, 0);
+        }
+        return addr;
     }
 
     if (type == EXPTYPE_PRIM_FLDREF) {
@@ -104,13 +112,18 @@ gen_seg_or_fieldref (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype
  *
  * The PRIM_STRUREF expression type is really just a way to automatically
  * parenthesize a structure-reference expression, so it's treated as a unit
- * by the expression code.  No special handling required here.
+ * by the expression code.  No special handling required here. XXX Well, maybe there is
  */
 static LLVMValueRef
 gen_struref (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
-    return llvmgen_expression(gctx, expr_struref_accexpr(exp), neededtype);
-
+    LLVMValueRef val;
+    name_t *np = expr_struref_referer(exp);
+    if (np != 0) llvmgen_deref_push(gctx, np);
+    val = llvmgen_expression(gctx, expr_struref_accexpr(exp), neededtype);
+    if (np != 0) llvmgen_deref_pop(gctx, np);
+    return val;
+    
 } /* gen_struref */
 
 static LLVMValueRef

@@ -90,6 +90,7 @@ struct expr_blk_s {
 };
 struct expr_struref_s {
     struct expr_node_s *accexpr;
+    name_t             *referer;
 };
 struct expr_oper_s {
     struct expr_node_s *op_lhs, *op_rhs;
@@ -263,6 +264,10 @@ siu expr_node_t *expr_struref_accexpr(expr_node_t *node) {
     return node->data.srdata.accexpr; }
 siu void expr_struref_accexpr_set(expr_node_t *node, expr_node_t *e) {
     node->data.srdata.accexpr = e; }
+siu name_t *expr_struref_referer(expr_node_t *node) {
+    return node->data.srdata.referer; }
+siu void expr_struref_referer_set(expr_node_t *node, name_t *np) {
+    node->data.srdata.referer = np; }
 
 // PRIM_SEG
 siu unsigned int expr_seg_width(expr_node_t *node) { return node->data.segdata.width; }
@@ -501,6 +506,7 @@ void expr_loopdepth_incr(expr_ctx_t ctx);
 void expr_loopdepth_decr(expr_ctx_t ctx);
 int expr_loopdepth_get(expr_ctx_t ctx);
 void *expr_fake_label_ptr(expr_ctx_t ctx);
+expr_node_t *expr_block_simplify(expr_ctx_t ctx, expr_node_t *exp);
 void expr_signal(expr_ctx_t ctx, statcode_t code, ...);
 
 #endif /* expression_h__ */
