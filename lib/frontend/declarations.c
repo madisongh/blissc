@@ -1936,19 +1936,29 @@ parse_ASSIGN (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
     expr_ctx_t ctx = vctx;
     name_t *np;
     lexeme_t *lex;
+    strdesc_t *lexstr;
     long val;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
         expr_signal(ctx, STC__DELIMEXP, "(");
         return 1;
     }
-    if (!parser_expect(pctx, QL_NAME, LEXTYPE_NAME_COMPILETIME, &lex, 1)) {
+    parser_next(pctx, QL_NAME, &lex);
+    if (lex == 0 || lexeme_boundtype(lex) != LEXTYPE_NAME) {
+        lexeme_free(expr_lexmemctx(ctx), lex);
         expr_signal(ctx, STC__CTNAMEXP);
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
-    np = lexeme_ctx_get(lex);
+    lexstr = lexeme_text(lex);
+    np = name_search_typed(parser_scope_get(pctx), lexstr->ptr, lexstr->len,
+                           LEXTYPE_NAME_COMPILETIME, 0);
     lexeme_free(expr_lexmemctx(ctx), lex);
+    if (np == 0) {
+        expr_signal(ctx, STC__CTNAMEXP);
+        parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
+        return 1;
+    }
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
         expr_signal(ctx, STC__DELIMEXP, ",");
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);

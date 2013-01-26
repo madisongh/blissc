@@ -85,6 +85,7 @@ struct gencodectx_s {
     LLVMTypeRef         memsetargtypes[5];
 
     unsigned int        globidx;
+    unsigned int        optlevel;
 
     char                tmpnambuf[NAME_SIZE];
 };

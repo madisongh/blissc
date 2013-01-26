@@ -20,6 +20,7 @@
  */
 
 #include "llvmgen.h"
+#include "blissc/switches.h"
 #include <assert.h>
 
 LLVMBasicBlockRef
@@ -254,7 +255,33 @@ llvmgen_cast_trunc_ext (gencodectx_t gctx, LLVMValueRef val, LLVMTypeRef neededt
     return (constcast ? LLVMConstBitCast(val, neededtype)
             : LLVMBuildBitCast(builder, val, neededtype, llvmgen_temp(gctx)));
 
-}
+} /* llvmgen_cast_trunc_ext */
+
+static int
+optlevel_handler (parse_ctx_t pctx, void *vctx, lextype_t dcltype, lexeme_t *swlex)
+{
+    gencodectx_t gctx = vctx;
+    lexeme_t *lex;
+    long val;
+
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_OP_ASSIGN, 0, 1)) {
+        expr_signal(gctx->ectx, STC__DELIMEXP, "=");
+        return 1;
+    }
+
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_NUMERIC, &lex, 1)) {
+        expr_signal(gctx->ectx, STC__INVOPTLVL);
+        return 1;
+    }
+    if (!string_numval(lexeme_text(lex), 10, &val) || val < 0 || val > 3) {
+        expr_signal(gctx->ectx, STC__INVOPTLVL);
+    }
+
+    gctx->optlevel = (unsigned int) val;
+
+    return 1;
+
+} /* optlevel_handler */
 
 /*
  * gencode_module_begin
@@ -276,10 +303,12 @@ gencode_module_begin (gencodectx_t gctx, name_t *modnp)
     LLVMDisposeMessage(dl);
 
     LLVMAddBasicAliasAnalysisPass(gctx->passmgr);
-    LLVMAddInstructionCombiningPass(gctx->passmgr);
-    LLVMAddReassociatePass(gctx->passmgr);
-    LLVMAddGVNPass(gctx->passmgr);
-    LLVMAddCFGSimplificationPass(gctx->passmgr);
+    if (gctx->optlevel > 0) {
+        LLVMAddInstructionCombiningPass(gctx->passmgr);
+        LLVMAddReassociatePass(gctx->passmgr);
+        LLVMAddGVNPass(gctx->passmgr);
+        LLVMAddCFGSimplificationPass(gctx->passmgr);
+    }
 
     return (gctx->module != 0);
 
@@ -291,7 +320,7 @@ gencode_module_end (gencodectx_t gctx, name_t *np)
     char *err;
 
     LLVMVerifyModule(gctx->module, LLVMPrintMessageAction, 0);
-    LLVMDumpModule(gctx->module);
+//    LLVMDumpModule(gctx->module);
     err = 0;
     if (LLVMTargetMachineEmitToFile(gctx->mctx->target_machine, gctx->module,
                                     gctx->mctx->outfile, gctx->mctx->outputtype, &err)) {
@@ -303,6 +332,20 @@ gencode_module_end (gencodectx_t gctx, name_t *np)
     return 1;
 
 } /* gencode_module_end */
+
+void
+gencode_optlevel_set (gencodectx_t gctx, unsigned int level)
+{
+    gctx->optlevel = (level & 3);  // valid values are 0, 1, 2, 3
+}
+
+void
+gencode_postinit (gencodectx_t gctx)
+{
+    switch_special_declare(parser_kwdscope(expr_parse_ctx(gctx->ectx)), LEXTYPE_SWITCH_OPTLEVEL,
+                           optlevel_handler, gctx);
+
+} /* gencode_postinit */
 
 /*
  * gencode_init
@@ -328,6 +371,7 @@ gencode_init (void *ectx, logctx_t logctx, machinedef_t *mach, symctx_t symctx)
     gctx->unitptrtype = LLVMPointerType(LLVMIntTypeInContext(gctx->llvmctx,
                                                              machine_unit_bits(mach)), 0);
     gctx->intptrtszype = LLVMIntTypeInContext(gctx->llvmctx, machine_addr_bits(mach));
+    gctx->optlevel = 1;
 
     llvmgen_symgen_init(gctx);
 

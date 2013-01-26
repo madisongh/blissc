@@ -698,6 +698,8 @@ expr_init (strctx_t strctx, parse_ctx_t pctx, scopectx_t kwdscope)
     declarations_init(ectx, pctx, kwdscope, ectx->mach);
     execfunc_init(ectx, kwdscope);
 
+    gencode_postinit(ectx->gctx);
+    
     return ectx;
 
 } /* expr_init */

@@ -22,6 +22,7 @@
 #include "blissc/support/fileio.h"
 #include "blissc/machinedef.h"
 #include "blissc/nametable.h"
+#include "blissc/gencode.h"
 #include "blissc/parser.h"
 #include "blissc/expression.h"
 #include "blissc/declarations.h"
@@ -44,6 +45,7 @@ struct blissc_driverctx_s {
     char            *listfn;
     unsigned int    listfnlen;
     int             free_listfn;
+    int             optlevel;
 };
 
 blissc_driverctx_t
@@ -58,6 +60,7 @@ blissc_init (jmp_buf retenv)
     ctx->logctx = logging_init(retenv);
     ctx->fioctx = fileio_init(ctx->logctx);
     ctx->outtype = MACH_K_OUTPUT_OBJ;
+    ctx->optlevel = -1; // unset
 
     return ctx;
 
@@ -69,8 +72,11 @@ blissc_output_set (blissc_driverctx_t ctx, bliss_output_t outtype,
 {
     ctx->outtype = (outtype == BLISS_K_OUTPUT_ASSEMBLY ? MACH_K_OUTPUT_ASM : MACH_K_OUTPUT_OBJ);
     if (fname != 0) {
-        ctx->outfn = file_canonicalname(ctx->fioctx, fname, fnlen, &ctx->outfnlen);
+        if (fnlen < 0) fnlen = (int) strlen(fname);
+        ctx->outfn = malloc(fnlen);
         if (ctx->outfn == 0) return 0;
+        memcpy(ctx->outfn, fname, fnlen);
+        ctx->outfn[fnlen] = '\0';
     }
     return 1;
 } /* blissc_output_set */
@@ -81,8 +87,11 @@ blissc_listopt_set (blissc_driverctx_t ctx, unsigned int flags,
 {
     ctx->listflags = flags;
     if (fname != 0) {
-        ctx->listfn = file_canonicalname(ctx->fioctx, fname, fnlen, &ctx->listfnlen);
+        if (fnlen < 0) fnlen = (int) strlen(fname);
+        ctx->listfn = malloc(fnlen);
         if (ctx->listfn == 0) return 0;
+        memcpy(ctx->listfn, fname, fnlen);
+        ctx->listfn[fnlen] = '\0';
     }
     return 1;
 
@@ -105,47 +114,78 @@ blissc_target_set (blissc_driverctx_t ctx, const char *machspec)
 }
 
 int
+blissc_optlevel_set (blissc_driverctx_t ctx, unsigned int val)
+{
+    ctx->optlevel = val;
+    return 1;
+}
+
+int
 blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
 {
     int status;
     size_t len = (fnlen < 0 ? strlen(fname) : fnlen);
-    fio_pathparts_t fnparts;
+    fio_pathparts_t srcparts, objparts, lstparts;
 
+    if (!file_splitname(ctx->fioctx, fname, fnlen, 1, &srcparts)) {
+        return 0;
+    }
     if (ctx->variant != 0) parser_variant_set(ctx->pctx, ctx->variant);
     if (ctx->outfn == 0) {
-        if (!file_splitname(ctx->fioctx, fname, fnlen, 1, &fnparts)) {
-            return 0;
-        }
+        file_splitname(ctx->fioctx, srcparts.path_fullname,
+                       (int) srcparts.path_fullnamelen, 0, &objparts);
         if (ctx->outtype == BLISS_K_OUTPUT_ASSEMBLY) {
-            fnparts.path_suffix = ".s";
+            objparts.path_suffix = ".s";
         } else {
-            fnparts.path_suffix = ".o";
+            objparts.path_suffix = ".o";
         }
-        fnparts.path_suffixlen = 2;
-        if (!file_combinename(ctx->fioctx, &fnparts)) {
+        objparts.path_suffixlen = 2;
+    } else {
+        if (!file_splitname(ctx->fioctx, ctx->outfn, -1, 0, &objparts)) {
             return 0;
         }
-        ctx->outfn = fnparts.path_fullname;
-        ctx->outfnlen = (unsigned int) fnparts.path_fullnamelen;
-        ctx->free_outfn = 1;
-        machine_output_set(ctx->mach, ctx->outtype, ctx->outfn, ctx->outfnlen);
+        if (objparts.path_dirnamelen == 0) {
+            objparts.path_dirnamelen = srcparts.path_dirnamelen;
+            objparts.path_dirname = srcparts.path_dirname;
+        }
     }
+    if (!file_combinename(ctx->fioctx, &objparts)) {
+        return 0;
+    }
+    if (ctx->outfn != 0) free(ctx->outfn);
+    ctx->outfn = objparts.path_fullname;
+    ctx->outfnlen = (unsigned int) objparts.path_fullnamelen;
+    ctx->free_outfn = 1;
+    machine_output_set(ctx->mach, ctx->outtype, ctx->outfn, ctx->outfnlen);
 
     if (ctx->listflags == 0) {
+        if (ctx->listfn != 0) free(ctx->listfn);
         ctx->listfn = 0;
         ctx->listfnlen = 0;
-    } else if (ctx->listfn == 0) {
-        if (!file_splitname(ctx->fioctx, ctx->outfn, ctx->outfnlen, 1, &fnparts)) {
+    } else {
+        if (ctx->listfn == 0) {
+            file_splitname(ctx->fioctx, ctx->outfn, ctx->outfnlen, 0, &lstparts);
+            lstparts.path_suffix = ".lis";
+            lstparts.path_suffixlen = 4;
+        } else {
+            if (!file_splitname(ctx->fioctx, ctx->listfn, -1, 0, &lstparts)) {
+                return 0;
+            }
+            if (lstparts.path_dirnamelen == 0) {
+                lstparts.path_dirnamelen = objparts.path_dirnamelen;
+                lstparts.path_dirname = objparts.path_dirname;
+            }
+        }
+        if (!file_combinename(ctx->fioctx, &lstparts)) {
             return 0;
         }
-        fnparts.path_suffix = ".lis";
-        fnparts.path_suffixlen = 4;
-        if (!file_combinename(ctx->fioctx, &fnparts)) {
-            return 0;
-        }
-        ctx->listfn = fnparts.path_fullname;
-        ctx->listfnlen = (unsigned int) fnparts.path_fullnamelen;
+        if (ctx->listfn != 0) free(ctx->listfn);
+        ctx->listfn = lstparts.path_fullname;
+        ctx->listfnlen = (unsigned int) lstparts.path_fullnamelen;
         ctx->free_listfn = 1;
+    }
+    if (ctx->optlevel >= 0) {
+        gencode_optlevel_set(expr_gencodectx(ctx->ectx), ctx->optlevel);
     }
     status = parser_fopen_main(ctx->pctx, fname, len,
                                ctx->listflags, ctx->listfn, ctx->listfnlen);

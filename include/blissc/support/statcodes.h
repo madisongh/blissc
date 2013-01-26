@@ -161,7 +161,8 @@ STATCODE(108,E,PROVERLAP, "overlapping initializer fields found in PRESET") \
 STATCODE(109,E,EXCRTNPARS,"routine !SD exceeds parameter list size limit") \
 STATCODE(110,E,ADDRVALRQ, "address expression required in this context") \
 STATCODE(111,E,EXCCALPARS,"routine call exceeds parameter list size limit") \
-STATCODE(112,E,INSFPARS,  "insufficient number of parameters in routine call")
+STATCODE(112,E,INSFPARS,  "insufficient number of parameters in routine call") \
+STATCODE(113,W,INVOPTLVL, "invalid OPTLEVEL setting")
 
 #define STATCODE(msg,typ,nam,txt) STC__##nam =  STC_CODE_##typ(msg),
 typedef enum {
