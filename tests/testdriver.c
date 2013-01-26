@@ -130,6 +130,14 @@ parse_args (int argc, char * const argv[])
                 print_usage();
                 err = 999;
                 break;
+            case 'O':
+                if (*optarg >= '0' && *optarg <= '3' && *(optarg+1) == '\0') {
+                    optlevel = *optarg - '0';
+                } else {
+                    fprintf(stderr, "Unrecognized optimization level: %s\n", optarg);
+                    err = 1;
+                }
+                break;
             case '?':
                 fprintf(stderr, "Unrecognized option: %s\n", argv[optind]);
                 err = 1;
