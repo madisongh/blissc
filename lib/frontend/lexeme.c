@@ -151,8 +151,9 @@ lexeme_bind (lexctx_t lctx, textpos_t curpos, quotelevel_t ql, quotemodifier_t q
     }
 
     // Check for lexical conditional skips
-    if ((cs == COND_CWA && !(lt == LEXTYPE_LXF_ELSE || lt == LEXTYPE_LXF_FI)) ||
-        (cs == COND_AWC && lt != LEXTYPE_LXF_FI)) {
+    if ((cs == COND_CWA && !(lt == LEXTYPE_LXF_ELSE || lt == LEXTYPE_LXF_FI ||
+                             lt == LEXTYPE_LXF_IF)) ||
+        (cs == COND_AWC && !(lt == LEXTYPE_LXF_FI || lt == LEXTYPE_LXF_IF))) {
         lexeme_free(lctx, lex);
         return 1;
     }

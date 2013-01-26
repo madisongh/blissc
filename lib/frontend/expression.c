@@ -2337,8 +2337,20 @@ static int
 parse_IF (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
 {
     expr_ctx_t ctx = vctx;
+    condstate_t cs = parser_condstate_get(pctx);
     long testval;
 
+    // Handle nesting of conditionals inside skipped consequents
+    // and alternatives by pushing COND_AWC on the conditional
+    // stack - that will force us to skip to %FI that corresponds
+    // with this %IF.  Also have to bump up the erroneof level,
+    // since it will be decremented by the %FI handler.
+    if (cs == COND_AWC || cs == COND_CWA) {
+        if (parser_condstate_push(pctx, COND_AWC)) {
+            parser_incr_erroneof(pctx);
+            return 1;
+        }
+    }
     // Note the use of increment/decrement here -- this is to handle
     // nesting of instances in which hitting end-of-file is a no-no.
     parser_incr_erroneof(pctx);

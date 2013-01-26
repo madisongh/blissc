@@ -426,6 +426,7 @@ void parser_skipmode_set (parse_ctx_t pctx, int val) { pctx->macroskip = val; }
 scopectx_t parser_kwdscope (parse_ctx_t pctx) { return pctx->kwdscope; }
 lstgctx_t parser_lstgctx (parse_ctx_t pctx) { return pctx->lstgctx; }
 void parser_variant_set (parse_ctx_t pctx, unsigned int val) { pctx->variant = val; }
+condstate_t parser_condstate_get (parse_ctx_t pctx) { return pctx->condstate[pctx->condlevel]; }
 
 /*
  * parser_condstate_push

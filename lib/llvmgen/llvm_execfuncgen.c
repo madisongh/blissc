@@ -30,7 +30,9 @@ FUNCGENDEF("MAXU",             gen_MINMAX,          LLVMIntUGT) \
 FUNCGENDEF("MIN",              gen_MINMAX,          LLVMIntSLT) \
 FUNCGENDEF("MINU",             gen_MINMAX,          LLVMIntULT) \
 FUNCGENDEF("SIGN",             gen_SIGN,            0) \
-FUNCGENDEF("ABS",              gen_ABS,             0)
+FUNCGENDEF("ABS",              gen_ABS,             0) \
+FUNCGENDEF("CH$MOVE",          gen_chf_move,        0) \
+FUNCGENDEF("CH$FILL",          gen_chf_fill,        0)
 #if 0
 FUNCGENDEF("CH$ALLOCATION",    gen_chf_allocation,  0) \
 FUNCGENDEF("CH$SIZE",          gen_chf_size,        0) \
@@ -42,8 +44,6 @@ FUNCGENDEF("CH$RCHAR_A",       gen_chf_rchar_a,     1) \
 FUNCGENDEF("CH$WCHAR",         gen_chf_wchar,       0) \
 FUNCGENDEF("CH$A_WCHAR",       gen_chf_wchar_a,     0) \
 FUNCGENDEF("CH$WCHAR_A",       gen_chf_wchar_a,     1) \
-FUNCGENDEF("CH$MOVE",          gen_chf_move,        0) \
-FUNCGENDEF("CH$FILL",          gen_chf_fill,        0) \
 FUNCGENDEF("CH$COPY",          gen_chf_copy,        0) \
 FUNCGENDEF("CH$EQL",           gen_chf_compare,     LLVMIntEQ) \
 FUNCGENDEF("CH$NEQ",           gen_chf_compare,     LLVMIntNE) \
@@ -236,3 +236,38 @@ gen_MINMAX (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededty
 
 } /* gen_MINMAX */
 
+static LLVMValueRef
+gen_chf_move (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    exprseq_t *args = expr_func_arglist(exp);
+    LLVMValueRef len, src, dst;
+    expr_node_t *arg;
+
+    arg = exprseq_head(args);
+    len = llvmgen_expression(gctx, arg, LLVMInt32TypeInContext(gctx->llvmctx));
+    arg = arg->tq_next;
+    src = llvmgen_expression(gctx, arg, LLVMPointerType(LLVMInt8TypeInContext(gctx->llvmctx), 0));
+    arg = arg->tq_next;
+    dst = llvmgen_expression(gctx, arg, LLVMPointerType(LLVMInt8TypeInContext(gctx->llvmctx), 0));
+    llvmgen_memcpy(gctx, dst, src, len);
+    if (neededtype == 0) return 0;
+    return LLVMConstNull(neededtype);
+}
+
+static LLVMValueRef
+gen_chf_fill (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    exprseq_t *args = expr_func_arglist(exp);
+    LLVMValueRef len, fill, dst;
+    expr_node_t *arg;
+
+    arg = exprseq_head(args);
+    fill = llvmgen_expression(gctx, arg, LLVMInt8TypeInContext(gctx->llvmctx));
+    arg = arg->tq_next;
+    len = llvmgen_expression(gctx, arg, LLVMInt32TypeInContext(gctx->llvmctx));
+    arg = arg->tq_next;
+    dst = llvmgen_expression(gctx, arg, LLVMPointerType(LLVMInt8TypeInContext(gctx->llvmctx), 0));
+    llvmgen_memset(gctx, dst, fill, len);
+    if (neededtype == 0) return 0;
+    return LLVMConstNull(neededtype);
+}

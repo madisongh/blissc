@@ -57,6 +57,7 @@ void parser_incr_erroneof(parse_ctx_t pctx);
 void parser_decr_erroneof(parse_ctx_t pctx);
 void parser_skipmode_set(parse_ctx_t pctx, int val);
 int parser_condstate_push(parse_ctx_t pctx, condstate_t newcs);
+condstate_t parser_condstate_get(parse_ctx_t pctx);
 int parse_lexeme_seq(parse_ctx_t pctx, lexseq_t *seq, quotelevel_t ql,
                      lextype_t terms[], int nterms,
                      lexseq_t *result, lextype_t *term);
