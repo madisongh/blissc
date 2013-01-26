@@ -163,6 +163,7 @@ gen_fetch (gencodectx_t gctx, expr_node_t *rhsactual, LLVMTypeRef neededtype)
         }
         if (valclass == LLVM_REG && (flags & LLVMGEN_M_SEG_DEREFED) == 0) {
             if (width != bpval) {
+                addr = llvmgen_adjustval(gctx, addr, gctx->fullwordtype, 0);
                 val = LLVMBuildTrunc(builder, addr,
                                      LLVMIntTypeInContext(gctx->llvmctx, width),
                                      llvmgen_temp(gctx));
@@ -173,9 +174,9 @@ gen_fetch (gencodectx_t gctx, expr_node_t *rhsactual, LLVMTypeRef neededtype)
             LLVMTypeRef fetchtype = LLVMPointerType(LLVMIntTypeInContext(gctx->llvmctx, width), 0);
 
             if (offset != 0) {
-                addr = llvmgen_adjustval(gctx, addr, gctx->fullwordtype, 0);
-                addr = LLVMBuildAdd(builder, addr, LLVMConstInt(gctx->fullwordtype, offset, 0),
-                                    llvmgen_temp(gctx));
+                LLVMValueRef off = LLVMConstInt(gctx->fullwordtype, offset, 1);
+                addr = llvmgen_adjustval(gctx, addr, gctx->unitptrtype, 0);
+                addr = LLVMBuildGEP(builder, addr, &off, 1, llvmgen_temp(gctx));
                 addr = llvmgen_adjustval(gctx, addr, fetchtype, 0);
             } else if (LLVMTypeOf(addr) != fetchtype) {
                 addr = LLVMBuildPointerCast(builder, addr, fetchtype, llvmgen_temp(gctx));

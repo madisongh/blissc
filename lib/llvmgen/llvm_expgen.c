@@ -48,11 +48,13 @@ llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp, unsigned int *flag
     if (type == EXPTYPE_PRIM_SEG) {
         LLVMValueRef addr = llvmgen_segaddress(gctx, expr_seg_name(exp), 0, flagsp);
         if (expr_seg_offset(exp) != 0) {
-            addr = llvmgen_adjustval(gctx, addr, gctx->fullwordtype, 0);
-            addr = LLVMBuildAdd(gctx->curfn->builder, addr,
-                                LLVMConstInt(gctx->fullwordtype, expr_seg_offset(exp), 0),
-                                llvmgen_temp(gctx));
-            return llvmgen_adjustval(gctx, addr, gctx->unitptrtype, 0);
+            LLVMValueRef off = LLVMConstInt(gctx->fullwordtype, expr_seg_offset(exp), 1);
+            addr = llvmgen_adjustval(gctx, addr, gctx->unitptrtype, 0);
+            if (LLVMIsConstant(addr)) {
+                addr = LLVMConstGEP(addr, &off, 1);
+            } else {
+                addr = LLVMBuildGEP(gctx->curfn->builder, addr, &off, 1, llvmgen_temp(gctx));
+            }
         }
         return addr;
     }

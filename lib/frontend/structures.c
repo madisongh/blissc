@@ -964,6 +964,9 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
     resexp = expr_node_alloc(ctx, EXPTYPE_PRIM_STRUREF, pos);
     expr_struref_accexpr_set(resexp, exp);
     expr_struref_referer_set(resexp, symname);
+    expr_is_ctce_set(resexp, expr_is_ctce(exp));
+    expr_is_ltce_set(resexp, expr_is_ltce_only(exp));
+    expr_has_value_set(resexp, 1); // XXX *must* have value, right?
     return resexp;
 
 } /* structure_reference */
