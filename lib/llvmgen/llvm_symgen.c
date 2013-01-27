@@ -189,7 +189,7 @@ llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount
             case IVTYPE_LIST: {
                 LLVMValueRef *savep = valp;
                 LLVMValueRef *srcp, *dstp;
-                savep = valp;
+
                 llvmgen_initializer(gctx, iv->data.listptr, 0, &valp);
                 dstp = valp;
                 // Handle (> 1) repeat count by appending copies of the pointer(s) just inserted
@@ -307,6 +307,10 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
             }
             this->s = (unsigned int) expr_litval(expr_fldref_size(exp));
             this->e = expr_fldref_signext(exp);
+        } else {
+            // Should never get here
+            expr_signal(gctx->ectx, STC__INTCMPERR, "llvmgen_presetter[1]");
+            continue;
         }
         exp = iv->data.scalar.expr;
         if (expr_type(exp) == EXPTYPE_PRIM_LIT) {
@@ -361,6 +365,11 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
     // Signal the user if we ran out of preset cells
     if (iv != 0) {
         expr_signal(gctx->ectx, STC__EXCPRLIMIT);
+    }
+
+    if (pcount == 0) {
+        expr_signal(gctx->ectx, STC__INTCMPERR, "llvmgen_presetter[2]");
+        return 0;
     }
 
     // At this point, the parr[] array contains a list of pointers
@@ -472,7 +481,7 @@ handle_initializer (gencodectx_t gctx, llvm_datasym_t *ld, name_t *np, unsigned 
     unsigned int bpunit = machine_unit_bits(gctx->mach);
     data_attr_t *attr = datasym_attr(np);
     unsigned int nunits, padding;
-    LLVMValueRef initval;
+    LLVMValueRef initval = 0;
 
     nunits = (unsigned int)initval_size(gctx->symctx, attr->ivlist);
     if (nunits > typesize) {
@@ -503,6 +512,10 @@ handle_initializer (gencodectx_t gctx, llvm_datasym_t *ld, name_t *np, unsigned 
                 llvmgen_assignment(gctx, iv->preset_expr, iv->data.scalar.expr);
             }
         }
+    }
+    if (initval == 0) {
+        expr_signal(gctx->ectx, STC__INTCMPERR, "handle_initializer");
+        return;
     }
     if (ld->vclass == LLVM_GLOBAL) {
         ld->value = LLVMAddGlobal(gctx->module, LLVMTypeOf(initval), name_azstring(np));

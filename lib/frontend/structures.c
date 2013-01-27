@@ -827,20 +827,7 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
             expr_signal(ctx, STC__INTCMPERR, "structure_reference[1]");
             return 0;
         }
-#if TRYTHISANOTHERWAY
-		// For REF symbols, we construct the fetch expression to get
-		// the address stored at the symbol's location.
-        if (attr->flags & SYM_M_REF) {
-            lexseq_instail(&seq, lexeme_create(lctx, LEXTYPE_DELIM_LPAR, &leftparen));
-            lexseq_instail(&seq, lexeme_create(lctx, LEXTYPE_OP_FETCH, &dot));
-        }
-#endif
         lexseq_instail(&seq,lexeme_copy(lctx, curlex));
-#if TRYTHISANOTHERWAY
-        if (attr->flags & SYM_M_REF) {
-            lexseq_instail(&seq, lexeme_create(lctx, LEXTYPE_DELIM_RPAR, &rightparen));
-        }
-#endif
         // Semicolons (and allocation-formals) not allowed in this case
         ndelims = 2;
         delim = LEXTYPE_DELIM_COMMA;
@@ -948,7 +935,7 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
     lexseq_init(&seq);
     lexseq_copy(lctx, &seq, &stru->accbody);
     parser_scope_push(pctx, myscope);
-    if (!expr_parse_seq(ctx, &seq, &exp)) {
+    if (!expr_parse_seq(ctx, &seq, &exp) || exp == 0) {
         expr_signal(ctx, STC__SYNTAXERR);
         lexseq_free(lctx, &seq);
         parser_scope_end(pctx);
@@ -961,6 +948,10 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
     // simplify a resultant block expression if it only contains
     // one expression and has no declarations, labels, or codecomments.
     exp = expr_block_simplify(ctx, exp);
+    if (exp == 0) {
+        expr_signal(ctx, STC__INTCMPERR, "structure_reference[2]");
+        return 0;
+    }
     resexp = expr_node_alloc(ctx, EXPTYPE_PRIM_STRUREF, pos);
     expr_struref_accexpr_set(resexp, exp);
     expr_struref_referer_set(resexp, symname);

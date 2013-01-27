@@ -34,6 +34,7 @@ llvmgen_expression (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 
     if (gctx->expgen_funcs[type] == 0) {
         expr_signal(gctx->ectx, STC__INTCMPERR, "llvmgen_expression");
+        return 0;
     }
 
     return (*gctx->expgen_funcs[type])(gctx, exp, neededtype);

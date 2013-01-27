@@ -1807,6 +1807,7 @@ initval_size (symctx_t ctx, initval_t *ivlist)
                 }
             } else {
                 expr_signal(ctx->expctx, STC__PRBADEXPR);
+                continue;
             }
             if (thissize > totsize) {
                 totsize = thissize;

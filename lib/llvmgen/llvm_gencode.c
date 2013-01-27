@@ -160,6 +160,11 @@ llvmgen_memcpy (gencodectx_t gctx, LLVMValueRef dest, LLVMValueRef src, LLVMValu
         gctx->memcpyfn = LLVMAddFunction(gctx->module, "llvm.memcpy.p0i8.p0i8.i32", type);
     }
 
+    if (gctx->curfn == 0 || gctx->curfn->builder == 0 || gctx->memcpyfn == 0) {
+        expr_signal(gctx->ectx, STC__INTCMPERR, "llvmgen_memcpy");
+        return;
+    }
+
     args[0] = llvmgen_adjustval(gctx, dest, gctx->memcpyargtypes[0], machine_addr_signed(gctx->mach));
     args[1] = llvmgen_adjustval(gctx, src, gctx->memcpyargtypes[1], machine_addr_signed(gctx->mach));
     args[2] = llvmgen_adjustval(gctx, len, gctx->memcpyargtypes[2], 0);
@@ -187,6 +192,11 @@ llvmgen_memset (gencodectx_t gctx, LLVMValueRef dest, LLVMValueRef uval, LLVMVal
         gctx->memsetfn = LLVMAddFunction(gctx->module, "llvm.memset.p0i8.i32", type);
     }
 
+    if (gctx->curfn == 0 || gctx->curfn->builder == 0) {
+        expr_signal(gctx->ectx, STC__INTCMPERR, "llvmgen_memset");
+        return;
+    }
+
     args[0] = llvmgen_adjustval(gctx, dest, gctx->memsetargtypes[0], machine_addr_signed(gctx->mach));
     args[1] = llvmgen_adjustval(gctx, uval, gctx->memsetargtypes[1], 0);
     args[2] = llvmgen_adjustval(gctx, len, gctx->memsetargtypes[2], 0);
@@ -212,6 +222,10 @@ llvmgen_cast_trunc_ext (gencodectx_t gctx, LLVMValueRef val, LLVMTypeRef neededt
     assert(needkind == LLVMPointerTypeKind || needkind == LLVMIntegerTypeKind);
     constcast = LLVMIsConstant(val);
     builder = (gctx->curfn == 0 ? 0 : gctx->curfn->builder);
+    if (!constcast && (gctx->curfn == 0 || builder == 0)) {
+        expr_signal(gctx->ectx, STC__INTCMPERR, "llvmgen_cast_trunc_ext");
+        return 0;
+    }
     if (valkind == LLVMPointerTypeKind) {
         if (needkind == LLVMPointerTypeKind) {
             if (constcast) {

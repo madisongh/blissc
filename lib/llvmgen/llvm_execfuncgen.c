@@ -112,6 +112,10 @@ llvmgen_execfuncgen_init (gencodectx_t gctx)
         name_t *np;
         np = name_search_typed(kwdscope, gentable[i].name, strlen(gentable[i].name),
                                LEXTYPE_NAME_FUNCTION, &fd);
+        if (np == 0) {
+            expr_signal(gctx->ectx, STC__INTCMPERR, "llvmgen_execfuncgen_init");
+            continue;
+        }
         fd->generator = (execfuncgenerator_fn) gentable[i].func;
         if (i == 0) {
             fd->genfnctx = (void *)(addr_signed ? LLVMIntSGT : LLVMIntUGT);

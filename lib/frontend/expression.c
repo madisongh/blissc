@@ -1173,18 +1173,14 @@ parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
         }
         if (expr_type(base) == EXPTYPE_PRIM_SEG &&
             expr_litval(pos) % bpunit == 0 && size_ok(sz, bpunit, upval)) {
-            data_attr_t *attr = datasym_attr(expr_seg_name(base));
-// XXX Defer the decision about how to handle the offset & size to code generation.
-//            if (attr->dclass != DCLASS_ARG && attr->dclass != DCLASS_REGISTER) {
-                expr_seg_offset_set(base, expr_seg_offset(base) +
-                                    expr_litval(pos) / machine_unit_bits(mach));
-                expr_seg_width_set(base, sz);
-                expr_seg_signext_set(base, (signext != 0));
-                expr_node_free(ctx, pos);
-                expr_node_free(ctx, size);
-                *expp = base;
-                return 1;
-//            }
+            expr_seg_offset_set(base, expr_seg_offset(base) +
+                                expr_litval(pos) / machine_unit_bits(mach));
+            expr_seg_width_set(base, sz);
+            expr_seg_signext_set(base, (signext != 0));
+            expr_node_free(ctx, pos);
+            expr_node_free(ctx, size);
+            *expp = base;
+            return 1;
         }
     }
     exp = expr_node_alloc(ctx, EXPTYPE_PRIM_FLDREF, parser_curpos(pctx));
