@@ -14,7 +14,7 @@
 
 #include "nametable.h"
 #include "symbols.h"
-#include "logging.h"
+#include "support/logging.h"
 #include "machinedef.h"
 
 struct gencodectx_s;

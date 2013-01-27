@@ -13,8 +13,8 @@
  */
 #include "lexeme.h"
 #include "nametable.h"
-#include "logging.h"
-#include "strings.h"
+#include "support/logging.h"
+#include "support/strings.h"
 
 struct lexer_ctx_s;
 typedef struct lexer_ctx_s *lexer_ctx_t;
