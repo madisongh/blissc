@@ -292,6 +292,9 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
     for (iv = ivlist; iv != 0 && pcount < LLVMGEN_K_MAXPRESETS; iv = iv->next) {
         expr_node_t *exp = iv->preset_expr;
         struct preset_s *this = &pcells[pcount];
+        if (expr_type(exp) == EXPTYPE_PRIM_STRUREF) {
+            exp = expr_struref_accexpr(exp);
+        }
         if (expr_type(exp) == EXPTYPE_PRIM_SEG) {
             this->o = (unsigned int) expr_seg_offset(exp);
             this->p = 0;

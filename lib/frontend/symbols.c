@@ -1791,6 +1791,9 @@ initval_size (symctx_t ctx, initval_t *ivlist)
         for (iv = ivlist; iv != 0; iv = iv->next) {
             expr_node_t *exp = iv->preset_expr;
             unsigned long thissize;
+            if (expr_type(exp) == EXPTYPE_PRIM_STRUREF) {
+                exp = expr_struref_accexpr(exp);
+            }
             if (expr_type(exp) == EXPTYPE_PRIM_SEG) {
                 thissize = expr_seg_offset(exp) + (expr_seg_width(exp)/bpunit);
             } else if (expr_type(exp) == EXPTYPE_PRIM_FLDREF) {
