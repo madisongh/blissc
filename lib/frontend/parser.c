@@ -86,7 +86,7 @@ struct parse_ctx_s {
     DODEF(INFORM, parse_msgfunc) DODEF(ERROR, parse_msgfunc) \
     DODEF(WARN, parse_msgfunc) DODEF(MESSAGE, parse_msgfunc) \
     DODEF(TITLE, parse_titlefunc) DODEF(SBTTL, parse_titlefunc) \
-    DODEF(VARIANT, parse_variant)
+    DODEF(VARIANT, parse_variant) DODEF(BLISS, parse_BLISS)
 
 // Forward declarations for the routines; fortunately, multiple forward
 // declarations aren't a problem.
@@ -1733,4 +1733,36 @@ parse_variant (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
     string_free(pctx->strctx, str);
     return 1;
     
+} /* parse_variant */
+
+/*
+ * parse_BLISS
+ *
+ * %BLISS
+ */
+int
+parse_BLISS (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
+{
+    lexeme_t *lex;
+    lextype_t lt;
+    strdesc_t *str;
+    long test;
+    static strdesc_t blissm = STRDEF("BLISSM");
+
+    if (!parser_expect(pctx, ql, LEXTYPE_DELIM_LPAR, 0, 1)) {
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, "(");
+    }
+    lt = parser_next(pctx, QL_NAME, &lex);
+    test = (lt == LEXTYPE_UNBOUND && lexeme_boundtype(lex) == LEXTYPE_NAME &&
+            strings_eql(lexeme_text(lex), &blissm));
+    if (!parser_expect(pctx, QL_NAME, LEXTYPE_DELIM_RPAR, 0, 1)) {
+        log_signal(pctx->logctx, pctx->curpos, STC__DELIMEXP, ")");
+    }
+    str = string_printf(pctx->strctx, 0, "%ld", test);
+    parser_lexeme_add(pctx, LEXTYPE_NUMERIC, str);
+    string_free(pctx->strctx, str);
+    lexeme_free(pctx->lmemctx, lex);
+
+    return 1;
+
 } /* parse_variant */

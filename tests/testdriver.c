@@ -27,6 +27,7 @@ static struct option options[] = {
     { "optimization",   required_argument,  0,  'O' },
     { "listing",        optional_argument,  0,  'l' },
     { "show",           required_argument,  0,  0   },
+    { "variant",        optional_argument,  0,  'V' },
     { "help",           no_argument,        0,  'h' },
     { 0,                0,                  0,  0   }
 };
@@ -36,6 +37,7 @@ static char *optarghelp[] = {
     "--optimization={0,1,2,3}",
     "--listing[=filename]    ",
     "--show[=option,...]     ",
+    "--variant=<n>           ",
     "--help                  "
 };
 static char *opthelp[] = {
@@ -44,6 +46,7 @@ static char *opthelp[] = {
     "set optimization level (valid values: 0,1,2,3, default:1)",
     "generate listing (default name is output file with '.lis' suffix)",
     "controls listing output (see below)",
+    "sets the %VARIANT value; if no value specified, defaults to 1",
     "displays usage information and exits"
 };
 static char *listopts [] = {
@@ -67,6 +70,7 @@ static char *srcfile = 0, *outfile = 0, *listfile = 0;
 static unsigned int listflags = 0;
 static bliss_output_t outtype = BLISS_K_OUTPUT_OBJECT;
 static int optlevel = -1;
+static unsigned int variant = 0;
 
 static void
 print_usage (void)
@@ -97,7 +101,7 @@ parse_args (int argc, char * const argv[])
 
     err = 0;
     while (!err) {
-        c = getopt_long_only(argc, argv, "hslo:O:", options, &which);
+        c = getopt_long_only(argc, argv, "hsl::o:O:V::", options, &which);
         if (c == -1) {
             break;
         }
@@ -136,6 +140,14 @@ parse_args (int argc, char * const argv[])
                 } else {
                     fprintf(stderr, "Unrecognized optimization level: %s\n", optarg);
                     err = 1;
+                }
+                break;
+            case 'V':
+                if (optarg == 0) {
+                    variant = 1;
+                } else {
+                    char *cp;
+                    variant = (unsigned int)strtol(optarg, &cp, 10);
                 }
                 break;
             case '?':
@@ -208,6 +220,7 @@ main (int argc, char * const argv[])
             goto finish;
         }
     }
+    blissc_variant_set(cctx, variant);
     if (!blissc_compile(cctx, srcfile, -1)) {
         fprintf(stderr, "bliss_compile reported error\n");
         status = 998;

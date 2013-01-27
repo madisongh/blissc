@@ -130,7 +130,7 @@ file_splitname (fioctx_t fio, const char *orig, int origlen, int canonicalize,
         if (parts->path_fullname == 0) return 0;
         memcpy(parts->path_fullname, orig, origlen);
         parts->path_fullname[origlen] = '\0';
-        len = (unsigned int) origlen;
+        len = parts->path_fullnamelen = (unsigned int) origlen;
     }
     for (cp = parts->path_fullname + (len-1), partlen = 0;
          cp >= parts->path_fullname && *cp != '.' && *cp != '/';
@@ -214,7 +214,7 @@ file_open (fioctx_t fio, const char *fname, size_t fnlen, int for_writing)
 	}
     memset(ctx, 0, sizeof(struct filectx_s));
     memset(&pp, 0, sizeof(pp));
-    if (file_splitname(fio, fname, (int) fnlen, 1, &pp) == 0) {
+    if (file_splitname(fio, fname, (int) fnlen, (for_writing ? 0 : 1), &pp) == 0) {
         free(ctx);
         return 0;
     }

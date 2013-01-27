@@ -80,6 +80,13 @@ static namedef_t macro_names[] = {
     NAMEDEF("%LENGTH", LEXTYPE_LXF_LENGTH, NAME_M_RESERVED)
 };
 
+static namedef_t predeclared_macros[] = {
+    NAMEDEF("%BLISSM",  LEXTYPE_NAME_MACRO, 0),
+    NAMEDEF("%BLISS16", LEXTYPE_NAME_MACRO, 0),
+    NAMEDEF("%BLISS32", LEXTYPE_NAME_MACRO, 0),
+    NAMEDEF("%BLISS36", LEXTYPE_NAME_MACRO, 0)
+};
+
 static lextype_t openers[] = { LEXTYPE_DELIM_LPAR, LEXTYPE_DELIM_LBRACK,
                                LEXTYPE_DELIM_LANGLE };
 static lextype_t closers[] = { LEXTYPE_DELIM_RPAR, LEXTYPE_DELIM_RBRACK,
@@ -549,6 +556,25 @@ macros_init (scopectx_t kwdscope, expr_ctx_t ctx)
     vec.typefree = macparam_freedata;
     vec.typecopy = macparam_copydata;
     nametype_dataop_register(namectx, LEXTYPE_NAME_MAC_PARAM, &vec, ctx);
+
+    for (i = 0; i < sizeof(predeclared_macros)/sizeof(predeclared_macros[0]); i++) {
+        name_t *np;
+        struct macrodecl_s *m;
+
+        np = name_declare(kwdscope, &predeclared_macros[i], 0, 0, 0, &m);
+        if (np == 0 || m == 0) {
+            expr_signal(ctx, STC__INTCMPERR, "macros_init");
+            continue;
+        }
+        m->type = MACRO_COND;
+        // Index 0 is the %BLISSM[] macro
+        if (i == 0) {
+            strdesc_t pctremain = STRDEF("%REMAINING");
+            lexeme_t *lex = lexeme_create(lctx, LEXTYPE_LXF_REMAINING, &pctremain);
+            lexseq_instail(&m->body, lex);
+        }
+        // All other macro bodies are empty
+    }
 
     return mctx;
 

@@ -88,7 +88,7 @@ machine_output_set (machinedef_t *mach, machine_output_t outtype, char *fname, i
     }
     m->outfile = malloc(fnlen+1);
     memcpy(m->outfile, fname, fnlen);
-    fname[fnlen] = '\0';
+    m->outfile[fnlen] = '\0';
 
 } /* machine_output_set */
 
