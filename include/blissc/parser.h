@@ -14,7 +14,6 @@
 
 #include "nametable.h"
 #include "lexeme.h"
-#include "scanner.h"
 #include "listings.h"
 #include "machinedef.h"
 #include "support/logging.h"
@@ -40,7 +39,7 @@ int parser_fopen_main(parse_ctx_t pctx, const char *fname, size_t fnlen,
                       unsigned int listopts, const char *listfname, size_t lfnlen);
 int parser_fopen(parse_ctx_t pctx, const char *fname, size_t fnlen,
                  char **actnamep);
-int parser_popen(parse_ctx_t pctx, scan_input_fn infn, void *fnctx);
+int parser_popen(parse_ctx_t pctx, void *infn, void *fnctx);
 void parser_finish(parse_ctx_t pctx);
 lexctx_t parser_lexmemctx(parse_ctx_t pctx);
 logctx_t parser_logctx(parse_ctx_t pctx);
