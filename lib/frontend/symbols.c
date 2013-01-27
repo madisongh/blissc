@@ -130,17 +130,17 @@ static const lextype_t symtype[6] = {
 #define IV_ALLOCOUNT 128
 
 /*
- * log2
+ * uint_log2
  *
  * Table for logarithm of powers of 2, used below
  * for computing alignments.
  */
 static int
-log2 (unsigned int n) {
+uint_log2 (unsigned int n) {
     static int table[] = { -1, 0, 1, -1, 2, -1, -1, -1, 3 };
     if (n >= sizeof(table) || table[n] < 0) return 0;
     return table[n];
-} /* log2 */
+} /* uint_log2 */
 
 /*
  * data_free
@@ -619,7 +619,7 @@ symbols_init (expr_ctx_t ctx)
     symctx->data_defaults.units = machine_scalar_units(mach);
     symctx->data_defaults.width = machine_scalar_bits(mach);
     symctx->literal_defaults.width = machine_scalar_bits(mach);
-    symctx->data_defaults.alignment = log2(symctx->data_defaults.units);
+    symctx->data_defaults.alignment = uint_log2(symctx->data_defaults.units);
     nametables_symctx_set(namectx, symctx);
     lextype_register(lctx, ctx, LEXTYPE_NAME_COMPILETIME, bind_compiletime);
     lextype_register(lctx, ctx, LEXTYPE_NAME_LITERAL, bind_literal);
@@ -774,10 +774,10 @@ datasym_declare (scopectx_t scope, strdesc_t *dsc, data_attr_t *attrp, textpos_t
     } else if (attrp->units != 0) {
         if (attrp->alignment == 0) {
             if (attrp->units <= machine_scalar_units(symctx->mach)) {
-                attrp->alignment = log2(attrp->units);
+                attrp->alignment = uint_log2(attrp->units);
             } else {
                 // XXX should this be another machine setting?
-                attrp->alignment = log2(machine_scalar_units(symctx->mach));
+                attrp->alignment = uint_log2(machine_scalar_units(symctx->mach));
             }
         }
         if (attrp->width == 0) {

@@ -1022,14 +1022,12 @@ macro_expand (macroctx_t mctx, name_t *macroname, lexseq_t *result)
     // the actual parameters.
     if (which < 3) {
 
-        lexeme_t *extralast;
         nameref_t *formal;
         lexseq_t val;
 
         terms[0] = LEXTYPE_DELIM_COMMA;
         terms[1] = closers[which];
 
-        extralast = 0;
         formal = namereflist_head(&macro->plist);
 
         while (1) {

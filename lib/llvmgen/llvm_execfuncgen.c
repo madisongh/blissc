@@ -118,9 +118,9 @@ llvmgen_execfuncgen_init (gencodectx_t gctx)
         }
         fd->generator = (execfuncgenerator_fn) gentable[i].func;
         if (i == 0) {
-            fd->genfnctx = (void *)(addr_signed ? LLVMIntSGT : LLVMIntUGT);
+            fd->genfnctx = (void *)(intptr_t)(addr_signed ? LLVMIntSGT : LLVMIntUGT);
         } else if (i == 1) {
-            fd->genfnctx = (void *)(addr_signed ? LLVMIntSLT : LLVMIntULT);
+            fd->genfnctx = (void *)(intptr_t)(addr_signed ? LLVMIntSLT : LLVMIntULT);
         } else {
             fd->genfnctx = gentable[i].fctx;
         }

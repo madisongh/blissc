@@ -900,7 +900,6 @@ handle_data_attrs (expr_ctx_t ctx, scopectx_t scope, decltype_t dt,
     int saw_au, saw_ext, saw_align, saw_init, saw_vol,
         saw_alias, saw_psect, saw_stru, saw_field, saw_preset;
     int did1;
-    initval_t *ivlist;
 
     saw_au = saw_ext = saw_align = saw_init = saw_vol = saw_alias = saw_psect = 0;
     saw_stru = 0;
@@ -923,8 +922,6 @@ handle_data_attrs (expr_ctx_t ctx, scopectx_t scope, decltype_t dt,
             }
         }
     }
-
-    ivlist = 0;
 
     do {
         did1 = 0;

@@ -134,7 +134,7 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
     if (ctx->outfn == 0) {
         file_splitname(ctx->fioctx, srcparts.path_fullname,
                        (int) srcparts.path_fullnamelen, 0, &objparts);
-        if (ctx->outtype == BLISS_K_OUTPUT_ASSEMBLY) {
+        if (ctx->outtype == MACH_K_OUTPUT_ASM) {
             objparts.path_suffix = ".s";
         } else {
             objparts.path_suffix = ".o";
