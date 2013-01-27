@@ -21,9 +21,8 @@ lib:
 	mkdir -p lib
 
 OBJS =
-DEPS =
 define librule
-lib/$(1): lib
+lib/$(1): | lib
 	mkdir -p lib/$(1)
 lib/$(1)/%.o: $(srcdir)lib/$(1)/%.c | lib/$(1)
 	$$(COMPILE.c) $$(OUTPUT_OPTION) $$<
@@ -31,9 +30,7 @@ lib/$(1)/%.o: $(srcdir)lib/$(1)/%.cpp | lib/$(1)
 	$$(COMPILE.cpp) $$(OUTPUT_OPTION) $$<
 $(1)_OBJS := $(addprefix lib/$(1)/,$(patsubst %.c,%.o,$($(1)_SRCS)) \
 		  $(patsubst %.cpp,%.o,$($(1)_CXXSRCS)))
-$(1)_DEPS := $(patsubst %.o,%.d,$($(1)_OBJS))
 OBJS += $$($(1)_OBJS)
-DEPS += $$($(1)_DEPS)
 endef
 
 $(foreach libdir,$(LIBDIRS),$(eval $(call librule,$(libdir))))
@@ -44,6 +41,6 @@ testdriver.o: $(srcdir)tests/testdriver.c
 blissc: testdriver.o $(OBJS)
 	$(CC) $(LDFLAGS) -o $@ testdriver.o $(OBJS) $(LIBS)
 
-$(foreach dep,$(DEPS),$(eval \
+$(foreach dep,$(patsubst %.o,%.d,$(OBJS)),$(eval \
 -include $(dep)))
 -include testdriver.d
