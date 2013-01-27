@@ -13,7 +13,6 @@
  */
 #include "lexeme.h"
 #include "nametable.h"
-#include "scanner.h"
 #include "logging.h"
 #include "strings.h"
 
@@ -23,9 +22,9 @@ typedef struct lexer_ctx_s *lexer_ctx_t;
 lexer_ctx_t lexer_init(strctx_t strctx, scopectx_t kwdscope,
                        logctx_t logctx, void *fioctx);
 lexctx_t lexer_lexctx(lexer_ctx_t lctx);
-scanctx_t lexer_scanctx(lexer_ctx_t ctx);
+void *lexer_scanctx(lexer_ctx_t ctx);
 int lexer_fopen(lexer_ctx_t ctx, const char *fname, size_t fnlen, char **actnamep);
-int lexer_popen(lexer_ctx_t ctx, scan_input_fn infn, void *fnctx);
+int lexer_popen(lexer_ctx_t ctx, void *infn, void *fnctx);
 void lexer_finish(lexer_ctx_t ctx);
 lexeme_t *lexer_next(lexer_ctx_t ctx, int erroneof, textpos_t *posp);
 lexeme_t *lexer_peek(lexer_ctx_t ctx, int erroneof);

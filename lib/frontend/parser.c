@@ -31,6 +31,7 @@
 #include "blissc/support/fileio.h"
 #include "blissc/machinedef.h"
 #include "blissc/support/utils.h"
+#include "scanner.h"
 
 // Parser context structure
 struct parse_ctx_s {

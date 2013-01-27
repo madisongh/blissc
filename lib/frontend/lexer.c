@@ -302,7 +302,7 @@ lexer_init (strctx_t strctx, scopectx_t kwdscope, logctx_t logctx, void *fioctx)
  * Getter/setters for lexer context
  */
 lexctx_t lexer_lexctx(lexer_ctx_t lctx) { return lctx->lexctx; }
-scanctx_t lexer_scanctx(lexer_ctx_t lctx) { return lctx->scnctx; }
+void *lexer_scanctx(lexer_ctx_t lctx) { return lctx->scnctx; }
 
 /*
  * lexer_fopen
@@ -337,8 +337,9 @@ lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen,
  * Insert a programmatic input source at the front of the stream.
  */
 int
-lexer_popen (lexer_ctx_t ctx, scan_input_fn infn, void *fnctx)
+lexer_popen (lexer_ctx_t ctx, void *vinfn, void *fnctx)
 {
+    scan_input_fn infn = vinfn;
     lexchain_t *chain = lexchain_alloc(ctx);
 
     if (chain == 0) {
