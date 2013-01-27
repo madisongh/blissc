@@ -107,6 +107,11 @@ parse_args (int argc, char * const argv[])
         }
         switch (c) {
             case 0: // long-only, right now this is just --show
+                if (optarg == 0) {
+                    fprintf(stderr, "error in options processing");
+                    err = 1;
+                    break;
+                }
                 showopts = optarg;
                 err = 0;
                 while (*showopts != '\0' && !err) {
@@ -135,6 +140,11 @@ parse_args (int argc, char * const argv[])
                 err = 999;
                 break;
             case 'O':
+                if (optarg == 0) {
+                    fprintf(stderr, "error in options processing");
+                    err = 1;
+                    break;
+                }
                 if (*optarg >= '0' && *optarg <= '3' && *(optarg+1) == '\0') {
                     optlevel = *optarg - '0';
                 } else {

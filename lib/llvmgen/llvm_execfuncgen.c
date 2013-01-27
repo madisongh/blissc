@@ -31,19 +31,18 @@ FUNCGENDEF("MIN",              gen_MINMAX,          LLVMIntSLT) \
 FUNCGENDEF("MINU",             gen_MINMAX,          LLVMIntULT) \
 FUNCGENDEF("SIGN",             gen_SIGN,            0) \
 FUNCGENDEF("ABS",              gen_ABS,             0) \
-FUNCGENDEF("CH$MOVE",          gen_chf_move,        0) \
-FUNCGENDEF("CH$FILL",          gen_chf_fill,        0)
-#if 0
 FUNCGENDEF("CH$ALLOCATION",    gen_chf_allocation,  0) \
-FUNCGENDEF("CH$SIZE",          gen_chf_size,        0) \
 FUNCGENDEF("CH$PTR",           gen_chf_pointer,     0) \
-FUNCGENDEF("CH$PLUS",          gen_chf_plus,        0) \
+FUNCGENDEF("CH$PLUS",          gen_chf_pointer,     0) \
 FUNCGENDEF("CH$RCHAR",         gen_chf_rchar,       0) \
 FUNCGENDEF("CH$A_RCHAR",       gen_chf_rchar_a,     0) \
 FUNCGENDEF("CH$RCHAR_A",       gen_chf_rchar_a,     1) \
 FUNCGENDEF("CH$WCHAR",         gen_chf_wchar,       0) \
 FUNCGENDEF("CH$A_WCHAR",       gen_chf_wchar_a,     0) \
 FUNCGENDEF("CH$WCHAR_A",       gen_chf_wchar_a,     1) \
+FUNCGENDEF("CH$MOVE",          gen_chf_move,        0) \
+FUNCGENDEF("CH$FILL",          gen_chf_fill,        0)
+#if 0
 FUNCGENDEF("CH$COPY",          gen_chf_copy,        0) \
 FUNCGENDEF("CH$EQL",           gen_chf_compare,     LLVMIntEQ) \
 FUNCGENDEF("CH$NEQ",           gen_chf_compare,     LLVMIntNE) \
@@ -51,7 +50,7 @@ FUNCGENDEF("CH$LSS",           gen_chf_compare,     LLVMIntULT) \
 FUNCGENDEF("CH$LEQ",           gen_chf_compare,     LLVMIntULE) \
 FUNCGENDEF("CH$GTR",           gen_chf_compare,     LLVMIntUGT) \
 FUNCGENDEF("CH$GEQ",           gen_chf_compare,     LLVMIntUGE) \
-FUNCGENDEF("CH$COMPARE",       gen_chf_compare,     0) \
+FUNCGENDEF("CH$COMPARE",       gen_chf_compare,     -1) \
 FUNCGENDEF("CH$FIND_CH",       gen_chf_find,        0) \
 FUNCGENDEF("CH$FIND_NOT_CH",   gen_chf_find,        1) \
 FUNCGENDEF("CH$FIND_SUB",      gen_chf_findsub,     0) \
@@ -240,6 +239,197 @@ gen_MINMAX (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededty
 
 } /* gen_MINMAX */
 
+/*
+ * gen_chf_allocation
+ *
+ * Generates CH$ALLOCATION code.
+ * Note that we only support one character size here -- byte -- so we
+ * rely on the frontend validating the character size parameter, if it was
+ * specified.
+ */
+static LLVMValueRef
+gen_chf_allocation (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    LLVMBuilderRef builder = gctx->curfn->builder;
+    exprseq_t *args = expr_func_arglist(exp);
+    LLVMValueRef len, result;
+    expr_node_t *arg;
+
+    arg = exprseq_head(args);
+    len = llvmgen_expression(gctx, arg, gctx->fullwordtype);
+    result = LLVMBuildMul(builder, len, LLVMConstInt(gctx->fullwordtype, 8, 0), llvmgen_temp(gctx));
+    result = LLVMBuildAdd(builder, result,
+                          LLVMConstInt(gctx->fullwordtype, machine_scalar_bits(gctx->mach)-1, 0),
+                          llvmgen_temp(gctx));
+    result = LLVMBuildUDiv(builder, result,
+                           LLVMConstInt(gctx->fullwordtype, machine_scalar_bits(gctx->mach), 0),
+                           llvmgen_temp(gctx));
+    return llvmgen_adjustval(gctx, result, neededtype, 0);
+
+} /* gen_chf_allocation */
+
+/*
+ * gen_chf_pointer
+ *
+ * Generates CH$PTR code.  Also handles CH$PLUS, since we don't
+ * bother checking the third argument to CH$PTR.
+ */
+static LLVMValueRef
+gen_chf_pointer (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    LLVMBuilderRef builder = gctx->curfn->builder;
+    exprseq_t *args = expr_func_arglist(exp);
+    LLVMValueRef result;
+    expr_node_t *arg;
+
+    arg = exprseq_head(args);
+    result = llvmgen_expression(gctx, arg, gctx->unitptrtype);
+    if (arg->tq_next != 0) {
+        LLVMValueRef offset;
+        arg = arg->tq_next;
+        if (expr_type(arg) == EXPTYPE_PRIM_LIT) {
+            if (expr_litval(arg) != 0) {
+                offset = LLVMConstInt(gctx->fullwordtype, expr_litval(arg), 0);
+                if (LLVMIsConstant(result)) {
+                    result = LLVMConstGEP(offset, &offset, 1);
+                } else {
+                    result = LLVMBuildGEP(builder, result, &offset, 1, llvmgen_temp(gctx));
+                }
+            }
+        } else {
+            offset = llvmgen_expression(gctx, arg, gctx->fullwordtype);
+            result = LLVMBuildPtrToInt(builder, result, gctx->fullwordtype, llvmgen_temp(gctx));
+            result= LLVMBuildAdd(builder, result, offset, llvmgen_temp(gctx));
+        }
+
+    }
+
+    return llvmgen_adjustval(gctx, result, neededtype, 0);
+
+} /* gen_chf_pointer */
+
+/*
+ * gen_chf_rchar
+ *
+ * Generates CH$RCHAR.
+ */
+static LLVMValueRef
+gen_chf_rchar (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    LLVMBuilderRef builder = gctx->curfn->builder;
+    exprseq_t *args = expr_func_arglist(exp);
+    LLVMValueRef addr, result;
+    expr_node_t *arg;
+
+    arg = exprseq_head(args);
+    addr = llvmgen_expression(gctx, arg, gctx->unitptrtype);
+    result = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
+
+    return llvmgen_adjustval(gctx, result, neededtype, 0);
+
+} /* gen_chf_rchar */
+
+/*
+ * gen_chf_rchar_a
+ *
+ * Generates CH$RCHAR_A and CH$A_RCHAR.
+ */
+static LLVMValueRef
+gen_chf_rchar_a (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    LLVMBuilderRef builder = gctx->curfn->builder;
+    exprseq_t *args = expr_func_arglist(exp);
+    int postincrement = (int) ctx;
+    LLVMValueRef one = LLVMConstInt(gctx->fullwordtype, 1, 0);
+    LLVMValueRef addr, result;
+    expr_node_t *arg;
+
+    arg = exprseq_head(args);
+    addr = llvmgen_expression(gctx, arg, LLVMPointerType(gctx->unitptrtype, 0));
+    if (!postincrement) {
+        LLVMValueRef tmp = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
+        tmp = LLVMBuildGEP(builder, tmp, &one, 1, llvmgen_temp(gctx));
+        LLVMBuildStore(builder, tmp, addr);
+        addr = tmp;
+    }
+    result = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
+    if (postincrement) {
+        LLVMValueRef tmp = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
+        tmp = LLVMBuildGEP(builder, tmp, &one, 1, llvmgen_temp(gctx));
+        LLVMBuildStore(builder, tmp, addr);
+    }
+
+    return llvmgen_adjustval(gctx, result, neededtype, 0);
+
+} /* gen_chf_rchar_a */
+
+/*
+ * gen_chf_wchar
+ *
+ * Generates CH$WCHAR.
+ */
+static LLVMValueRef
+gen_chf_wchar (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    LLVMBuilderRef builder = gctx->curfn->builder;
+    exprseq_t *args = expr_func_arglist(exp);
+    LLVMValueRef ch, addr;
+    expr_node_t *arg;
+
+    arg = exprseq_head(args);
+    ch = llvmgen_expression(gctx, arg, LLVMInt8TypeInContext(gctx->llvmctx));
+    arg = arg->tq_next;
+    addr = llvmgen_expression(gctx, arg, gctx->unitptrtype);
+    LLVMBuildStore(builder, ch, addr);
+
+    if (neededtype != 0) {
+        return LLVMConstNull(neededtype);
+    }
+
+    return 0;
+
+} /* gen_chf_wchar */
+
+/*
+ * gen_chf_wchar_a
+ *
+ * Generates CH$WCHAR_A and CH$A_WCHAR.
+ */
+static LLVMValueRef
+gen_chf_wchar_a (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    LLVMBuilderRef builder = gctx->curfn->builder;
+    exprseq_t *args = expr_func_arglist(exp);
+    int postincrement = (int) ctx;
+    LLVMValueRef one = LLVMConstInt(gctx->fullwordtype, 1, 0);
+    LLVMValueRef ch, addr;
+    expr_node_t *arg;
+
+    arg = exprseq_head(args);
+    ch = llvmgen_expression(gctx, arg, LLVMInt8TypeInContext(gctx->llvmctx));
+    arg = arg->tq_next;
+    addr = llvmgen_expression(gctx, arg, LLVMPointerType(gctx->unitptrtype, 0));
+    if (!postincrement) {
+        LLVMValueRef tmp = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
+        tmp = LLVMBuildGEP(builder, tmp, &one, 1, llvmgen_temp(gctx));
+        LLVMBuildStore(builder, tmp, addr);
+        addr = tmp;
+    }
+    LLVMBuildStore(builder, ch, addr);
+    if (postincrement) {
+        LLVMValueRef tmp = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
+        tmp = LLVMBuildGEP(builder, tmp, &one, 1, llvmgen_temp(gctx));
+        LLVMBuildStore(builder, tmp, addr);
+    }
+
+    if (neededtype != 0) {
+        return LLVMConstNull(neededtype);
+    }
+
+    return 0;
+
+} /* gen_chf_wchar_a */
+
 static LLVMValueRef
 gen_chf_move (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -256,7 +446,8 @@ gen_chf_move (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef needed
     llvmgen_memcpy(gctx, dst, src, len);
     if (neededtype == 0) return 0;
     return LLVMConstNull(neededtype);
-}
+
+} /* gen_chf_move */
 
 static LLVMValueRef
 gen_chf_fill (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
@@ -274,4 +465,5 @@ gen_chf_fill (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef needed
     llvmgen_memset(gctx, dst, fill, len);
     if (neededtype == 0) return 0;
     return LLVMConstNull(neededtype);
-}
+
+} /* gen_chf_fill */
