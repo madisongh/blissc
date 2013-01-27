@@ -25,7 +25,7 @@ machine_init (const char *machspec)
 {
     machine_ctx_t m = malloc(sizeof(struct machine_ctx_s) + sizeof(struct machinedef_s));
     machinedef_t *mach;
-    char default_triple[64], *err;
+    char *err;
     LLVMTargetRef target;
 
     if (m == 0) return 0;
@@ -37,8 +37,7 @@ machine_init (const char *machspec)
     LLVMInitializeX86AsmPrinter();
 
     if (machspec == 0) {
-        strcpy(default_triple, HelperGetDefaultTriple());
-        machspec = default_triple;
+        machspec = HelperGetDefaultTriple();
     }
     err = 0;
     target = HelperLookupTarget(machspec, &err);

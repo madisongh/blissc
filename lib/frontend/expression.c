@@ -731,8 +731,8 @@ expr_finish (expr_ctx_t ctx)
         return;
     }
 
-    symbols_finish(ctx->symctx);
     parser_finish(ctx->pctx);
+    symbols_finish(ctx->symctx);
 
     for (e = ctx->extents; e != 0; e = enext) {
         enext = e->next;

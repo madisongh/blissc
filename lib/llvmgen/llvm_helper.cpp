@@ -6,6 +6,12 @@
 //  Copyright (c) 2013 Matthew Madison. All rights reserved.
 //
 
+#ifndef __STDC_LIMIT_MACROS
+#define __STDC_LIMIT_MACROS
+#endif
+#ifndef __STDC_CONSTANT_MACROS
+#define __STDC_CONSTANT_MACROS
+#endif
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wconversion"
 #include "llvm-c/Core.h"
@@ -25,8 +31,8 @@ void HelperSetAllocaAlignment(LLVMValueRef Inst, unsigned int Bytes) {
     unwrap<AllocaInst>(Inst)->setAlignment(Bytes);
 }
 
-const char *HelperGetDefaultTriple(void) {
-    return sys::getDefaultTargetTriple().c_str();
+char *HelperGetDefaultTriple(void) {
+    return strdup(sys::getDefaultTargetTriple().c_str());
 }
 
 LLVMTargetRef HelperLookupTarget(const char *triple, char **err) {

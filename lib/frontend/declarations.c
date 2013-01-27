@@ -1801,8 +1801,7 @@ parse_ident (parse_ctx_t pctx, void *vctx, lextype_t dcltype, lexeme_t *lex)
     }
     id = string_copy(parser_strctx(pctx), 0, lexeme_text(idlex));
     modsym_ident_set(modnp, id);
-    id = string_copy(parser_strctx(pctx), 0, lexeme_text(idlex));
-    listing_ident_set(parser_lstgctx(pctx), id);
+    listing_ident_set(parser_lstgctx(pctx), id); // this copies the string
     lexeme_free(parser_lexmemctx(pctx), idlex);
     return 1;
 

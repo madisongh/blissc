@@ -17,12 +17,6 @@
 #include "blissc/expression.h"
 #include "blissc/symbols.h"
 #include "blissc/machinedef.h"
-#include "llvm-c/Core.h"
-#include "llvm-c/Analysis.h"
-#include "llvm-c/Transforms/Scalar.h"
-#include "llvm-c/Target.h"
-#include "llvm-c/TargetMachine.h"
-#include "llvm_helper.h"
 #include "llvm_machinectx.h"
 #include <string.h>
 #include <stdio.h>

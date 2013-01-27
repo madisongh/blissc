@@ -509,11 +509,7 @@
 					/Volumes/Extra/llvm/install/lib,
 					"/opt/local/libexec/llvm-3.2/lib",
 				);
-				OTHER_CFLAGS = (
-					"-D__STDC_CONSTANT_MACROS",
-					"-D__STDC_FORMAT_MACROS",
-					"-D__STDC_LIMIT_MACROS",
-				);
+				OTHER_CFLAGS = "";
 				OTHER_CPLUSPLUSFLAGS = (
 					"$(OTHER_CFLAGS)",
 					"-D_DEBUG",
@@ -588,11 +584,7 @@
 					/Volumes/Extra/llvm/install/lib,
 					"/opt/local/libexec/llvm-3.2/lib",
 				);
-				OTHER_CFLAGS = (
-					"-D__STDC_CONSTANT_MACROS",
-					"-D__STDC_FORMAT_MACROS",
-					"-D__STDC_LIMIT_MACROS",
-				);
+				OTHER_CFLAGS = "";
 				OTHER_CPLUSPLUSFLAGS = (
 					"$(OTHER_CFLAGS)",
 					"-D_DEBUG",

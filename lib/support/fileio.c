@@ -126,7 +126,7 @@ file_splitname (fioctx_t fio, const char *orig, int origlen, int canonicalize,
         parts->path_fullnamelen = len;
     } else {
         if (origlen < 0) origlen = (int) strlen(orig);
-        parts->path_fullname = malloc((unsigned int)origlen);
+        parts->path_fullname = malloc((unsigned int)origlen+1);
         if (parts->path_fullname == 0) return 0;
         memcpy(parts->path_fullname, orig, origlen);
         parts->path_fullname[origlen] = '\0';
@@ -162,23 +162,28 @@ int
 file_combinename (fioctx_t fio, fio_pathparts_t *parts)
 {
     size_t len;
-    if (parts->path_fullname != 0) free(parts->path_fullname);
-    parts->path_fullname = malloc(parts->path_dirnamelen + parts->path_filenamelen +
-                                  parts->path_suffixlen + 1);
-    if (parts->path_fullname == 0) return 0;
+    char *newpath;
+    newpath = malloc(parts->path_dirnamelen + parts->path_filenamelen +
+                     parts->path_suffixlen + 1);
+    if (newpath == 0) return 0;
     len = 0;
     if (parts->path_dirname != 0) {
-        memcpy(parts->path_fullname, parts->path_dirname, parts->path_dirnamelen);
+        memcpy(newpath, parts->path_dirname, parts->path_dirnamelen);
+        parts->path_dirname = newpath;
         len += parts->path_dirnamelen;
     }
     if (parts->path_filename != 0) {
-        memcpy(parts->path_fullname + len, parts->path_filename, parts->path_filenamelen);
+        memcpy(newpath + len, parts->path_filename, parts->path_filenamelen);
+        parts->path_filename = newpath+len;
         len += parts->path_filenamelen;
     }
     if (parts->path_suffix != 0) {
-        memcpy(parts->path_fullname + len, parts->path_suffix, parts->path_suffixlen);
+        memcpy(newpath + len, parts->path_suffix, parts->path_suffixlen);
+        parts->path_suffix = newpath + len;
         len += parts->path_suffixlen;
     }
+    if (parts->path_fullname != 0) free(parts->path_fullname);
+    parts->path_fullname = newpath;
     parts->path_fullname[len] = '\0';
     parts->path_fullnamelen = len;
     return 1;

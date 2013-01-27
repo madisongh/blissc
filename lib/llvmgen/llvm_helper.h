@@ -15,7 +15,7 @@ extern "C" {
 #endif
 
     void HelperSetAllocaAlignment(LLVMValueRef Inst, unsigned int Bytes);
-    const char *HelperGetDefaultTriple(void);
+    char *HelperGetDefaultTriple(void);
     LLVMTargetRef HelperLookupTarget(const char *triple, char **err);
     void HelperSetAsmVerbosity(LLVMTargetMachineRef tm, LLVMBool v);
 

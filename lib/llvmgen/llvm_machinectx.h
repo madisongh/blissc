@@ -13,6 +13,12 @@
  */
 
 #include "blissc/machinedef.h"
+#ifndef __STDC_LIMIT_MACROS
+#define __STDC_LIMIT_MACROS
+#endif
+#ifndef __STDC_CONSTANT_MACROS
+#define __STDC_CONSTANT_MACROS
+#endif
 #include "llvm-c/Core.h"
 #include "llvm-c/Analysis.h"
 #include "llvm-c/Transforms/Scalar.h"
