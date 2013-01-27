@@ -16,7 +16,7 @@
  *--
  */
 #include "llvmgen.h"
-#include "nametable.h"
+#include "blissc/nametable.h"
 
 static LLVMIntPredicate pred[] = {
     LLVMIntEQ, LLVMIntNE, LLVMIntSLT, LLVMIntSLE,
