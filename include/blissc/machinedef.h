@@ -63,5 +63,6 @@ machinedef_t *machine_init (const char *machspec);
 void machine_psects_init (machinedef_t *mach, void *scope);
 void machine_output_set (machinedef_t *mach, machine_output_t outtype,
                          char *fname, int fnlen);
+void machine_dumpir_set (machinedef_t *mach, char *fname, int fnlen);
 
 #endif /* machinedef_h__ */

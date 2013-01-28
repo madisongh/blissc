@@ -32,6 +32,7 @@ struct machine_ctx_s {
     LLVMTargetMachineRef    target_machine;
     LLVMCodeGenFileType     outputtype;
     char                    *outfile;
+    char                    *irdumpfile;
 };
 
 

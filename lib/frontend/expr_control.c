@@ -250,10 +250,9 @@ parse_case (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
             expr_signal(ctx, STC__DELIMEXP, ":");
         }
         exp = 0;
+        // Empty action is OK
         if (!expr_parse_expr(ctx, &exp)) {
-            expr_signal(ctx, STC__EXPREXP);
-            status = 0;
-            break;
+            exp = expr_node_alloc(ctx, EXPTYPE_NOOP, parser_curpos(pctx));
         }
         if (!expr_has_value(exp)) {
             every_case_has_value = 0;
@@ -427,8 +426,9 @@ parse_select (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
             expr_signal(ctx, STC__DELIMEXP, ":");
         }
         exp = 0;
+        // Empty expression is allowed here
         if (!expr_parse_expr(ctx, &exp)) {
-            expr_signal(ctx, STC__EXPREXP);
+            exp = expr_node_alloc(ctx, EXPTYPE_NOOP, parser_curpos(pctx));
         }
         if (selectors == 0 && !is_always && !is_otherwise) {
             expr_node_free(ctx, exp);

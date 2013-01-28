@@ -46,6 +46,10 @@ struct blissc_driverctx_s {
     unsigned int    listfnlen;
     int             free_listfn;
     int             optlevel;
+    int             dumpir;
+    char            *irfn;
+    unsigned int    irfnlen;
+    int             free_irfn;
 };
 
 blissc_driverctx_t
@@ -77,6 +81,8 @@ blissc_output_set (blissc_driverctx_t ctx, bliss_output_t outtype,
         if (ctx->outfn == 0) return 0;
         memcpy(ctx->outfn, fname, fnlen);
         ctx->outfn[fnlen] = '\0';
+        ctx->outfnlen = fnlen;
+        ctx->free_outfn = 1;
     }
     return 1;
 } /* blissc_output_set */
@@ -92,10 +98,30 @@ blissc_listopt_set (blissc_driverctx_t ctx, unsigned int flags,
         if (ctx->listfn == 0) return 0;
         memcpy(ctx->listfn, fname, fnlen);
         ctx->listfn[fnlen] = '\0';
+        ctx->listfnlen = fnlen;
+        ctx->free_listfn = 1;
     }
     return 1;
 
 } /* blissc_listopt_set */
+
+int
+blissc_dumpir_set (blissc_driverctx_t ctx, int val,
+                    const char *fname, int fnlen)
+{
+    ctx->dumpir = val;
+    if (fname != 0) {
+        if (fnlen < 0) fnlen = (int) strlen(fname);
+        ctx->irfn = malloc(fnlen);
+        if (ctx->irfn == 0) return 0;
+        memcpy(ctx->irfn, fname, fnlen);
+        ctx->irfn[fnlen] = '\0';
+        ctx->irfnlen = fnlen;
+        ctx->free_irfn = 1;
+    }
+    return 1;
+
+} /* blissc_dumpir_set */
 
 int blissc_variant_set (blissc_driverctx_t ctx, unsigned int val)
 {
@@ -140,26 +166,19 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
             objparts.path_suffix = ".o";
         }
         objparts.path_suffixlen = 2;
-    } else {
-        if (!file_splitname(ctx->fioctx, ctx->outfn, -1, 0, &objparts)) {
+        objparts.path_dirnamelen = 0;
+        if (!file_combinename(ctx->fioctx, &objparts)) {
             return 0;
         }
-        if (objparts.path_dirnamelen == 0) {
-            objparts.path_dirnamelen = srcparts.path_dirnamelen;
-            objparts.path_dirname = srcparts.path_dirname;
-        }
+        free(ctx->outfn);
+        ctx->outfn = objparts.path_fullname;
+        ctx->outfnlen = (unsigned int) objparts.path_fullnamelen;
+        ctx->free_outfn = 1;
     }
-    if (!file_combinename(ctx->fioctx, &objparts)) {
-        return 0;
-    }
-    if (ctx->outfn != 0) free(ctx->outfn);
-    ctx->outfn = objparts.path_fullname;
-    ctx->outfnlen = (unsigned int) objparts.path_fullnamelen;
-    ctx->free_outfn = 1;
     machine_output_set(ctx->mach, ctx->outtype, ctx->outfn, ctx->outfnlen);
 
     if (ctx->listflags == 0) {
-        if (ctx->listfn != 0) free(ctx->listfn);
+        if (ctx->listfn != 0 && ctx->free_listfn) free(ctx->listfn);
         ctx->listfn = 0;
         ctx->listfnlen = 0;
     } else {
@@ -179,11 +198,32 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
         if (!file_combinename(ctx->fioctx, &lstparts)) {
             return 0;
         }
-        if (ctx->listfn != 0) free(ctx->listfn);
+        if (ctx->listfn != 0 && ctx->free_listfn) free(ctx->listfn);
         ctx->listfn = lstparts.path_fullname;
         ctx->listfnlen = (unsigned int) lstparts.path_fullnamelen;
         ctx->free_listfn = 1;
     }
+
+    if (ctx->dumpir) {
+        if (ctx->irfn == 0) {
+            file_splitname(ctx->fioctx, ctx->outfn, ctx->outfnlen, 0, &lstparts);
+            lstparts.path_suffix = ".ll";
+            lstparts.path_suffixlen = 3;
+        } else {
+            if (!file_splitname(ctx->fioctx, ctx->irfn, ctx->irfnlen, 0, &lstparts)) {
+                return 0;
+            }
+        }
+        if (!file_combinename(ctx->fioctx, &lstparts)) {
+            return 0;
+        }
+        if (ctx->irfn != 0 && ctx->free_irfn) free(ctx->irfn);
+        ctx->irfn = lstparts.path_fullname;
+        ctx->irfnlen = (unsigned int) lstparts.path_fullnamelen;
+        ctx->free_irfn = 1;
+    }
+    machine_dumpir_set(ctx->mach, ctx->irfn, ctx->irfnlen);
+
     if (ctx->optlevel >= 0) {
         gencode_optlevel_set(expr_gencodectx(ctx->ectx), ctx->optlevel);
     }
@@ -203,6 +243,7 @@ blissc_finish (blissc_driverctx_t ctx)
     if (ctx->strctx != 0) strings_finish(ctx->strctx);
     if (ctx->free_listfn) free(ctx->listfn);
     if (ctx->free_outfn) free(ctx->outfn);
+    if (ctx->free_irfn) free(ctx->irfn);
     free(ctx);
 
 } /* blissc_finish */

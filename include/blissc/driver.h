@@ -42,6 +42,8 @@ int blissc_listopt_set(blissc_driverctx_t ctx, unsigned int listflags,
                        const char *fname, int fnlen);
 int blissc_variant_set(blissc_driverctx_t ctx, unsigned int val);
 int blissc_optlevel_set(blissc_driverctx_t ctx, unsigned int val);
+int blissc_dumpir_set(blissc_driverctx_t ctx, int val, const char *fname,
+                      int fnlen);
 int blissc_compile(blissc_driverctx_t ctx, const char *fname, int fnlen);
 void blissc_finish(blissc_driverctx_t ctx);
 

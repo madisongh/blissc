@@ -21,6 +21,10 @@
 #include <stdlib.h>
 #include "blissc/driver.h"
 
+enum {
+    LONGOPT_SHOW = 4,
+    LONGOPT_DUMP_IR = 6
+};
 static struct option options[] = {
     { "output",         required_argument,  0,  'o' },
     { "assembly",       no_argument,        0,  's' },
@@ -28,6 +32,7 @@ static struct option options[] = {
     { "listing",        optional_argument,  0,  'l' },
     { "show",           required_argument,  0,  0   },
     { "variant",        optional_argument,  0,  'V' },
+    { "dump-ir",        optional_argument,  0,  0   },
     { "help",           no_argument,        0,  'h' },
     { 0,                0,                  0,  0   }
 };
@@ -38,15 +43,17 @@ static char *optarghelp[] = {
     "--listing[=filename]    ",
     "--show[=option,...]     ",
     "--variant=<n>           ",
+    "--dump-ir[=filename]    ",
     "--help                  "
 };
 static char *opthelp[] = {
-    "output file name (defaults to source filename with '.o' or '.s' suffix)",
+    "output file name (default is src name +'.o' or '.s' suffix)",
     "generate assembly language output instead of object",
     "set optimization level (valid values: 0,1,2,3, default:1)",
     "generate listing (default name is output file with '.lis' suffix)",
     "controls listing output (see below)",
     "sets the %VARIANT value; if no value specified, defaults to 1",
+    "dumps the LLVM IR code (default name is outfile + '.ll' suffix)",
     "displays usage information and exits"
 };
 static char *listopts [] = {
@@ -71,6 +78,8 @@ static unsigned int listflags = 0;
 static bliss_output_t outtype = BLISS_K_OUTPUT_OBJECT;
 static int optlevel = -1;
 static unsigned int variant = 0;
+static int dumpir = 0;
+static char *irfile = 0;
 
 static void
 print_usage (void)
@@ -106,23 +115,31 @@ parse_args (int argc, char * const argv[])
             break;
         }
         switch (c) {
-            case 0: // long-only, right now this is just --show
-                if (optarg == 0) {
-                    fprintf(stderr, "error in options processing");
-                    err = 1;
-                    break;
-                }
-                showopts = optarg;
-                err = 0;
-                while (*showopts != '\0' && !err) {
-                    char *value;
-                    int i = getsubopt(&showopts, listopts, &value);
-                    if (i < 0) {
-                        fprintf(stderr, "Unrecognized --show option: %s\n", value);
+            case 0:
+                if (which == LONGOPT_SHOW) {
+                    if (optarg == 0) {
+                        fprintf(stderr, "error in options processing");
                         err = 1;
                         break;
                     }
-                    listflags |= (1<<i);
+                    showopts = optarg;
+                    err = 0;
+                    while (*showopts != '\0' && !err) {
+                        char *value;
+                        int i = getsubopt(&showopts, listopts, &value);
+                        if (i < 0) {
+                            fprintf(stderr, "Unrecognized --show option: %s\n", value);
+                            err = 1;
+                            break;
+                        }
+                        listflags |= (1<<i);
+                    }
+                } else if (which == LONGOPT_DUMP_IR) {
+                    dumpir = 1;
+                    irfile = optarg;
+                } else {
+                    fprintf(stderr, "unrecognized long option");
+                    err = 1;
                 }
                 break;
             case 'o':
@@ -220,6 +237,11 @@ main (int argc, char * const argv[])
     }
     if (!blissc_output_set(cctx, outtype, outfile, -1)) {
         fprintf(stderr, "Error setting output type\n");
+        status = 1;
+        goto finish;
+    }
+    if (!blissc_dumpir_set(cctx, dumpir, irfile, -1)) {
+        fprintf(stderr, "Error setting --dump-ir\n");
         status = 1;
         goto finish;
     }

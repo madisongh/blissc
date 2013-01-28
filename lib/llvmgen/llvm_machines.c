@@ -35,6 +35,7 @@ machine_init (const char *machspec)
     LLVMInitializeX86Target();
     LLVMInitializeX86TargetMC();
     LLVMInitializeX86AsmPrinter();
+    LLVMInitializeX86AsmParser();
 
     if (machspec == 0) {
         machspec = HelperGetDefaultTriple();
@@ -91,6 +92,26 @@ machine_output_set (machinedef_t *mach, machine_output_t outtype, char *fname, i
     m->outfile[fnlen] = '\0';
 
 } /* machine_output_set */
+
+void
+machine_dumpir_set (machinedef_t *mach, char *fname, int fnlen)
+{
+    machine_ctx_t m = machine_context(mach);
+
+    if (m->irdumpfile != 0) {
+        free(m->irdumpfile);
+        m->irdumpfile = 0;
+    }
+    if (fname != 0) {
+        if (fnlen < 0) fnlen = (int) strlen(fname);
+        if (fnlen != 0) {
+            m->irdumpfile = malloc(fnlen+1);
+            memcpy(m->irdumpfile, fname, fnlen);
+            m->irdumpfile[fnlen] = '\0';
+        }
+    }
+
+} /* machine_dumpir_set */
 
 void
 machine_finish (machinedef_t *mach)

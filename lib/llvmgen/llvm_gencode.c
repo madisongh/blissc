@@ -304,12 +304,26 @@ int
 gencode_module_begin (gencodectx_t gctx, name_t *modnp)
 {
     char *dl;
+#if 0 // XXX later
+    char module_header[256];
+    int headerlen;
+    strdesc_t *str;
+#endif // XXX later
 
     llvmgen_expgen_init(gctx);
 
     gctx->modnp = modnp;
     gctx->module = LLVMModuleCreateWithNameInContext(name_azstring(modnp), gctx->llvmctx);
+
+    if (gctx->module == 0) {
+        return 0;
+    }
     gctx->passmgr = LLVMCreateFunctionPassManagerForModule(gctx->module);
+    if (gctx->passmgr == 0) {
+        LLVMDisposeModule(gctx->module);
+        gctx->module = 0;
+        return 0;
+    }
 
     LLVMSetTarget(gctx->module, LLVMGetTargetMachineTriple(gctx->mctx->target_machine));
     dl = LLVMCopyStringRepOfTargetData(LLVMGetTargetMachineData(gctx->mctx->target_machine));
@@ -324,7 +338,30 @@ gencode_module_begin (gencodectx_t gctx, name_t *modnp)
         LLVMAddCFGSimplificationPass(gctx->passmgr);
     }
 
-    return (gctx->module != 0);
+#if 0 // XXX later
+    headerlen = 0;
+    str = modsym_ident(modnp);
+    if (str != 0) {
+        int reslen, len = str->len;
+        reslen = snprintf(module_header+headerlen, sizeof(module_header)-headerlen,
+                          "\t.ident %-*.*s", len, len, str->ptr);
+        if (reslen > 0) headerlen += reslen;
+    }
+    str = modsym_main(modnp);
+    if (str != 0) {
+        int reslen, len = str->len;
+        if (headerlen > 0) module_header[headerlen++] = '\n';
+        reslen = snprintf(module_header+headerlen, sizeof(module_header)-headerlen,
+                          "\t.set start,_%-*.*s", len, len, str->ptr);
+        if (reslen > 0) headerlen += reslen;
+    }
+    if (headerlen > 0) {
+        module_header[headerlen] = '\0';
+        LLVMSetModuleInlineAsm(gctx->module, module_header);
+    }
+#endif // XXX later
+
+    return 1;
 
 } /* gencode_module_begin */
 
@@ -334,7 +371,12 @@ gencode_module_end (gencodectx_t gctx, name_t *np)
     char *err;
 
     LLVMVerifyModule(gctx->module, LLVMPrintMessageAction, 0);
-//    LLVMDumpModule(gctx->module);
+    if (gctx->mctx->irdumpfile != 0) {
+        err = 0;
+        if (LLVMPrintModuleToFile(gctx->module, gctx->mctx->irdumpfile, &err)) {
+            if (err) { fprintf(stderr, "%s\n", err); LLVMDisposeMessage(err); }
+        }
+    }
     err = 0;
     if (LLVMTargetMachineEmitToFile(gctx->mctx->target_machine, gctx->module,
                                     gctx->mctx->outfile, gctx->mctx->outputtype, &err)) {

@@ -339,24 +339,23 @@ gen_chf_rchar_a (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef nee
 {
     LLVMBuilderRef builder = gctx->curfn->builder;
     exprseq_t *args = expr_func_arglist(exp);
-    int postincrement = (int) ctx;
+    int postincrement = (int)(intptr_t) ctx;
     LLVMValueRef one = LLVMConstInt(gctx->fullwordtype, 1, 0);
-    LLVMValueRef addr, result;
+    LLVMValueRef addraddr, addr, result;
     expr_node_t *arg;
 
     arg = exprseq_head(args);
-    addr = llvmgen_expression(gctx, arg, LLVMPointerType(gctx->unitptrtype, 0));
+    addraddr = llvmgen_expression(gctx, arg, LLVMPointerType(gctx->unitptrtype, 0));
+    addr = LLVMBuildLoad(builder, addraddr, llvmgen_temp(gctx));
     if (!postincrement) {
-        LLVMValueRef tmp = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
-        tmp = LLVMBuildGEP(builder, tmp, &one, 1, llvmgen_temp(gctx));
-        LLVMBuildStore(builder, tmp, addr);
+        LLVMValueRef tmp = LLVMBuildGEP(builder, addr, &one, 1, llvmgen_temp(gctx));
+        LLVMBuildStore(builder, tmp, addraddr);
         addr = tmp;
     }
     result = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
     if (postincrement) {
-        LLVMValueRef tmp = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
-        tmp = LLVMBuildGEP(builder, tmp, &one, 1, llvmgen_temp(gctx));
-        LLVMBuildStore(builder, tmp, addr);
+        LLVMValueRef tmp = LLVMBuildGEP(builder, addr, &one, 1, llvmgen_temp(gctx));
+        LLVMBuildStore(builder, tmp, addraddr);
     }
 
     return llvmgen_adjustval(gctx, result, neededtype, 0);
@@ -400,26 +399,25 @@ gen_chf_wchar_a (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef nee
 {
     LLVMBuilderRef builder = gctx->curfn->builder;
     exprseq_t *args = expr_func_arglist(exp);
-    int postincrement = (int) ctx;
+    int postincrement = (int)(intptr_t) ctx;
     LLVMValueRef one = LLVMConstInt(gctx->fullwordtype, 1, 0);
-    LLVMValueRef ch, addr;
+    LLVMValueRef ch, addraddr, addr;
     expr_node_t *arg;
 
     arg = exprseq_head(args);
     ch = llvmgen_expression(gctx, arg, LLVMInt8TypeInContext(gctx->llvmctx));
     arg = arg->tq_next;
-    addr = llvmgen_expression(gctx, arg, LLVMPointerType(gctx->unitptrtype, 0));
+    addraddr = llvmgen_expression(gctx, arg, LLVMPointerType(gctx->unitptrtype, 0));
+    addr = LLVMBuildLoad(builder, addraddr, llvmgen_temp(gctx));
     if (!postincrement) {
-        LLVMValueRef tmp = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
-        tmp = LLVMBuildGEP(builder, tmp, &one, 1, llvmgen_temp(gctx));
-        LLVMBuildStore(builder, tmp, addr);
+        LLVMValueRef tmp = LLVMBuildGEP(builder, addr, &one, 1, llvmgen_temp(gctx));
+        LLVMBuildStore(builder, tmp, addraddr);
         addr = tmp;
     }
     LLVMBuildStore(builder, ch, addr);
     if (postincrement) {
-        LLVMValueRef tmp = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
-        tmp = LLVMBuildGEP(builder, tmp, &one, 1, llvmgen_temp(gctx));
-        LLVMBuildStore(builder, tmp, addr);
+        LLVMValueRef tmp = LLVMBuildGEP(builder, addr, &one, 1, llvmgen_temp(gctx));
+        LLVMBuildStore(builder, tmp, addraddr);
     }
 
     if (neededtype != 0) {
