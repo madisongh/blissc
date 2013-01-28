@@ -186,55 +186,23 @@ gen_ABS (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
 static LLVMValueRef
 gen_MINMAX (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
-    LLVMBasicBlockRef exitblk = llvmgen_exitblock_create(gctx, 0);
-    llvm_btrack_t *bt = llvmgen_btrack_create(gctx, exitblk);
     unsigned int bpval = machine_scalar_bits(gctx->mach);
     exprseq_t *args = expr_func_arglist(exp);
     LLVMIntPredicate pred = (LLVMIntPredicate) ctx;
     LLVMBuilderRef builder = gctx->curfn->builder;
     LLVMTypeRef inttype = LLVMIntTypeInContext(gctx->llvmctx, bpval);
-    LLVMBasicBlockRef here, yesdest, nodest;
-    LLVMValueRef val, cmpval, nextphi, test, result;
+    LLVMValueRef val, cmpval, test;
     expr_node_t *arg;
 
     arg = exprseq_head(args);
     val = llvmgen_expression(gctx, arg, inttype);
-    here = LLVMGetInsertBlock(builder);
     for (arg = arg->tq_next; arg != 0; arg = arg->tq_next) {
-        nodest = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
-        if (arg->tq_next == 0) {
-            yesdest = exitblk;
-            nextphi = 0;
-        } else {
-            yesdest = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
-            LLVMPositionBuilderAtEnd(builder, yesdest);
-            nextphi = LLVMBuildPhi(builder, inttype, llvmgen_temp(gctx));
-            LLVMPositionBuilderAtEnd(builder, here);
-        }
         cmpval = llvmgen_expression(gctx, arg, inttype);
         test = LLVMBuildICmp(builder, pred, val, cmpval, llvmgen_temp(gctx));
-        LLVMBuildCondBr(builder, test, yesdest, nodest);
-        here = LLVMGetInsertBlock(builder);
-        if (yesdest == exitblk) {
-            llvmgen_btrack_update_phi(gctx, bt, here, val);
-            llvmgen_btrack_update_brcount(gctx, bt);
-        } else {
-            LLVMAddIncoming(nextphi, &val, &here, 1);
-        }
-        LLVMPositionBuilderAtEnd(builder, nodest);
-        if (yesdest == exitblk) {
-            llvmgen_btrack_update(gctx, bt, cmpval);
-        } else {
-            LLVMBuildBr(builder, yesdest);
-            LLVMAddIncoming(nextphi, &cmpval, &nodest, 1);
-        }
-        LLVMPositionBuilderAtEnd(builder, yesdest);
-        here = yesdest;
-        val = nextphi;
+        val = LLVMBuildSelect(builder, test, val, cmpval, llvmgen_temp(gctx));
     }
 
-    result = llvmgen_btrack_finalize(gctx, bt, inttype);
-    return llvmgen_adjustval(gctx, result, neededtype,
+    return llvmgen_adjustval(gctx, val, neededtype,
                              (pred == LLVMIntSLT || pred == LLVMIntSGT));
 
 } /* gen_MINMAX */
