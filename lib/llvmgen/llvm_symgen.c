@@ -549,7 +549,11 @@ gendatatype (gencodectx_t gctx, data_attr_t *attr, unsigned int *ucountp)
     LLVMTypeRef basetype;
 
     if (attr->struc != 0 || attr->units > machine_scalar_units(gctx->mach)) {
-        basetype = LLVMArrayType(LLVMIntTypeInContext(gctx->llvmctx, bpunit), attr->units);
+        if (attr->units == 0) {
+            basetype = LLVMPointerType(LLVMIntTypeInContext(gctx->llvmctx, bpunit), 0);
+        } else {
+            basetype = LLVMArrayType(LLVMIntTypeInContext(gctx->llvmctx, bpunit), attr->units);
+        }
     } else {
         basetype = LLVMIntTypeInContext(gctx->llvmctx, attr->units * bpunit);
     }
@@ -581,6 +585,11 @@ datasym_generator (void *vctx, name_t *np, void *p)
     if ((attr->flags & SYM_M_FORWARD) != 0) {
         return 1;
     }
+
+    ld->flags = (((attr->flags & SYM_M_SIGNEXT) != 0 ? LLVMGEN_M_SEG_SIGNEXT : 0) |
+                 ((attr->flags & SYM_M_VOLATILE) != 0 ? LLVMGEN_M_SEG_VOLATILE : 0) |
+                 ((attr->flags & SYM_M_REF) != 0 ? LLVMGEN_M_SEG_ISREF : 0));
+
     if (attr->dclass == DCLASS_ARG) {
         ld->vclass = LLVM_REG;
     } else if (attr->dclass == DCLASS_STATIC) {
@@ -612,8 +621,6 @@ datasym_generator (void *vctx, name_t *np, void *p)
         if (attr->alignment != 0) {
             HelperSetAllocaAlignment(ld->value, 1<<attr->alignment);
         }
-        ld->flags = (((attr->flags & SYM_M_SIGNEXT) != 0 ? LLVMGEN_M_SEG_SIGNEXT : 0) |
-                     ((attr->flags & SYM_M_VOLATILE) != 0 ? LLVMGEN_M_SEG_VOLATILE : 0));
         if (attr->ivlist != 0) {
             handle_initializer(gctx, ld, np, units);
         }

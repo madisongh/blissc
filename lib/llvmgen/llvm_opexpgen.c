@@ -39,12 +39,10 @@ llvmgen_predfromop (optype_t op, int addrsigned)
 LLVMValueRef
 llvmgen_assignment (gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs)
 {
-    expr_node_t *lhsbase = (expr_type(lhs) == EXPTYPE_PRIM_STRUREF ? expr_struref_accexpr(lhs) : lhs);
-    LLVMValueRef rhsvalue, v, lhsaddr, size, pos;
-    LLVMTypeRef  lhstype, rhstype;
     LLVMBuilderRef builder = (gctx->curfn == 0 ? 0 : gctx->curfn->builder);
-    unsigned int flags = 0;
-    int signext = ((flags & LLVMGEN_M_SEG_SIGNEXT) != 0);
+    LLVMValueRef rhsvalue, v, lhsaddr;
+    LLVMTypeRef  lhstype, rhstype;
+    llvm_accinfo_t accinfo;
     int shifts_required = 0;
 
     rhsvalue = llvmgen_expression(gctx, rhs, 0);
@@ -53,179 +51,113 @@ llvmgen_assignment (gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs)
         expr_signal(gctx->ectx, STC__EXPRVALRQ);
         rhsvalue = LLVMConstNull(LLVMIntTypeInContext(gctx->llvmctx, bpval));
     }
-    lhsaddr = llvmgen_addr_expression(gctx, lhs, &flags);
+    rhstype = LLVMTypeOf(rhsvalue);
+
+    lhsaddr = llvmgen_addr_expression(gctx, lhs, &accinfo);
     if (lhsaddr == 0) {
         expr_signal(gctx->ectx, STC__ADDRVALRQ);
         return rhsvalue;
     }
-    lhstype = LLVMGetElementType(LLVMTypeOf(lhsaddr));
-    if (LLVMGetTypeKind(lhstype) == LLVMArrayTypeKind || LLVMGetTypeKind(lhstype) == LLVMStructTypeKind
-        || expr_type(lhsbase) == EXPTYPE_PRIM_FLDREF) {
-        lhstype = gctx->fullwordtype;
-        lhsaddr = llvmgen_adjustval(gctx, lhsaddr, LLVMPointerType(lhstype, 0), 0);
-    }
-
-    rhstype = LLVMTypeOf(rhsvalue);
-    if (expr_type(lhsbase) == EXPTYPE_PRIM_FLDREF) {
-        expr_node_t *pexp = expr_fldref_pos(lhsbase);
-        expr_node_t *sexp = expr_fldref_size(lhsbase);
-        LLVMTypeRef type;
-
-        signext = expr_fldref_signext(lhsbase);
-
+    if (accinfo.posval != 0 || accinfo.sizeval != 0) {
         shifts_required = 1;
-        type = (LLVMGetTypeKind(rhstype) == LLVMIntegerTypeKind ? rhstype : gctx->fullwordtype);
-        size = llvmgen_expression(gctx, sexp, type);
-        pos = llvmgen_expression(gctx, pexp, type);
-    } else if (expr_type(lhsbase) == EXPTYPE_PRIM_SEG) {
-        llvm_stgclass_t segclass;
-        int was_deref;
-        was_deref = (expr_type(lhs) == EXPTYPE_PRIM_STRUREF &&
-                     expr_struref_referer(lhs) == expr_seg_name(lhsbase));
-        llvmgen_segaddress(gctx, expr_seg_name(lhsbase), &segclass, 0);
-        if (segclass == LLVM_REG && !was_deref &&
-            expr_seg_offset(lhsbase) != 0 && expr_seg_width(lhsbase) != machine_scalar_bits(gctx->mach)) {
-            LLVMTypeRef type;
-
-            shifts_required = 1;
-            type = (LLVMGetTypeKind(rhstype) == LLVMIntegerTypeKind ? rhstype : gctx->fullwordtype);
-            size = LLVMConstInt(type, expr_seg_width(lhsbase), 0);
-            pos = LLVMConstInt(type, expr_seg_offset(lhsbase) * machine_unit_bits(gctx->mach), 0);
-        } else {
-            LLVMTypeRef sizedtype = LLVMIntTypeInContext(gctx->llvmctx, expr_seg_width(lhsbase));
-            if (lhstype != sizedtype) {
-                lhsaddr = llvmgen_adjustval(gctx, lhsaddr, LLVMPointerType(sizedtype, 0), 0);
-                lhstype = sizedtype;
-            }
+        lhstype = gctx->fullwordtype;
+        if ((accinfo.flags & LLVMGEN_M_ACC_CONSTSIZ) != 0) {
+            accinfo.sizeval = LLVMConstInt(gctx->fullwordtype, accinfo.size, 0);
         }
+    } else if ((accinfo.flags & LLVMGEN_M_ACC_CONSTSIZ) != 0) {
+        lhstype = LLVMIntTypeInContext(gctx->llvmctx, accinfo.size);
+    } else {
+        lhstype = gctx->fullwordtype;
     }
-
+    lhsaddr = llvmgen_adjustval(gctx, lhsaddr, LLVMPointerType(lhstype, 0), 0);
     if (shifts_required) {
         LLVMValueRef neg1, srcmask, dstmask, rhstemp;
 
         if (LLVMGetTypeKind(rhstype) != LLVMIntegerTypeKind) {
             rhsvalue = llvmgen_adjustval(gctx, rhsvalue, gctx->fullwordtype, 0);
             rhstype = LLVMTypeOf(rhsvalue);
+        } else {
+            accinfo.sizeval = llvmgen_adjustval(gctx, accinfo.sizeval, rhstype, 0);
+            accinfo.posval = llvmgen_adjustval(gctx, accinfo.posval, rhstype, 0);
         }
 
         neg1 = LLVMConstAllOnes(rhstype);
-        v = LLVMBuildShl(builder, neg1, size, llvmgen_temp(gctx));
+        v = LLVMBuildShl(builder, neg1, accinfo.sizeval, llvmgen_temp(gctx));
         srcmask = LLVMBuildNot(builder, v, llvmgen_temp(gctx));
         v = LLVMBuildAnd(builder, rhsvalue, srcmask, llvmgen_temp(gctx));
-        v = LLVMBuildShl(builder, v, pos, llvmgen_temp(gctx));
+        v = LLVMBuildShl(builder, v, accinfo.posval, llvmgen_temp(gctx));
         rhstemp = llvmgen_adjustval(gctx, v, lhstype, 0);
 
-        v = LLVMBuildShl(builder, srcmask, pos, llvmgen_temp(gctx));
+        v = LLVMBuildShl(builder, srcmask, accinfo.posval, llvmgen_temp(gctx));
         v = llvmgen_adjustval(gctx, v, lhstype, 0);
         dstmask = LLVMBuildNot(builder, v, llvmgen_temp(gctx));
         v = LLVMBuildLoad(builder, lhsaddr, llvmgen_temp(gctx));
-        v = llvmgen_adjustval(gctx, v, lhstype, signext);
+        v = llvmgen_adjustval(gctx, v, lhstype, (accinfo.flags & LLVMGEN_M_SEG_SIGNEXT) != 0);
         v = LLVMBuildAnd(builder, v, dstmask, llvmgen_temp(gctx));
         v = LLVMBuildOr(builder, v, rhstemp, llvmgen_temp(gctx));
     } else {
-        v = llvmgen_adjustval(gctx, rhsvalue, lhstype, signext);
+        v = llvmgen_adjustval(gctx, rhsvalue, lhstype, (accinfo.flags & LLVMGEN_M_SEG_SIGNEXT) != 0);
     }
 
     LLVMBuildStore(builder, v, lhsaddr);
-    if ((flags & LLVMGEN_M_SEG_VOLATILE) != 0) LLVMSetVolatile(v, 1);
+    if ((accinfo.flags & LLVMGEN_M_SEG_VOLATILE) != 0) LLVMSetVolatile(v, 1);
 
     return rhsvalue;
 
 } /* llvmgen_assignment */
 
 static LLVMValueRef
-gen_fetch (gencodectx_t gctx, expr_node_t *rhsactual, LLVMTypeRef neededtype)
+gen_fetch (gencodectx_t gctx, expr_node_t *rhs, LLVMTypeRef neededtype)
 {
     LLVMBuilderRef builder = gctx->curfn->builder;
-    unsigned int flags = 0;
-    expr_node_t *base, *rhs;
-    unsigned int bpval = machine_scalar_bits(gctx->mach);
+    llvm_accinfo_t accinfo;
     LLVMValueRef addr, val;
+    LLVMTypeRef type;
+    int shifts_required = 0;
     int signext;
 
-    rhs = (expr_type(rhsactual) == EXPTYPE_PRIM_STRUREF ? expr_struref_accexpr(rhsactual) : rhsactual);
-    base = (expr_type(rhs) == EXPTYPE_PRIM_FLDREF ? expr_fldref_addr(rhs) : rhs);
-    if (expr_type(base) == EXPTYPE_PRIM_SEG && name_type(expr_seg_name(base)) == LEXTYPE_NAME_DATA) {
-        data_attr_t *attr = datasym_attr(expr_seg_name(base));
-        unsigned int width = expr_seg_width(base);
-        unsigned int offset = (unsigned int) expr_seg_offset(base);
-        llvm_stgclass_t valclass;
-
-        if (width == 0) {
-            width = attr->width;
+    addr = llvmgen_addr_expression(gctx, rhs, &accinfo);
+    if (accinfo.posval != 0 || accinfo.sizeval != 0) {
+        type = gctx->fullwordtype;
+        if ((accinfo.flags & LLVMGEN_M_ACC_CONSTSIZ)) {
+            accinfo.sizeval = LLVMConstInt(gctx->fullwordtype, accinfo.size, 0);
         }
-        if (rhs != rhsactual) { // it's a STRUREF, make sure auto-deref happens
-            llvmgen_deref_push(gctx, expr_seg_name(base));
-        }
-        addr = llvmgen_segaddress(gctx, expr_seg_name(base), &valclass, &flags);
-        if (rhs != rhsactual) {
-            llvmgen_deref_pop(gctx, expr_seg_name(base));
-        }
-        if (valclass == LLVM_REG && (flags & LLVMGEN_M_SEG_DEREFED) == 0) {
-            if (width != bpval) {
-                addr = llvmgen_adjustval(gctx, addr, gctx->fullwordtype, 0);
-                val = LLVMBuildTrunc(builder, addr,
-                                     LLVMIntTypeInContext(gctx->llvmctx, width),
-                                     llvmgen_temp(gctx));
-            } else {
-                val = addr;
-            }
-        } else {
-            LLVMTypeRef fetchtype = LLVMPointerType(LLVMIntTypeInContext(gctx->llvmctx, width), 0);
-
-            if (offset != 0) {
-                LLVMValueRef off = LLVMConstInt(gctx->fullwordtype, offset, 1);
-                addr = llvmgen_adjustval(gctx, addr, gctx->unitptrtype, 0);
-                addr = LLVMBuildGEP(builder, addr, &off, 1, llvmgen_temp(gctx));
-                addr = llvmgen_adjustval(gctx, addr, fetchtype, 0);
-            } else if (LLVMTypeOf(addr) != fetchtype) {
-                addr = LLVMBuildPointerCast(builder, addr, fetchtype, llvmgen_temp(gctx));
-            }
-            val = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
-            if ((flags & LLVMGEN_M_SEG_VOLATILE) != 0) LLVMSetVolatile(val, 1);
-        }
+        shifts_required = 1;
+    } else if ((accinfo.flags & LLVMGEN_M_ACC_CONSTSIZ)) {
+        type = LLVMIntTypeInContext(gctx->llvmctx, accinfo.size);
     } else {
-        LLVMTypeRef fetchtype = LLVMPointerType(gctx->fullwordtype, 0);
-        addr = llvmgen_addr_expression(gctx, rhs, &flags);
-        if (LLVMTypeOf(addr) != fetchtype) {
-            addr = LLVMBuildPointerCast(builder, addr, fetchtype, llvmgen_temp(gctx));
-        }
-        val = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
-        if ((flags & LLVMGEN_M_SEG_VOLATILE) != 0) LLVMSetVolatile(val, 1);
+        type = gctx->fullwordtype;
     }
-    signext = (flags & LLVMGEN_M_SEG_SIGNEXT) != 0;
-    // If this is a field reference, do the extraction
-    if (rhs != base) {
-        LLVMTypeRef inttype = LLVMIntTypeInContext(gctx->llvmctx, machine_scalar_bits(gctx->mach));
-        expr_node_t *pos = expr_fldref_pos(rhs);
-        expr_node_t *size = expr_fldref_size(rhs);
+    signext = ((accinfo.flags & LLVMGEN_M_SEG_SIGNEXT) != 0);
 
-        val = llvmgen_adjustval(gctx, val, inttype, signext);
-        if (!(expr_type(pos) == EXPTYPE_PRIM_LIT && expr_litval(pos) == 0)) {
-            LLVMValueRef pval = llvmgen_expression(gctx, pos, inttype);
-            if (signext) {
-                val = LLVMBuildAShr(builder, val, pval, llvmgen_temp(gctx));
-            } else {
-                val = LLVMBuildLShr(builder, val, pval, llvmgen_temp(gctx));
-            }
+    if (accinfo.segclass == LLVM_REG &&
+        (accinfo.flags & (LLVMGEN_M_SEG_DEREFED|LLVMGEN_M_SEG_ISREF)) == 0) {
+        val = llvmgen_adjustval(gctx, addr, type, signext);
+    } else {
+        addr = llvmgen_adjustval(gctx, addr, LLVMPointerType(type, 0), 0);
+        val = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
+        if ((accinfo.flags & LLVMGEN_M_SEG_VOLATILE) != 0) LLVMSetVolatile(val, 1);
+    }
+    if (shifts_required) {
+        val = llvmgen_adjustval(gctx, val, gctx->fullwordtype, signext);
+        if (signext) {
+            val = LLVMBuildAShr(builder, val, accinfo.posval, llvmgen_temp(gctx));
+        } else {
+            val = LLVMBuildLShr(builder, val, accinfo.posval, llvmgen_temp(gctx));
         }
 
-        signext = expr_fldref_signext(rhs);
-
-        if (expr_type(size) == EXPTYPE_PRIM_LIT) {
-            LLVMTypeRef trunctype = LLVMIntTypeInContext(gctx->llvmctx,
-                                                         (unsigned int) expr_litval(size));
+        if ((accinfo.flags & LLVMGEN_M_ACC_CONSTSIZ) != 0) {
+            LLVMTypeRef trunctype = LLVMIntTypeInContext(gctx->llvmctx, accinfo.size);
             val = llvmgen_adjustval(gctx, val, trunctype, signext);
         } else {
-            LLVMValueRef neg1 = LLVMConstAllOnes(inttype);
-            LLVMValueRef sizeval = llvmgen_expression(gctx, size, inttype);
+            LLVMValueRef neg1 = LLVMConstAllOnes(gctx->fullwordtype);
             LLVMValueRef mask;
 
-            mask = LLVMBuildShl(builder, neg1, sizeval, llvmgen_temp(gctx));
+            mask = LLVMBuildShl(builder, neg1, accinfo.sizeval, llvmgen_temp(gctx));
             mask = LLVMBuildNeg(builder, mask, llvmgen_temp(gctx));
             val = LLVMBuildAnd(builder, val, mask, llvmgen_temp(gctx));
             if (signext) {
-                val = LLVMBuildSExt(builder, val, inttype, llvmgen_temp(gctx));
+                val = LLVMBuildSExt(builder, val, gctx->fullwordtype, llvmgen_temp(gctx));
             }
         }
     }

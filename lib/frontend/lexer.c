@@ -482,9 +482,10 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek, textpos_t *posp)
                     ctx->signok = 0;
                     break;
                 default:
+                    lextype = LEXTYPE_NONE;
                     break;
             }
-            if (lextype == 0) {
+            if (lextype == LEXTYPE_NONE) {
                 lex = &errlex;
             } else {
                 lex = lexeme_create(ctx->lexctx, lextype, tok);

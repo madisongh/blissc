@@ -93,6 +93,19 @@ typedef enum {
 #define LLVMGEN_M_SEG_SIGNEXT  (1<<0)
 #define LLVMGEN_M_SEG_VOLATILE (1<<1)
 #define LLVMGEN_M_SEG_DEREFED  (1<<2)
+#define LLVMGEN_M_SEG_ISREF    (1<<3)
+// Flags above are also used in the accinfo structure below,
+// along with the following flags
+#define LLVMGEN_M_ACC_CONSTSIZ (1<<4)
+#define LLVMGEN_M_ACC_GENEXPR  (1<<5)
+struct llvm_accinfo_s {
+    llvm_stgclass_t     segclass;
+    unsigned int        flags;
+    unsigned int        size;
+    LLVMValueRef        posval, sizeval;
+};
+typedef struct llvm_accinfo_s llvm_accinfo_t;
+
 
 #define siu static inline __attribute__((unused))
 siu char *llvmgen_temp(gencodectx_t gctx) {
@@ -150,7 +163,7 @@ LLVMValueRef llvmgen_assignment(gencodectx_t gctx, expr_node_t *lhs, expr_node_t
 LLVMValueRef llvmgen_segaddress(gencodectx_t gctx, name_t *np, llvm_stgclass_t *segclass,
                                 unsigned int *flagsp);
 LLVMValueRef llvmgen_expression(gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype);
-LLVMValueRef llvmgen_addr_expression(gencodectx_t gctx, expr_node_t *exp, unsigned int *flagsp);
+LLVMValueRef llvmgen_addr_expression(gencodectx_t gctx, expr_node_t *exp, llvm_accinfo_t *accinfo);
 void llvmgen_deref_push(gencodectx_t gctx, name_t *np);
 void llvmgen_deref_pop(gencodectx_t gctx, name_t *np);
 void llvmgen_expgen_register(gencodectx_t gctx, exprtype_t type, llvmgen_expgen_fn func);

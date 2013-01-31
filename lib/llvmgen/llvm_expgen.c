@@ -42,14 +42,68 @@ llvmgen_expression (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 } /* llvmgen_expression */
 
 LLVMValueRef
-llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp, unsigned int *flagsp)
+llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp,
+                         llvm_accinfo_t *accinfo)
 {
     exprtype_t type = expr_type(exp);
+    expr_node_t *base = exp;
+    name_t *np = 0;
+    LLVMValueRef addr;
+    int was_fldref = 0;
+
+    if (accinfo != 0) {
+        memset(accinfo, 0, sizeof(llvm_accinfo_t));
+    }
+    if (type == EXPTYPE_PRIM_STRUREF) {
+        base = expr_struref_accexpr(exp);
+        type = expr_type(base);
+        np = expr_struref_referer(exp);
+        if (np != 0) {
+            accinfo->flags |= LLVMGEN_M_SEG_DEREFED;
+            llvmgen_deref_push(gctx, np);
+        }
+    }
+
+    if (type == EXPTYPE_PRIM_FLDREF) {
+        if (accinfo != 0) {
+            expr_node_t *pexp = expr_fldref_pos(base);
+            expr_node_t *sexp = expr_fldref_size(base);
+            if (expr_type(pexp) != EXPTYPE_PRIM_LIT || expr_litval(pexp) != 0) {
+                accinfo->posval = llvmgen_expression(gctx, pexp, gctx->fullwordtype);
+            }
+            if (expr_type(sexp) == EXPTYPE_PRIM_LIT) {
+                accinfo->flags |= LLVMGEN_M_ACC_CONSTSIZ;
+                accinfo->size = (unsigned int) expr_litval(sexp);
+            } else {
+                accinfo->sizeval = llvmgen_expression(gctx, sexp, gctx->fullwordtype);
+            }
+            if (expr_fldref_signext(base)) {
+                accinfo->flags |= LLVMGEN_M_SEG_SIGNEXT;
+            }
+        }
+        base = expr_fldref_addr(base);
+        type = expr_type(base);
+        was_fldref = 1;
+    }
 
     if (type == EXPTYPE_PRIM_SEG) {
-        LLVMValueRef addr = llvmgen_segaddress(gctx, expr_seg_name(exp), 0, flagsp);
-        if (expr_seg_offset(exp) != 0) {
-            LLVMValueRef off = LLVMConstInt(gctx->fullwordtype, expr_seg_offset(exp), 1);
+        expr_node_t *offexp = expr_seg_offset(base);
+        llvm_stgclass_t valclass;
+        unsigned int sflags;
+        addr = llvmgen_segaddress(gctx, expr_seg_name(base), &valclass, &sflags);
+        if (valclass == LLVM_REG && accinfo == 0 && (sflags & LLVMGEN_M_SEG_DEREFED) == 0) {
+            // XXX
+            expr_signal(gctx->ectx, STC__INTCMPERR, "attempt to take address of register");
+        }
+        if (accinfo != 0) {
+            accinfo->segclass = valclass;
+            if (!was_fldref) {
+                accinfo->flags |= sflags | LLVMGEN_M_ACC_CONSTSIZ;
+                accinfo->size = expr_seg_width(base);
+            }
+        }
+        if (offexp != 0) {
+            LLVMValueRef off = LLVMConstInt(gctx->fullwordtype, offexp, 1);
             addr = llvmgen_adjustval(gctx, addr, gctx->unitptrtype, 0);
             if (LLVMIsConstant(addr)) {
                 addr = LLVMConstGEP(addr, &off, 1);
@@ -57,16 +111,14 @@ llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp, unsigned int *flag
                 addr = LLVMBuildGEP(gctx->curfn->builder, addr, &off, 1, llvmgen_temp(gctx));
             }
         }
-        return addr;
+    } else {
+        if (accinfo != 0) accinfo->flags |= LLVMGEN_M_ACC_GENEXPR;
+        addr = llvmgen_expression(gctx, base, gctx->unitptrtype);
     }
 
-    if (type == EXPTYPE_PRIM_FLDREF) {
-        return llvmgen_addr_expression(gctx, expr_fldref_addr(exp), flagsp);
-    }
+    if (np != 0) llvmgen_deref_pop(gctx, np);
 
-    if (flagsp != 0) *flagsp = 0;
-
-    return llvmgen_expression(gctx, exp, gctx->unitptrtype);
+    return addr;
 
 } /* llvmgen_addr_expression */
 

@@ -181,7 +181,7 @@ gen_ABS (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
 
     return llvmgen_adjustval(gctx, result, neededtype, 0);
 
-} /* gen_SIGN */
+} /* gen_ABS */
 
 static LLVMValueRef
 gen_MINMAX (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
@@ -433,3 +433,46 @@ gen_chf_fill (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef needed
     return LLVMConstNull(neededtype);
 
 } /* gen_chf_fill */
+
+#if 0
+static LLVMValueRef
+gen_chf_compare (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    LLVMBasicBlockRef exitblk = llvmgen_exitblock_create(gctx, 0);
+    LLVMBasicBlockRef negblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
+    llvm_btrack_t *bt = llvmgen_btrack_create(gctx, exitblk);
+    exprseq_t *args = expr_func_arglist(exp);
+    LLVMBuilderRef builder = gctx->curfn->builder;
+    int do_general_compare = ((intptr_t) ctx == -1);
+    expr_node_t *arg;
+    LLVMIntPredicate pred;
+    LLVMValueRef len1, len2, ptr1, ptr2, fill, loop1bound, test;
+
+    arg = exprseq_head(args);
+    len1 = llvmgen_expression(gctx, arg, gctx->fullwordtype);
+    arg = arg->tq_next;
+    ptr1 = llvmgen_expression(gctx, arg, gctx->unitptrtype);
+    arg = arg->tq_next;
+    len2 = llvmgen_expression(gctx, arg, gctx->fullwordtype);
+    arg = arg->tq_next;
+    ptr2 = llvmgen_expression(gctx, arg, gctx->unitptrtype);
+    arg = arg->tq_next;
+    fill = llvmgen_expression(gctx, arg, LLVMInt8TypeInContext(gctx->llvmctx));
+    test = LLVMBuildICmp(builder, LLVMIntULE, len1, len2, llvmgen_temp(gctx));
+    loop1bound = LLVMBuildSelect(builer, test, len1, len2, llvmgen_temp(gctx));
+    
+    val = llvmgen_expression(gctx, exprseq_head(args), 0);
+    test = LLVMBuildICmp(builder, LLVMIntSLT, val, LLVMConstNull(LLVMTypeOf(val)), llvmgen_temp(gctx));
+    LLVMBuildCondBr(builder, test, negblk, exitblk);
+    llvmgen_btrack_update_phi(gctx, bt, 0, val);
+    llvmgen_btrack_update_brcount(gctx, bt);
+    LLVMPositionBuilderAtEnd(builder, negblk);
+    val = LLVMBuildSub(builder, LLVMConstNull(LLVMTypeOf(val)), val, llvmgen_temp(gctx));
+    llvmgen_btrack_update(gctx, bt, val);
+
+    result = llvmgen_btrack_finalize(gctx, bt, LLVMTypeOf(val));
+
+    return llvmgen_adjustval(gctx, result, neededtype, 0);
+
+} /* gen_chf_compare */
+#endif
