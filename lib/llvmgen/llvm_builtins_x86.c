@@ -19,6 +19,19 @@
 #include "llvmgen.h"
 #include "blissc/execfuncs.h"
 
+// Structure for tracking the inline assembly we generate for machine-specific
+// built-ins.
+//
+// The 'arginfo' field takes a character string.  The first character codes
+// the return type; subsequent characters code argument types and "extra" arguments
+// that are added, where needed, to adjust results. Codes are:
+// V=void (only for return type), P=pointer, F=fullword, or 1,2,4,8 = int size in bytes
+// X=extra arg to be inserted, assumed type is fullword, followed by value in parentheses
+//
+// The 'argcount' field is the number of arguments expected when parsing the source.
+// The 'actcount' field is the actual number of pseudo-arguments used in the LLVM code,
+// which includes the 'X' extra arguments.
+//
 struct asminfo_s {
     char * const        name;
     char * const        instr;
@@ -28,23 +41,18 @@ struct asminfo_s {
     char * const        arginfo;
     unsigned int        flags;
 };
-// argstrings: up to 9 descriptors - first is return type
-// V=void, P=pointer, F=fullword, or 1,2,4,8 = int size in bytes; void allowed only for return type
-// X=extra arg to be inserted, assumed fullword, followed by value in parentheses
-// <name> <instruction> <reguse> <argcount> <actcount> <argstring> <flags>
-// <argcount> is the count of arguments expected to be passed in (which excludes the Xtra args)
-// <actcount> is the actual count of arguments.
+
 #define ASMGENS \
 ASMGENDEF("MOVSB", "cld;rep;movsb", "{rcx},{rsi},{rdi},~{dflag}", 3, 3, "VFPP", LLVMGEN_M_ASM_SIDEEFFECT) \
-ASMGENDEF("STOSB", "cld;rep;stosb", "{rdi},{rcx},{al},~{dflag}",  3, 3, "V1FP", LLVMGEN_M_ASM_SIDEEFFECT) \
+ASMGENDEF("STOSB", "cld;rep;stosb", "{al},{rcx},{rdi},~{dflag}",  3, 3, "V1FP", LLVMGEN_M_ASM_SIDEEFFECT) \
 ASMGENDEF("CMPSB", "cld;repe;cmpsb;cmovb %rax,%rcx;cmova %rdx,%rcx", \
                    "={rcx},{rcx},{rsi},{rdi},{rax},{rdx}",        3, 5, "FFPPX(-1)X(1)", 0) \
-ASMGENDEF("SCASB_REPE", "cld;repe;scasb;cmoveq %rdx,%rsi", \
-                        "={rsi},{rcx},{rsi},{al},{rdx}",          3, 4, "FFP1X(0)", 0) \
-ASMGENDEF("SCASB_REPNE", "cld;repne;scasb;cmovne %rdx,%rsi", \
-                         "={rsi},{rcx},{rsi},{al},{rdx}",         3, 4, "FFP1X(0)", 0) \
+ASMGENDEF("SCASB_REPE", "cld;repe;scasb;cmoveq %rdx,%rdi;subq %rdx,%rdi", \
+                        "={rdi},{rcx},{rdi},{al},{rdx}",          3, 4, "PFP1X(1)", 0) \
+ASMGENDEF("SCASB_REPNE", "cld;repne;scasb;cmovne %rdx,%rdi;subq %rdx,%rdi", \
+                         "={rdi},{rcx},{rdi},{al},{rdx}",         3, 4, "PFP1X(1)", 0) \
 ASMGENDEF("SCASB_CMP", "cld;repe;scasb;cmovb %rbx,%rcx;cmova %rdx,%rcx", \
-                       "={rcx},{rcx},{rsi},{al},{rbx},{rdx}",     3, 5, "FFP1X(-1)X(1)", 0)
+                       "={rcx},{rcx},{rdi},{al},{rbx},{rdx}",     3, 5, "FFP1X(-1)X(1)", 0)
 
 
 #define ASMGENDEF(n_, i_, r_, ac1_, ac2_, ai_, f_) { n_, i_, r_, ac1_, ac2_, ai_, f_ },
@@ -67,12 +75,12 @@ decode_type (gencodectx_t gctx, const char *arginfo, LLVMTypeRef *typep, LLVMVal
             break;
         case 'F':
             *typep = gctx->fullwordtype;
-            *xargp = 0;
+            if (xargp != 0) *xargp = 0;
             cp += 1;
             break;
         case 'P':
             *typep = gctx->unitptrtype;
-            *xargp = 0;
+            if (xargp != 0) *xargp = 0;
             cp += 1;
             break;
         case '1':
@@ -80,7 +88,7 @@ decode_type (gencodectx_t gctx, const char *arginfo, LLVMTypeRef *typep, LLVMVal
         case '4':
         case '8':
             *typep = LLVMIntTypeInContext(gctx->llvmctx, (*cp - '0') * 8);
-            *xargp = 0;
+            if (xargp != 0) *xargp = 0;
             cp += 1;
             break;
         case 'X': {
