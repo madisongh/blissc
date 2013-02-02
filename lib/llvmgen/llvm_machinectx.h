@@ -35,5 +35,4 @@ struct machine_ctx_s {
     char                    *irdumpfile;
 };
 
-
 #endif /* llvm_machinectx_h__ */

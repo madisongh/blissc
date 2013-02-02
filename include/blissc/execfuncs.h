@@ -24,6 +24,7 @@ typedef void *(*execfuncgenerator_fn)(void *ctx, void *fctx,
 #define FUNC_M_VARARGS  (1<<0)
 #define FUNC_M_NOVALUE  (1<<1)
 #define FUNC_M_NOPARSE  (1<<2) // do not parse arguments
+#define FUNC_M_BUILTIN  (1<<3)
 
 struct funcdef_s {
     execfunchandler_fn    handler;

@@ -19,9 +19,6 @@
 #include "llvmgen.h"
 #include "blissc/execfuncs.h"
 
-typedef LLVMValueRef (*realgenerator_fn)(gencodectx_t gctx, void *fctx,
-                                         expr_node_t *node, LLVMTypeRef neededtype);
-
 #define FUNCGENS \
 FUNCGENDEF("MAXA",             gen_MINMAX,          LLVMIntSGT) \
 FUNCGENDEF("MINA",             gen_MINMAX,          LLVMIntSLT) \
@@ -41,9 +38,7 @@ FUNCGENDEF("CH$WCHAR",         gen_chf_wchar,       0) \
 FUNCGENDEF("CH$A_WCHAR",       gen_chf_wchar_a,     0) \
 FUNCGENDEF("CH$WCHAR_A",       gen_chf_wchar_a,     1) \
 FUNCGENDEF("CH$MOVE",          gen_chf_move,        0) \
-FUNCGENDEF("CH$FILL",          gen_chf_fill,        0)
-#if 0
-FUNCGENDEF("CH$COPY",          gen_chf_copy,        0) \
+FUNCGENDEF("CH$FILL",          gen_chf_fill,        0) \
 FUNCGENDEF("CH$EQL",           gen_chf_compare,     LLVMIntEQ) \
 FUNCGENDEF("CH$NEQ",           gen_chf_compare,     LLVMIntNE) \
 FUNCGENDEF("CH$LSS",           gen_chf_compare,     LLVMIntULT) \
@@ -53,16 +48,12 @@ FUNCGENDEF("CH$GEQ",           gen_chf_compare,     LLVMIntUGE) \
 FUNCGENDEF("CH$COMPARE",       gen_chf_compare,     -1) \
 FUNCGENDEF("CH$FIND_CH",       gen_chf_find,        0) \
 FUNCGENDEF("CH$FIND_NOT_CH",   gen_chf_find,        1) \
+FUNCGENDEF("CH$FAIL",          gen_chf_fail,        0)
+#if 0
+FUNCGENDEF("CH$COPY",          gen_chf_copy,        0) \
 FUNCGENDEF("CH$FIND_SUB",      gen_chf_findsub,     0) \
-FUNCGENDEF("CH$FAIL",          gen_chf_fail,        0) \
 FUNCGENDEF("CH$TRANSLATE",     gen_chf_translate,   0)
 #endif
-
-struct execfuncgen_s {
-    char                    *name;
-    realgenerator_fn         func;
-    void                    *fctx;
-};
 
 #define FUNCGENDEF(s_, f_, c_) \
     static LLVMValueRef f_ (gencodectx_t gctx, void *fctx, \
@@ -71,7 +62,7 @@ FUNCGENS
 #undef FUNCGENDEF
 
 #define FUNCGENDEF(s_, f_, c_) { s_, f_, (void *)(c_) },
-struct execfuncgen_s gentable[] = {
+llvm_execfuncgen_t gentable[] = {
     FUNCGENS
 };
 #undef FUNCGENDEF
@@ -80,7 +71,7 @@ static LLVMValueRef
 gen_execfunc (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
     funcdef_t *fd = name_extraspace(expr_func_name(exp));
-    realgenerator_fn realfnptr = (realgenerator_fn)(fd->generator);
+    llvmgen_execfunc_fn realfnptr = (llvmgen_execfunc_fn)(fd->generator);
 
     if (realfnptr == 0) {
         unsigned int bpval = machine_scalar_bits(gctx->mach);
@@ -124,6 +115,7 @@ llvmgen_execfuncgen_init (gencodectx_t gctx)
             fd->genfnctx = gentable[i].fctx;
         }
     }
+    llvmgen_builtins_init(gctx, kwdscope);
     llvmgen_expgen_register(gctx, EXPTYPE_EXECFUN, gen_execfunc);
 
 } /* llvmgen_execfuncgen_init */
@@ -399,80 +391,105 @@ gen_chf_wchar_a (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef nee
 static LLVMValueRef
 gen_chf_move (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
-    exprseq_t *args = expr_func_arglist(exp);
-    LLVMValueRef len, src, dst;
-    expr_node_t *arg;
 
-    arg = exprseq_head(args);
-    len = llvmgen_expression(gctx, arg, LLVMInt32TypeInContext(gctx->llvmctx));
-    arg = arg->tq_next;
-    src = llvmgen_expression(gctx, arg, LLVMPointerType(LLVMInt8TypeInContext(gctx->llvmctx), 0));
-    arg = arg->tq_next;
-    dst = llvmgen_expression(gctx, arg, LLVMPointerType(LLVMInt8TypeInContext(gctx->llvmctx), 0));
-    llvmgen_memcpy(gctx, dst, src, len);
-    if (neededtype == 0) return 0;
-    return LLVMConstNull(neededtype);
+    return llvmgen_builtinfunc(gctx, "MOVSB", exp, neededtype);
 
 } /* gen_chf_move */
 
 static LLVMValueRef
 gen_chf_fill (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
-    exprseq_t *args = expr_func_arglist(exp);
-    LLVMValueRef len, fill, dst;
-    expr_node_t *arg;
-
-    arg = exprseq_head(args);
-    fill = llvmgen_expression(gctx, arg, LLVMInt8TypeInContext(gctx->llvmctx));
-    arg = arg->tq_next;
-    len = llvmgen_expression(gctx, arg, LLVMInt32TypeInContext(gctx->llvmctx));
-    arg = arg->tq_next;
-    dst = llvmgen_expression(gctx, arg, LLVMPointerType(LLVMInt8TypeInContext(gctx->llvmctx), 0));
-    llvmgen_memset(gctx, dst, fill, len);
-    if (neededtype == 0) return 0;
-    return LLVMConstNull(neededtype);
+    return llvmgen_builtinfunc(gctx, "STOSB", exp, neededtype);
 
 } /* gen_chf_fill */
 
-#if 0
 static LLVMValueRef
 gen_chf_compare (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
     LLVMBasicBlockRef exitblk = llvmgen_exitblock_create(gctx, 0);
-    LLVMBasicBlockRef negblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
+    LLVMBasicBlockRef eqchk = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
+    LLVMBasicBlockRef lenchk = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
+    LLVMBasicBlockRef str2longer = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
+    LLVMBasicBlockRef str1longer = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
     llvm_btrack_t *bt = llvmgen_btrack_create(gctx, exitblk);
     exprseq_t *args = expr_func_arglist(exp);
     LLVMBuilderRef builder = gctx->curfn->builder;
     int do_general_compare = ((intptr_t) ctx == -1);
     expr_node_t *arg;
     LLVMIntPredicate pred;
-    LLVMValueRef len1, len2, ptr1, ptr2, fill, loop1bound, test;
+    LLVMValueRef argvals[3], t0, t1, bound;
+    LLVMValueRef len1, len2, ptr1, ptr2, fill, result, v;
 
     arg = exprseq_head(args);
     len1 = llvmgen_expression(gctx, arg, gctx->fullwordtype);
     arg = arg->tq_next;
-    ptr1 = llvmgen_expression(gctx, arg, gctx->unitptrtype);
+    argvals[1] = ptr1 = llvmgen_expression(gctx, arg, gctx->unitptrtype);
     arg = arg->tq_next;
     len2 = llvmgen_expression(gctx, arg, gctx->fullwordtype);
     arg = arg->tq_next;
-    ptr2 = llvmgen_expression(gctx, arg, gctx->unitptrtype);
+    argvals[2] = ptr2 = llvmgen_expression(gctx, arg, gctx->unitptrtype);
     arg = arg->tq_next;
     fill = llvmgen_expression(gctx, arg, LLVMInt8TypeInContext(gctx->llvmctx));
-    test = LLVMBuildICmp(builder, LLVMIntULE, len1, len2, llvmgen_temp(gctx));
-    loop1bound = LLVMBuildSelect(builer, test, len1, len2, llvmgen_temp(gctx));
-    
-    val = llvmgen_expression(gctx, exprseq_head(args), 0);
-    test = LLVMBuildICmp(builder, LLVMIntSLT, val, LLVMConstNull(LLVMTypeOf(val)), llvmgen_temp(gctx));
-    LLVMBuildCondBr(builder, test, negblk, exitblk);
-    llvmgen_btrack_update_phi(gctx, bt, 0, val);
+    t0 = LLVMBuildICmp(builder, LLVMIntULE, len1, len2, llvmgen_temp(gctx));
+    t1 = LLVMBuildICmp(builder, LLVMIntEQ, len1, len2, llvmgen_temp(gctx));
+    argvals[0] = bound = LLVMBuildSelect(builder, t0, len1, len2, llvmgen_temp(gctx));
+    result = llvmgen_asminstr(gctx, "CMPSB", argvals, 3);
+    v = LLVMBuildSwitch(builder, result, exitblk, 1);
+    LLVMAddCase(v, LLVMConstNull(gctx->fullwordtype), eqchk);
+    llvmgen_btrack_update_phi(gctx, bt, LLVMGetInsertBlock(builder), result);
     llvmgen_btrack_update_brcount(gctx, bt);
-    LLVMPositionBuilderAtEnd(builder, negblk);
-    val = LLVMBuildSub(builder, LLVMConstNull(LLVMTypeOf(val)), val, llvmgen_temp(gctx));
-    llvmgen_btrack_update(gctx, bt, val);
 
-    result = llvmgen_btrack_finalize(gctx, bt, LLVMTypeOf(val));
+    LLVMPositionBuilderAtEnd(builder, eqchk);
+    LLVMBuildCondBr(builder, t1, exitblk, lenchk);
+    llvmgen_btrack_update_phi(gctx, bt, LLVMGetInsertBlock(builder), result);
+    llvmgen_btrack_update_brcount(gctx, bt);
+
+    LLVMPositionBuilderAtEnd(builder, lenchk);
+    LLVMBuildCondBr(builder, t0, str2longer, str1longer);
+
+    LLVMPositionBuilderAtEnd(builder, str2longer);
+    argvals[0] = LLVMBuildSub(builder, len2, bound, llvmgen_temp(gctx));
+    argvals[1] = LLVMBuildGEP(builder, ptr2, &bound, 1, llvmgen_temp(gctx));
+    argvals[2] = fill;
+    result = llvmgen_asminstr(gctx, "SCASB_CMP", argvals, 3);
+    llvmgen_btrack_update(gctx, bt, result);
+
+    LLVMPositionBuilderAtEnd(builder, str1longer);
+    argvals[0] = LLVMBuildSub(builder, len1, bound, llvmgen_temp(gctx));
+    argvals[1] = LLVMBuildGEP(builder, ptr1, &bound, 1, llvmgen_temp(gctx));
+    argvals[2] = fill;
+    result = llvmgen_asminstr(gctx, "SCASB_CMP", argvals, 3);
+    llvmgen_btrack_update(gctx, bt, result);
+
+    result = llvmgen_btrack_finalize(gctx, bt, gctx->fullwordtype);
+    if (!do_general_compare) {
+        pred = (LLVMIntPredicate)(intptr_t)ctx;
+        result = LLVMBuildICmp(builder, pred, result, LLVMConstNull(gctx->fullwordtype), llvmgen_temp(gctx));
+    }
 
     return llvmgen_adjustval(gctx, result, neededtype, 0);
 
 } /* gen_chf_compare */
-#endif
+
+static LLVMValueRef
+gen_chf_find (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+
+    return llvmgen_builtinfunc(gctx, (ctx == 0 ? "SCASB_REPNE" : "SCASB_REPE"), exp, neededtype);
+
+
+} /* gen_chf_find */
+
+static LLVMValueRef
+gen_chf_fail (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    LLVMBuilderRef builder = gctx->curfn->builder;
+    exprseq_t *args = expr_func_arglist(exp);
+    LLVMValueRef result, arg;
+
+    arg = llvmgen_expression(gctx, exprseq_head(args), gctx->fullwordtype);
+    result = LLVMBuildIsNull(builder, arg, llvmgen_temp(gctx));
+
+    return llvmgen_adjustval(gctx, result, neededtype, 0);
+
+} /* gen_chf_fail */

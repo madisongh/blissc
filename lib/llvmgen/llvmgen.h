@@ -50,7 +50,30 @@ struct llvm_rtntrack_s {
 };
 typedef struct llvm_rtntrack_s llvm_rtntrack_t;
 
+#define LLVMGEN_K_ASM_MAXARGS    8
+#define LLVMGEN_M_ASM_SIDEEFFECT (1<<0)
+#define LLVMGEN_M_ASM_ALIGNSTACK (1<<1)
+struct llvm_asminstr_s {
+    void                   *instrinfo;
+    LLVMTypeRef             functype;
+    LLVMTypeRef             rettype;
+    LLVMTypeRef             argtypes[LLVMGEN_K_ASM_MAXARGS];
+    LLVMValueRef            xargs[LLVMGEN_K_ASM_MAXARGS];
+    LLVMValueRef            asminstr;
+    unsigned int            flags;
+    unsigned int            argcount;
+};
+typedef struct llvm_asminstr_s llvm_asminstr_t;
+
 typedef LLVMValueRef (*llvmgen_expgen_fn)(gencodectx_t, expr_node_t *, LLVMTypeRef);
+typedef LLVMValueRef (*llvmgen_execfunc_fn)(gencodectx_t, void *, expr_node_t *, LLVMTypeRef);
+
+struct llvm_execfuncgen_s {
+    char * const            name;
+    llvmgen_execfunc_fn     func;
+    void                   *fctx;
+};
+typedef struct llvm_execfuncgen_s llvm_execfuncgen_t;
 
 struct gencodectx_s {
     machine_ctx_t       mctx;
@@ -62,6 +85,7 @@ struct gencodectx_s {
     llvm_rtntrack_t     *freerts;
     llvm_rtntrack_t     *curfn;
     name_t              *extern_psect;
+    scopectx_t           asmscope;
     llvmgen_expgen_fn    expgen_funcs[EXPTYPE_COUNT];
 
     LLVMContextRef      llvmctx;
@@ -72,11 +96,6 @@ struct gencodectx_s {
     LLVMTypeRef         fullwordtype;
     LLVMTypeRef         int1type;
     LLVMTypeRef         intptrtszype;
-
-    LLVMValueRef        memcpyfn;
-    LLVMTypeRef         memcpyargtypes[5];
-    LLVMValueRef        memsetfn;
-    LLVMTypeRef         memsetargtypes[5];
 
     unsigned int        globidx;
     unsigned int        optlevel;
@@ -172,4 +191,9 @@ void llvmgen_ctrlexpgen_init(gencodectx_t gctx);
 void llvmgen_execfuncgen_init(gencodectx_t gctx);
 void llvmgen_expgen_init(gencodectx_t gctx);
 LLVMIntPredicate llvmgen_predfromop(optype_t op, int addrsigned);
+void llvmgen_builtins_init(gencodectx_t gctx, scopectx_t kwdscope);
+LLVMValueRef llvmgen_builtinfunc(gencodectx_t gctx, const char *name,
+                                 expr_node_t *exp, LLVMTypeRef neededtype);
+LLVMValueRef llvmgen_asminstr(gencodectx_t gctx, const char *name, LLVMValueRef *args,
+                              unsigned int argcnt);
 #endif

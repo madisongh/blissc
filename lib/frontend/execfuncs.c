@@ -162,6 +162,7 @@ execfunc_define (scopectx_t scope, funcdef_t *funcdef, textpos_t pos)
     ndef.lt = LEXTYPE_NAME_FUNCTION;
     ndef.name = funcdef->name;
     ndef.namelen = funcdef->namelen;
+    ndef.flags |= (funcdef->flags & FUNC_M_BUILTIN) == 0 ? 0 : NAME_M_BUILTIN;
     return name_declare(scope, &ndef, pos, funcdef, sizeof(funcdef_t), 0);
 
 } /* execfunc_define */

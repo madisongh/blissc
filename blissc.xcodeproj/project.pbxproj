@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		7A02B3B01688900300E273AC /* expr_control.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A02B3AF1688900300E273AC /* expr_control.c */; };
+		7A0E5B2E16BD465C00E1B75C /* llvm_builtins_x86.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A0E5B2D16BD465C00E1B75C /* llvm_builtins_x86.c */; };
 		7A13E03616775C9600C4F14D /* execfuncs.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A13E03516775C9600C4F14D /* execfuncs.c */; };
 		7A2DD25B165009F1002CD078 /* declarations.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A2DD25A165009F1002CD078 /* declarations.c */; };
 		7A381B2316987FC1008588BA /* llvm_helper.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7A381B2116987FC1008588BA /* llvm_helper.cpp */; };
@@ -53,6 +54,7 @@
 
 /* Begin PBXFileReference section */
 		7A02B3AF1688900300E273AC /* expr_control.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = expr_control.c; path = lib/frontend/expr_control.c; sourceTree = SOURCE_ROOT; };
+		7A0E5B2D16BD465C00E1B75C /* llvm_builtins_x86.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = llvm_builtins_x86.c; path = lib/llvmgen/llvm_builtins_x86.c; sourceTree = "<group>"; };
 		7A13E03516775C9600C4F14D /* execfuncs.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = execfuncs.c; path = lib/frontend/execfuncs.c; sourceTree = SOURCE_ROOT; };
 		7A13E03816775CA100C4F14D /* execfuncs.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = execfuncs.h; path = include/blissc/execfuncs.h; sourceTree = SOURCE_ROOT; };
 		7A19786C16AB145F009FE9EE /* llvmgen.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = llvmgen.h; path = lib/llvmgen/llvmgen.h; sourceTree = "<group>"; };
@@ -283,6 +285,7 @@
 				7A5588FE16AB353B000D9FE2 /* llvm_symgen.c */,
 				7A53E04B16AD7A07006C1DAE /* llvm_ctrlexpgen.c */,
 				7A53E05216AE008B006C1DAE /* llvm_execfuncgen.c */,
+				7A0E5B2D16BD465C00E1B75C /* llvm_builtins_x86.c */,
 				7A53E04E16AD7AFE006C1DAE /* llvm_expgen.c */,
 				7A53E05016AD7B6C006C1DAE /* llvm_opexpgen.c */,
 				7A381B2116987FC1008588BA /* llvm_helper.cpp */,
@@ -421,6 +424,7 @@
 				7A53E04F16AD7AFE006C1DAE /* llvm_expgen.c in Sources */,
 				7A53E05116AD7B6C006C1DAE /* llvm_opexpgen.c in Sources */,
 				7A53E05316AE008B006C1DAE /* llvm_execfuncgen.c in Sources */,
+				7A0E5B2E16BD465C00E1B75C /* llvm_builtins_x86.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

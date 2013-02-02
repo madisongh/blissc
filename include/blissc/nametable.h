@@ -99,6 +99,8 @@ name_t *name_search(scopectx_t scope, const char *id,
                     size_t len, lextype_t *ntypep);
 name_t *name_search_typed(scopectx_t scope, const char *id,
                           size_t len, lextype_t ntype, void *datapp);
+name_t *name_search_typed_special(scopectx_t scope, const char *id,
+                                  size_t len, lextype_t ntype, void *datapp);
 void name_insert(scopectx_t scope, name_t *name);
 void name_free(name_t *name);
 name_t *name_declare(scopectx_t scope, namedef_t *def, textpos_t pos,
