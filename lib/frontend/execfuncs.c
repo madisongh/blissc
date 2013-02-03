@@ -23,7 +23,7 @@
 #include "blissc/nametable.h"
 #include "blissc/lexeme.h"
 #include "blissc/gencode.h"
-#include "blissc/chf.h"
+#include "blissc/charfuncs.h"
 
 typedef int (*compare_fn)(long, long);
 static int cmplss (long val1, long val2) { return (val1 < val2); }
@@ -61,18 +61,15 @@ static int
 parse_func_args (expr_ctx_t ctx, exprseq_t *arglist)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
-    int status;
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
         return 0;
     }
-    status = 1;
     while (1) {
         expr_node_t *exp;
         if (!expr_parse_expr(ctx, &exp)) {
             expr_signal(ctx, STC__EXPREXP);
-            status = 0;
-            break;
+            exp = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
         }
         exprseq_instail(arglist, exp);
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
@@ -80,14 +77,10 @@ parse_func_args (expr_ctx_t ctx, exprseq_t *arglist)
         }
         if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
             expr_signal(ctx, STC__DELIMEXP, ",");
-            status = 0;
-            break;
         }
     }
-    if (!status) {
-        parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
-    }
-    return status;
+
+    return 1;
 
 } /* parse_func_args */
 
@@ -192,7 +185,7 @@ execfunc_init (expr_ctx_t ctx, scopectx_t scope)
         name_declare(scope, &ndef, 0, &stdfuncs[i], sizeof(stdfuncs[i]), 0);
     }
 
-    chf_init(ctx, scope);
+    charfuncs_init(ctx, scope);
 
 } /* execfunc_init */
 

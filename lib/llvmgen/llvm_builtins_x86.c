@@ -43,16 +43,21 @@ struct asminfo_s {
 };
 
 #define ASMGENS \
-ASMGENDEF("MOVSB", "cld;rep;movsb", "{rcx},{rsi},{rdi},~{dflag}", 3, 3, "VFPP", LLVMGEN_M_ASM_SIDEEFFECT) \
-ASMGENDEF("STOSB", "cld;rep;stosb", "{al},{rcx},{rdi},~{dflag}",  3, 3, "V1FP", LLVMGEN_M_ASM_SIDEEFFECT) \
+ASMGENDEF("MOVSB", "cld;rep;movsb", "={rdi},{rcx},{rsi},{rdi},~{dflag},~{rcx},~{rsi}", \
+                                                                         3, 3, "PFPP", LLVMGEN_M_ASM_SIDEEFFECT) \
+ASMGENDEF("STOSB", "cld;rep;stosb", "={rdi},{al},{rcx},{rdi},~{dflag},~{rcx}", \
+                                                                         3, 3, "P1FP", LLVMGEN_M_ASM_SIDEEFFECT) \
 ASMGENDEF("CMPSB", "cld;repe;cmpsb;cmovb %rax,%rcx;cmova %rdx,%rcx", \
-                   "={rcx},{rcx},{rsi},{rdi},{rax},{rdx}",        3, 5, "FFPPX(-1)X(1)", 0) \
+                   "={rcx},{rcx},{rsi},{rdi},{rax},{rdx},~{dflag},~{rcx},~{rdi},~{rsi}", \
+                                                                         3, 5, "FFPPX(-1)X(1)", 0) \
 ASMGENDEF("SCASB_REPE", "cld;repe;scasb;cmoveq %rdx,%rdi;subq %rdx,%rdi", \
-                        "={rdi},{rcx},{rdi},{al},{rdx}",          3, 4, "PFP1X(1)", 0) \
+                        "={rdi},{rcx},{rdi},{al},{rdx},~{dflag},~{rcx}", 3, 4, "PFP1X(1)", 0) \
 ASMGENDEF("SCASB_REPNE", "cld;repne;scasb;cmovne %rdx,%rdi;subq %rdx,%rdi", \
-                         "={rdi},{rcx},{rdi},{al},{rdx}",         3, 4, "PFP1X(1)", 0) \
+                         "={rdi},{rcx},{rdi},{al},{rdx},~{dflag},~{rcx}", \
+                                                                         3, 4, "PFP1X(1)", 0) \
 ASMGENDEF("SCASB_CMP", "cld;repe;scasb;cmovb %rbx,%rcx;cmova %rdx,%rcx", \
-                       "={rcx},{rcx},{rdi},{al},{rbx},{rdx}",     3, 5, "FFP1X(-1)X(1)", 0)
+                       "={rcx},{rcx},{rdi},{al},{rbx},{rdx},~{dflag},~{rcx},~{rdi}", \
+                                                                         3, 5, "FFP1X(-1)X(1)", 0)
 
 
 #define ASMGENDEF(n_, i_, r_, ac1_, ac2_, ai_, f_) { n_, i_, r_, ac1_, ac2_, ai_, f_ },

@@ -1,8 +1,8 @@
-#ifndef chf_h__
-#define chf_h__
+#ifndef charfuncs_h__
+#define charfuncs_h__
 /*
  *++
- *	File:			chf.h
+ *	File:			charfuncs.h
  *
  *	Abstract:		Definitions for CH$ functions.
  *
@@ -14,6 +14,6 @@
 #include "expression.h"
 #include "nametable.h"
 
-void chf_init(expr_ctx_t ctx, scopectx_t scope);
+void charfuncs_init(expr_ctx_t ctx, scopectx_t scope);
 
-#endif /* chf_h__ */
+#endif /* charfuncs_h__ */

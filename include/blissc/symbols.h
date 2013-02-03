@@ -39,6 +39,7 @@ typedef enum {
 #define SYM_M_PENDING   (1<<6)
 #define SYM_M_FORWARD   (1<<7)
 #define SYM_M_BIND      (1<<8)
+#define SYM_M_PLIT      (1<<9)
 
 #define PSECT_M_ATTR_WRITE   (1<<13)
 #define PSECT_M_ATTR_EXEC    (1<<14)

@@ -191,8 +191,10 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
                 return 0;
             }
             if (lstparts.path_dirnamelen == 0) {
+                file_splitname(ctx->fioctx, ctx->outfn, ctx->outfnlen, 0, &objparts);
                 lstparts.path_dirnamelen = objparts.path_dirnamelen;
                 lstparts.path_dirname = objparts.path_dirname;
+                free(objparts.path_fullname);
             }
         }
         if (!file_combinename(ctx->fioctx, &lstparts)) {

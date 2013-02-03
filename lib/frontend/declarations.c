@@ -619,7 +619,7 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
     data_attr_t attr;
     initval_t *ivlist;
     unsigned long size;
-    unsigned int padding;
+    unsigned int padding, overage;
 
     if (!attr_psect(ctx, &psname)) {
         psname = scope_sclass_psectname(parser_scope_get(pctx), SCLASS_PLIT);
@@ -631,10 +631,11 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
     if (ivlist == 0) {
         return 0;
     }
-    size = initval_size(symctx, ivlist);
-    padding = machine_scalar_units(mach) - (size == 0 ? 0
-                                            : (size % machine_scalar_units(mach)));
+
     // Must pad out to integral number of fullwords
+    size = initval_size(symctx, ivlist);
+    overage = (size == 0 ? 0 : (size % machine_scalar_units(mach)));
+    padding = (overage == 0 ? 0 : machine_scalar_units(mach) - overage);
     if (padding != 0) {
         ivlist = initval_scalar_add(symctx, ivlist, padding, 0, 1, 0);
     }
@@ -650,7 +651,7 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
     plitname.len = tempname_get(expr_namectx(ctx), namebuf, sizeof(namebuf));
     memset(&attr, 0, sizeof(attr));
     attr.owner = psname;
-    attr.flags = 0;
+    attr.flags = SYM_M_PLIT;
     attr.dclass = DCLASS_STATIC;
     attr.ivlist = ivlist;
     attr.units = (unsigned int) initval_size(symctx, ivlist);

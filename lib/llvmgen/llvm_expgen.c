@@ -128,14 +128,9 @@ gen_literal (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     strdesc_t *str = expr_litstring(exp);
     LLVMValueRef result;
 
-    if (str == 0) {
+    if (str == 0 || str->len <= machine_scalar_units(gctx->mach)) {
         int signext = machine_signext_supported(gctx->mach);
         result = LLVMConstInt(gctx->fullwordtype, expr_litval(exp), signext);
-    } else if (str->len <= machine_scalar_units(gctx->mach)) {
-        unsigned long ival = 0;
-        unsigned int i;
-        for (i = str->len; i > 0; i--) ival = (ival << 8) | str->ptr[i];
-        result = LLVMConstInt(gctx->fullwordtype, ival, 0);
     } else {
         result = LLVMConstStringInContext(gctx->llvmctx, str->ptr, str->len, 1);
     }

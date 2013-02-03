@@ -282,7 +282,8 @@ name_copy (name_t *src, scopectx_t dstscope)
     if (cfn != 0) {
         cfn(vctx, dst, dst->nameextra, src, src->nameextra);
     } else {
-        memcpy(dst->nameextra, src->nameextra, sizeof(dst->nameextra));
+        memcpy(dst->nameextra, src->nameextra,
+               ctx->typevec[typeidx(src->nametype)].typesize);
     }
     return dst;
 
@@ -1131,7 +1132,7 @@ tempname_get (namectx_t ctx, char *buf, size_t bufsiz)
 int
 name_declare_builtin (scopectx_t scope, strdesc_t *namestr, textpos_t pos)
 {
-    name_t *np = name_search(scope, namestr->ptr, namestr->len, 0);
+    name_t *np = name_search_internal(scope, namestr->ptr, namestr->len, 0, 0, 1);
 
     if (np == 0 || (np->nameflags & NAME_M_BUILTIN) == 0) {
         logctx_t logctx = scope->home->logctx;

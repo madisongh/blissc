@@ -62,7 +62,7 @@ llvmgen_btrack_finalize (gencodectx_t gctx, llvm_btrack_t *bt, LLVMTypeRef neede
     } else {
         LLVMPositionBuilderAtEnd(builder, bt->exitblock);
         if (bt->phirefcount > 0 && bt->phirefcount == bt->branchcount) {
-            phi = LLVMBuildPhi(builder, gctx->fullwordtype, llvmgen_temp(gctx));
+            phi = LLVMBuildPhi(builder, LLVMTypeOf(bt->phivals[0]), llvmgen_temp(gctx));
             LLVMAddIncoming(phi, bt->phivals, bt->phisources, bt->phirefcount);
         }
     }

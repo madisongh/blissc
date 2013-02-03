@@ -261,11 +261,8 @@ llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount
     } else {
         initconst = LLVMConstStructInContext(gctx->llvmctx, valarr, arrsize, 1);
     }
-    oneval = LLVMAddGlobal(gctx->module, LLVMTypeOf(initconst), llvmgen_global(gctx));
-    LLVMSetLinkage(oneval, LLVMPrivateLinkage);
-    LLVMSetInitializer(oneval, initconst);
     free(valarr);
-    return oneval;
+    return initconst;
 
 } /* llvmgen_initializer */
 
