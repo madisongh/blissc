@@ -259,16 +259,11 @@ charfunc_TRANSTABLE (expr_ctx_t ctx, void *fctx, name_t *fnp,
         return 0;
     }
     size = initval_size(symctx, ivlist);
-    padding = machine_scalar_units(mach) - (size == 0 ? 0
-                                            : (size % machine_scalar_units(mach)));
-    // Must pad out to integral number of fullwords
+    // XXX magic constant here
+    padding = (size >= 256 ? 0 : 256 - (unsigned int) size);
     if (padding != 0) {
         ivlist = initval_scalar_add(symctx, ivlist, padding, 0, 1, 0);
     }
-    size = initval_size(symctx, ivlist) / machine_scalar_units(mach);
-    ivlist = initval_scalar_prepend(symctx, ivlist, 1, size,
-                                    machine_scalar_units(mach), 0);
-
     np = 0;
     strdesc_init(&plitname, namebuf, 0);
     plitname.len = tempname_get(expr_namectx(ctx), namebuf, sizeof(namebuf));
@@ -277,7 +272,7 @@ charfunc_TRANSTABLE (expr_ctx_t ctx, void *fctx, name_t *fnp,
     attr.flags = 0;
     attr.dclass = DCLASS_STATIC;
     attr.ivlist = ivlist;
-    attr.units = (unsigned int) (initval_size(symctx, ivlist) / machine_scalar_units(mach));
+    attr.units = (unsigned int) initval_size(symctx, ivlist);
     attr.sc = SYMSCOPE_LOCAL;
     np = datasym_declare(parser_scope_get(pctx), &plitname, &attr, curpos);
     if (np == 0) {

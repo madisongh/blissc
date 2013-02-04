@@ -1162,10 +1162,9 @@ declare_bind (expr_ctx_t ctx, scopectx_t scope, decltype_t dt)
         }
         memset(&attr, 0, sizeof(attr));
         attr.flags = SYM_M_PENDING | SYM_M_BIND;
-        // Allocate storage for the BIND pointer.  If we're bound
-        // to an LTCE, make it static storage (with a global symbol
-        // if it's a GLOBAL BIND).  Otherwise, it's local storage.
         if (expr_is_ltce(exp)) {
+            // Set these so that we know this name also represents
+            // an LTCE.
             attr.owner = scope_sclass_psectname(scope,
                                                 (dt == DCL_GLOBAL
                                                  ? SCLASS_GLOBAL
@@ -1174,8 +1173,8 @@ declare_bind (expr_ctx_t ctx, scopectx_t scope, decltype_t dt)
         } else {
             attr.dclass = DCLASS_STKORREG;
         }
-        attr.units = machine_scalar_units(mach);
         attr.ivlist = expr_initval_add(ctx, 0, exp, machine_scalar_units(mach));
+        attr.units = machine_scalar_units(mach);
         attr.sc = (dt == DCL_GLOBAL ? SYMSCOPE_GLOBAL : SYMSCOPE_LOCAL);
         np = datasym_declare(scope, namestr, &attr, pos);
         if (np == 0) {

@@ -542,7 +542,7 @@ static LLVMTypeRef
 gendatatype (gencodectx_t gctx, data_attr_t *attr, unsigned int *ucountp)
 {
     unsigned int bpunit = machine_unit_bits(gctx->mach);
-    unsigned int refbind = (attr->flags & (SYM_M_REF|SYM_M_BIND));
+    unsigned int isrefbind = (attr->flags & (SYM_M_BIND|SYM_M_REF));
     LLVMTypeRef basetype;
 
     if (attr->struc != 0 || attr->units > machine_scalar_units(gctx->mach)) {
@@ -554,9 +554,9 @@ gendatatype (gencodectx_t gctx, data_attr_t *attr, unsigned int *ucountp)
     } else {
         basetype = LLVMIntTypeInContext(gctx->llvmctx, attr->units * bpunit);
     }
-    if (refbind != 0) {
+    if (isrefbind) {
         if (ucountp != 0) *ucountp = machine_addr_bits(gctx->mach)/bpunit;
-        if (refbind == (SYM_M_REF|SYM_M_BIND)) {
+        if (isrefbind == (SYM_M_BIND|SYM_M_REF)) {
             return LLVMPointerType(LLVMPointerType(basetype, 0), 0);
         }
         return LLVMPointerType(basetype, 0);
@@ -585,11 +585,13 @@ datasym_generator (void *vctx, name_t *np, void *p)
 
     ld->flags = (((attr->flags & SYM_M_SIGNEXT) != 0 ? LLVMGEN_M_SEG_SIGNEXT : 0) |
                  ((attr->flags & SYM_M_VOLATILE) != 0 ? LLVMGEN_M_SEG_VOLATILE : 0) |
-                 ((attr->flags & SYM_M_REF) != 0 ? LLVMGEN_M_SEG_ISREF : 0));
+                 ((attr->flags & SYM_M_REF) != 0 ? LLVMGEN_M_SEG_ISREF : 0) |
+                 ((attr->flags & SYM_M_BIND) != 0 ? LLVMGEN_M_SEG_ISBIND : 0));
 
     if (attr->dclass == DCLASS_ARG) {
         ld->vclass = LLVM_REG;
-    } else if (attr->dclass == DCLASS_STATIC) {
+    } else if (((attr->flags & SYM_M_BIND) != 0 && attr->sc != SYMSCOPE_LOCAL) ||
+               ((attr->flags & SYM_M_BIND) == 0 && attr->dclass == DCLASS_STATIC)) {
         ld->vclass = LLVM_GLOBAL;
         type = gendatatype(gctx, attr, &units);
         if (attr->ivlist != 0) {
@@ -737,15 +739,14 @@ llvmgen_segaddress (gencodectx_t gctx, name_t *np, llvm_stgclass_t *segclassp, u
     }
     if (ntype == LEXTYPE_NAME_DATA) {
         llvm_datasym_t *ld = sym_genspace(np);
-        data_attr_t *attr = datasym_attr(np);
         LLVMValueRef val;
         if (segclassp != 0) *segclassp = ld->vclass;
         if (flagsp != 0) *flagsp = ld->flags;
         val = ld->value;
-        if (ld->flags & SYM_M_BIND) {
+        if ((ld->flags & LLVMGEN_M_SEG_ISBIND) != 0) {
             val = LLVMBuildLoad(gctx->curfn->builder, val, llvmgen_temp(gctx));
         }
-        if (ld->deref != 0 && (attr->flags & SYM_M_REF) != 0) {
+        if (ld->deref != 0 && (ld->flags & LLVMGEN_M_SEG_ISREF) != 0) {
             if (flagsp != 0) *flagsp |= LLVMGEN_M_SEG_DEREFED;
             if (ld->vclass != LLVM_REG) {
                 val = LLVMBuildLoad(gctx->curfn->builder, val, llvmgen_temp(gctx));

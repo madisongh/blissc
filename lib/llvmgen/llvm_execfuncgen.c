@@ -50,10 +50,8 @@ FUNCGENDEF("CH$FIND_CH",       gen_ch_find,         0) \
 FUNCGENDEF("CH$FIND_NOT_CH",   gen_ch_find,         1) \
 FUNCGENDEF("CH$FAIL",          gen_ch_fail,         0) \
 FUNCGENDEF("CH$FIND_SUB",      gen_ch_findsub,      0) \
-FUNCGENDEF("CH$COPY",          gen_ch_copy,         0)
-#if 0
+FUNCGENDEF("CH$COPY",          gen_ch_copy,         0) \
 FUNCGENDEF("CH$TRANSLATE",     gen_ch_translate,    0)
-#endif
 
 #define FUNCGENDEF(s_, f_, c_) \
     static LLVMValueRef f_ (gencodectx_t gctx, void *fctx, \
@@ -684,7 +682,8 @@ gen_ch_copy (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededt
     // Must be an odd number of arguments (the minimum of 5 check is
     // performed in the front end)
     if ((argcnt % 2) != 1) {
-        expr_signal(gctx->ectx, STC__INSFUNARG, name_string(expr_func_name(exp)));
+        log_signal(parser_logctx(expr_parse_ctx(gctx->ectx)), expr_textpos(exp),
+                   STC__INSFUNARG, name_string(expr_func_name(exp)));
         return (neededtype == 0 ? 0 : LLVMConstNull(neededtype));
     }
     // Get to the 'fill', 'dlen', and 'dptr' args, which are the last 3
@@ -729,3 +728,77 @@ gen_ch_copy (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededt
     return llvmgen_adjustval(gctx, result, neededtype, 0);
     
 } /* gen_ch_copy */
+
+static LLVMValueRef
+gen_ch_translate (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
+{
+    LLVMBasicBlockRef exitblk = llvmgen_exitblock_create(gctx, 0);
+    LLVMBasicBlockRef loopblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
+    LLVMBasicBlockRef loopbody = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
+    LLVMBasicBlockRef postloop = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
+    LLVMBasicBlockRef fillblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
+    llvm_btrack_t *bt = llvmgen_btrack_create(gctx, exitblk);
+    exprseq_t *args = expr_func_arglist(exp);
+    LLVMBuilderRef builder = gctx->curfn->builder;
+    LLVMValueRef zero = LLVMConstNull(gctx->fullwordtype);
+    expr_node_t *arg;
+    LLVMBasicBlockRef curblk;
+    LLVMValueRef argvals[3], test, loopcount, loopphi, offphi, chr;
+    LLVMValueRef transtab, slen, sptr, dlen, dptr, fill, result, v;
+
+    arg = exprseq_head(args);
+    transtab = llvmgen_expression(gctx, arg, gctx->unitptrtype);
+    arg = arg->tq_next;
+    slen = llvmgen_expression(gctx, arg, gctx->fullwordtype);
+    arg = arg->tq_next;
+    sptr = llvmgen_expression(gctx, arg, gctx->unitptrtype);
+    arg = arg->tq_next;
+    fill = llvmgen_expression(gctx, arg, LLVMInt8TypeInContext(gctx->llvmctx));
+    arg = arg->tq_next;
+    dlen = llvmgen_expression(gctx, arg, gctx->fullwordtype);
+    arg = arg->tq_next;
+    dptr = llvmgen_expression(gctx, arg, gctx->unitptrtype);
+    test = LLVMBuildICmp(builder, LLVMIntULE, slen, dlen, llvmgen_temp(gctx));
+    loopcount = LLVMBuildSelect(builder, test, slen, dlen, llvmgen_temp(gctx));
+    curblk = LLVMGetInsertBlock(builder);
+    LLVMBuildBr(builder, loopblk);
+
+    LLVMPositionBuilderAtEnd(builder, loopblk);
+    loopphi = LLVMBuildPhi(builder, gctx->fullwordtype, llvmgen_temp(gctx));
+    LLVMAddIncoming(loopphi, &loopcount, &curblk, 1);
+    offphi = LLVMBuildPhi(builder, gctx->fullwordtype, llvmgen_temp(gctx));
+    LLVMAddIncoming(offphi, &zero, &curblk, 1);
+    test = LLVMBuildIsNull(builder, test, llvmgen_temp(gctx));
+    LLVMBuildCondBr(builder, test, postloop, loopbody);
+
+    LLVMPositionBuilderAtEnd(builder, loopbody);
+    sptr = LLVMBuildGEP(builder, sptr, &offphi, 1, llvmgen_temp(gctx));
+    chr = LLVMBuildLoad(builder, sptr, llvmgen_temp(gctx));
+    v = LLVMBuildGEP(builder, transtab, &chr, 1, llvmgen_temp(gctx));
+    chr = LLVMBuildLoad(builder, v, llvmgen_temp(gctx));
+    v = LLVMBuildGEP(builder, dptr, &offphi, 1, llvmgen_temp(gctx));
+    LLVMBuildStore(builder, chr, v);
+    v = LLVMBuildSub(builder, loopphi, LLVMConstInt(gctx->fullwordtype, 1, 0), llvmgen_temp(gctx));
+    LLVMAddIncoming(loopphi, &v, &loopbody, 1);
+    v = LLVMBuildAdd(builder, offphi, LLVMConstInt(gctx->fullwordtype, 1, 0), llvmgen_temp(gctx));
+    LLVMAddIncoming(offphi, &v, &loopbody, 1);
+    LLVMBuildBr(builder, loopblk);
+
+    LLVMPositionBuilderAtEnd(builder, postloop);
+    dptr = LLVMBuildGEP(builder, dptr, &loopcount, 1, llvmgen_temp(gctx));
+    test = LLVMBuildICmp(builder, LLVMIntULT, offphi, dlen, llvmgen_temp(gctx));
+    LLVMBuildCondBr(builder, test, exitblk, fillblk);
+    llvmgen_btrack_update_phi(gctx, bt, LLVMGetInsertBlock(builder), dptr);
+    llvmgen_btrack_update_brcount(gctx, bt);
+
+    LLVMPositionBuilderAtEnd(builder, fillblk);
+    argvals[0] = fill;
+    argvals[1] = LLVMBuildSub(builder, dlen, offphi, llvmgen_temp(gctx));
+    argvals[2] = dptr;
+    dptr = llvmgen_asminstr(gctx, "STOSB", argvals, 3);
+    llvmgen_btrack_update(gctx, bt, dptr);
+
+    result = llvmgen_btrack_finalize(gctx, bt, gctx->unitptrtype);
+    return llvmgen_adjustval(gctx, result, neededtype, 0);
+    
+} /* gen_ch_translate */
