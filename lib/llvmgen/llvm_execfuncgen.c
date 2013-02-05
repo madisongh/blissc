@@ -741,6 +741,7 @@ gen_ch_translate (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef ne
     exprseq_t *args = expr_func_arglist(exp);
     LLVMBuilderRef builder = gctx->curfn->builder;
     LLVMValueRef zero = LLVMConstNull(gctx->fullwordtype);
+    LLVMValueRef one  = LLVMConstInt(gctx->fullwordtype, 1, 0);
     expr_node_t *arg;
     LLVMBasicBlockRef curblk;
     LLVMValueRef argvals[3], test, loopcount, loopphi, offphi, chr;
@@ -768,7 +769,7 @@ gen_ch_translate (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef ne
     LLVMAddIncoming(loopphi, &loopcount, &curblk, 1);
     offphi = LLVMBuildPhi(builder, gctx->fullwordtype, llvmgen_temp(gctx));
     LLVMAddIncoming(offphi, &zero, &curblk, 1);
-    test = LLVMBuildIsNull(builder, test, llvmgen_temp(gctx));
+    test = LLVMBuildIsNull(builder, loopphi, llvmgen_temp(gctx));
     LLVMBuildCondBr(builder, test, postloop, loopbody);
 
     LLVMPositionBuilderAtEnd(builder, loopbody);
@@ -778,16 +779,16 @@ gen_ch_translate (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef ne
     chr = LLVMBuildLoad(builder, v, llvmgen_temp(gctx));
     v = LLVMBuildGEP(builder, dptr, &offphi, 1, llvmgen_temp(gctx));
     LLVMBuildStore(builder, chr, v);
-    v = LLVMBuildSub(builder, loopphi, LLVMConstInt(gctx->fullwordtype, 1, 0), llvmgen_temp(gctx));
+    v = LLVMBuildSub(builder, loopphi, one, llvmgen_temp(gctx));
     LLVMAddIncoming(loopphi, &v, &loopbody, 1);
-    v = LLVMBuildAdd(builder, offphi, LLVMConstInt(gctx->fullwordtype, 1, 0), llvmgen_temp(gctx));
+    v = LLVMBuildAdd(builder, offphi, one, llvmgen_temp(gctx));
     LLVMAddIncoming(offphi, &v, &loopbody, 1);
     LLVMBuildBr(builder, loopblk);
 
     LLVMPositionBuilderAtEnd(builder, postloop);
     dptr = LLVMBuildGEP(builder, dptr, &loopcount, 1, llvmgen_temp(gctx));
-    test = LLVMBuildICmp(builder, LLVMIntULT, offphi, dlen, llvmgen_temp(gctx));
-    LLVMBuildCondBr(builder, test, exitblk, fillblk);
+    test = LLVMBuildICmp(builder, LLVMIntULT, loopcount, dlen, llvmgen_temp(gctx));
+    LLVMBuildCondBr(builder, test, fillblk, exitblk);
     llvmgen_btrack_update_phi(gctx, bt, LLVMGetInsertBlock(builder), dptr);
     llvmgen_btrack_update_brcount(gctx, bt);
 
