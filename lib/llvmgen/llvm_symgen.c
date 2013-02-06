@@ -6,7 +6,20 @@
  *
  *  Module description:
  *
- *       This module generates LLVM for symbols.
+ *      This module generates LLVM for symbols - literals,
+ *      data segments, BINDs, routines, labels, psects, and
+ *      modules.
+ *
+ *      Besides generating the symbols themselves, this module
+ *      also handles generating addresses for the symbols needed
+ *      in fetch and assignment expressions.
+ *
+ *      The front-end's symbols module has hooks that allow the
+ *      code generator to reserve additional memory for each
+ *      symbol, for tracking purposes.  We use this for stashing
+ *      the LLVM values for symbols, saving us an extra lookup
+ *      (and allowing for cases, like BINDs, where the BLISS name
+ *      doesn't necessarily map to an LLVM name).
  *
  *	Author:		M. Madison
  *				Copyright © 2013, Matthew Madison
@@ -17,8 +30,14 @@
  */
 #include "llvmgen.h"
 
+// Upper bound on the number of expressions we'll process in
+// a PRESET attribute.
 #define LLVMGEN_K_MAXPRESETS 128
 
+/*
+ * Tracking structures attached to symbols, used with
+ * the sym_genspace hooks.
+ */
 struct llvm_litsym_s {
     LLVMValueRef        value;
 };
@@ -79,6 +98,12 @@ machine_psects_init (machinedef_t *mach, void *scope) {
 
 } /* machine_psects_init */
 
+/*
+ * llvmgen_label_btrack
+ *
+ * Returns the pointer to the branch-tracking structure
+ * associated with a label.  Used for handling LEAVE expressions.
+ */
 llvm_btrack_t *
 llvmgen_label_btrack (name_t *np)
 {
@@ -88,6 +113,11 @@ llvmgen_label_btrack (name_t *np)
 
 } /* llvmgen_label_btrack */
 
+/*
+ * llvmgen_label_btrack_set
+ *
+ * Sets the branch tracking context for a label.
+ */
 void
 llvmgen_label_btrack_set (name_t *np, llvm_btrack_t *bt)
 {
@@ -100,6 +130,12 @@ llvmgen_label_btrack_set (name_t *np, llvm_btrack_t *bt)
 
 /*
  * litsym_generator
+ *
+ * Generates LLVM for a [GLOBAL] LITERAL.
+ *
+ * XXX Not sure that the way LLVM handles global constants
+ * exactly matches the semantics the BLISS LRM describes.
+ *
  */
 static int
 litsym_generator (void *vctx, name_t *np, void *p)
@@ -140,6 +176,9 @@ litsym_generator (void *vctx, name_t *np, void *p)
 
 /*
  * initializer_arraysize
+ *
+ * Calculates the size of the array of LLVMValueRefs needed for
+ * setting up an initializer.
  */
 static unsigned int
 initializer_arraysize (initval_t *ivlist)
@@ -162,6 +201,9 @@ initializer_arraysize (initval_t *ivlist)
 
 /*
  * llvmgen_initializer
+ *
+ * Generates an array of LLVMValueRefs populated with the values
+ * for an initializer.  Used for INITIAL attribute handling.
  */
 static LLVMValueRef
 llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount, LLVMValueRef **arrp)
@@ -268,6 +310,12 @@ llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount
 
 /*
  * llvmgen_presetter
+ *
+ * Sets up an initializer for a PRESET attribute.  This is more complicated
+ * than INITIAL handling, since we have to order the initializers here by
+ * offset from the base address.  Once we have computed all of the initializers
+ * and put them in the correct order, we can generate an array of LLVMValueRefs
+ * and create the initializer.
  */
 static LLVMValueRef
 llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
@@ -474,6 +522,10 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
 
 /*
  * handle_initializer
+ *
+ * Handles initialization (INITIAL and PRESET) attributes for a data symbol.
+ * Specifics depend on the type of symbol (OWN/GLOBAL/PLIT or LOCAL), and whether
+ * we're doing INITIAL or PRESET.
  */
 static void
 handle_initializer (gencodectx_t gctx, llvm_datasym_t *ld, name_t *np, unsigned int typesize)
@@ -537,16 +589,19 @@ handle_initializer (gencodectx_t gctx, llvm_datasym_t *ld, name_t *np, unsigned 
 
 /*
  * gendatatype
+ *
+ * Generates the appropriate LLVM type for a data symbol.
  */
 static LLVMTypeRef
 gendatatype (gencodectx_t gctx, data_attr_t *attr, unsigned int *ucountp)
 {
     unsigned int bpunit = machine_unit_bits(gctx->mach);
-    unsigned int isrefbind = (attr->flags & (SYM_M_BIND|SYM_M_REF));
+    unsigned int isref = (attr->flags & SYM_M_REF) != 0;
     LLVMTypeRef basetype;
 
     if (attr->struc != 0 || attr->units > machine_scalar_units(gctx->mach)) {
-        if (attr->units == 0) {
+        // BINDs cannot be arrays, since they don't allocate storage.
+        if (attr->units == 0 || (attr->flags & SYM_M_BIND) != 0) {
             basetype = LLVMPointerType(LLVMIntTypeInContext(gctx->llvmctx, bpunit), 0);
         } else {
             basetype = LLVMArrayType(LLVMIntTypeInContext(gctx->llvmctx, bpunit), attr->units);
@@ -554,11 +609,8 @@ gendatatype (gencodectx_t gctx, data_attr_t *attr, unsigned int *ucountp)
     } else {
         basetype = LLVMIntTypeInContext(gctx->llvmctx, attr->units * bpunit);
     }
-    if (isrefbind) {
+    if (isref) {
         if (ucountp != 0) *ucountp = machine_addr_bits(gctx->mach)/bpunit;
-        if (isrefbind == (SYM_M_BIND|SYM_M_REF)) {
-            return LLVMPointerType(LLVMPointerType(basetype, 0), 0);
-        }
         return LLVMPointerType(basetype, 0);
     }
     if (ucountp != 0) *ucountp = attr->units;
@@ -568,6 +620,9 @@ gendatatype (gencodectx_t gctx, data_attr_t *attr, unsigned int *ucountp)
 
 /*
  * datasym_generator
+ *
+ * Generates a data symbol.  Routine arguments and local BINDs are LLVM registers
+ * (they don't actually allocate any storage).
  */
 static int
 datasym_generator (void *vctx, name_t *np, void *p)
@@ -658,6 +713,12 @@ datasym_generator (void *vctx, name_t *np, void *p)
 
 /*
  * rtnsym_generator
+ *
+ * Generates a routine symbol.  For EXTERNAL and FORWARD declarations, we
+ * generate a generic (varargs) LLVM function prototype.  When a FORWARD declaration
+ * is later instantiated by a routine definition, we replace the original
+ * prototype with the actual prototype that has the correct number of
+ * parameters.
  */
 static int
 rtnsym_generator (void *vctx, name_t *np, void *p)
@@ -726,6 +787,14 @@ rtnsym_generator (void *vctx, name_t *np, void *p)
 } /* rtnsym_generator */
 
 
+/*
+ * llvmgen_deref_push
+ *
+ * Pushes notification of the need to automatically dereference a REF
+ * symbol.  Called when computing the address for a fetch or an assignment
+ * operation.  It's counted because multiple such derefs could appear in
+ * a single expression.
+ */
 void
 llvmgen_deref_push (gencodectx_t gctx, name_t *np)
 {
@@ -736,8 +805,14 @@ llvmgen_deref_push (gencodectx_t gctx, name_t *np)
     }
     ld = sym_genspace(np);
     ld->deref += 1;
-}
 
+} /* llvmgen_deref_push */
+
+/*
+ * llvmgen_deref_pop
+ *
+ * Pops a dereference notification.
+ */
 void
 llvmgen_deref_pop (gencodectx_t gctx, name_t *np)
 {
@@ -748,10 +823,15 @@ llvmgen_deref_pop (gencodectx_t gctx, name_t *np)
     }
     ld = sym_genspace(np);
     ld->deref -= 1;
-}
+
+} /* llvmgen_deref_pop */
 
 /*
  * llvmgen_segaddress
+ *
+ * Generates an address.  This should only be applied to ROUTINEs
+ * and data segments.  Automatically handles auto-dereferencing of REF
+ * pointers.
  */
 LLVMValueRef
 llvmgen_segaddress (gencodectx_t gctx, name_t *np, llvm_stgclass_t *segclassp, unsigned int *flagsp)
@@ -786,6 +866,9 @@ llvmgen_segaddress (gencodectx_t gctx, name_t *np, llvm_stgclass_t *segclassp, u
 
 /*
  * symbol_gen_dispatch
+ *
+ * Dispatcher routine for generating a symbol.  Called
+ * by the front end.
  */
 static int
 symbol_gen_dispatch (void *vctx, name_t *np, void *p)
@@ -805,6 +888,9 @@ symbol_gen_dispatch (void *vctx, name_t *np, void *p)
 
 /*
  * symbol_gensize
+ *
+ * Returns the amount of space needed for symbol tracking.
+ * Called by the front end when defining a symbol.
  */
 static unsigned int
 symbol_gensize (void *vctx, lextype_t lt) {
@@ -827,6 +913,9 @@ symbol_gensize (void *vctx, lextype_t lt) {
 
 /*
  * llvmgen_symgen_init
+ *
+ * Initializes the code generation size and dispatch
+ * hooks invoked from the front-end symbols module.
  */
 void
 llvmgen_symgen_init (gencodectx_t gctx)

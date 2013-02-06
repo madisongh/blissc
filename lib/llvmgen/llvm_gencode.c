@@ -1,6 +1,6 @@
 /*
  *++
- *	File:			gencode_llvm.c
+ *	File:			llvm_gencode.c
  *
  *	Abstract:		Common codegen to LLVM IR.
  *
@@ -23,6 +23,12 @@
 #include "blissc/switches.h"
 #include <assert.h>
 
+/*
+ * llvmgen_exitblock_create
+ *
+ * Utility routine for setting up an exit block for a control
+ * sequence.
+ */
 LLVMBasicBlockRef
 llvmgen_exitblock_create (gencodectx_t gctx, char *label)
 {
@@ -35,6 +41,11 @@ llvmgen_exitblock_create (gencodectx_t gctx, char *label)
 
 } /* llvmgen_create_exitblock */
 
+/*
+ * llvmgen_btrack_create
+ *
+ * Initializes a branch tracking structure.
+ */
 llvm_btrack_t *
 llvmgen_btrack_create (gencodectx_t gctx, LLVMBasicBlockRef exitpoint) {
     llvm_btrack_t *bt;
@@ -50,6 +61,13 @@ llvmgen_btrack_create (gencodectx_t gctx, LLVMBasicBlockRef exitpoint) {
 
 } /* llvmgen_btrack_create */
 
+/*
+ * llvmgen_btrack_finalize
+ *
+ * Finalizes a control sequence that uses branch tracking.  Inserts
+ * the terminating phi in the exit block, or deleting the exit block
+ * if there have been no branches to it.
+ */
 LLVMValueRef
 llvmgen_btrack_finalize (gencodectx_t gctx, llvm_btrack_t *bt, LLVMTypeRef neededtype)
 {
@@ -74,6 +92,14 @@ llvmgen_btrack_finalize (gencodectx_t gctx, llvm_btrack_t *bt, LLVMTypeRef neede
 
 /*
  * gencode_routine_begin
+ *
+ * Sets up the tracking structure for generating code in a routine
+ * (function, in LLVM parlance).  Called by the front end just before
+ * parsing a routine's expression.  Note that BLISS allows nested
+ * routines, so these tracking structures are stacked.
+ *
+ * Two basic blocks are created here - the entry block and an exit
+ * block.  The exit block will be deleted later if it is not needed.
  */
 int
 gencode_routine_begin (gencodectx_t gctx, name_t *np)
@@ -106,6 +132,16 @@ gencode_routine_begin (gencodectx_t gctx, name_t *np)
 
 /*
  * gencode_routine_end
+ *
+ * Performs the code generation for a routine.  Called by
+ * the front end just after parsing a routine's expression.
+ * The code for the expression is generated, the exit block
+ * is finalized (to handle RETURNs), and the return value
+ * (or void for NOVALUE routines) is generated.
+ *
+ * The generated LLVM is then verified for consistency, and
+ * the function pass manager is called to process the code
+ * and perform function-level optimizations.
  */
 int
 gencode_routine_end (gencodectx_t gctx, name_t *np)
@@ -143,6 +179,15 @@ gencode_routine_end (gencodectx_t gctx, name_t *np)
 
 } /* gencode_routine_end */
 
+/*
+ * llvmgen_cast_trunc_ext
+ *
+ * Workhorse routine for generating a cast, truncation, or zero-/signed-extension
+ * on an LLVM value to get it to a desired type.  This is called by the inlined
+ * routine llvmgen_adjustval(), which checks for the degenerate cases where no
+ * such transformation is required.  In most cases, that function should be
+ * called, rather than calling this function directly.
+ */
 LLVMValueRef
 llvmgen_cast_trunc_ext (gencodectx_t gctx, LLVMValueRef val, LLVMTypeRef neededtype, int signext)
 {
@@ -212,6 +257,11 @@ llvmgen_cast_trunc_ext (gencodectx_t gctx, LLVMValueRef val, LLVMTypeRef neededt
 
 } /* llvmgen_cast_trunc_ext */
 
+/*
+ * optlevel_handler
+ *
+ * Handler for the OPTLEVEL=<n> switch.  Levels 0 through 3 are supported.
+ */
 static int
 optlevel_handler (parse_ctx_t pctx, void *vctx, lextype_t dcltype, lexeme_t *swlex)
 {
@@ -240,6 +290,16 @@ optlevel_handler (parse_ctx_t pctx, void *vctx, lextype_t dcltype, lexeme_t *swl
 
 /*
  * gencode_module_begin
+ *
+ * Sets up the code generation context for a module.  Called by
+ * the front end just after parsing a module declaration, but before
+ * processing the module expression.
+ *
+ * This function creates the module in LLVM, sets up the function
+ * pass manager, and, if optimization is enabled, sets up the
+ * optimization passes.
+ *
+ * XXX Needs further work.  MAIN is not handled, for instance.
  */
 int
 gencode_module_begin (gencodectx_t gctx, name_t *modnp)
@@ -306,6 +366,13 @@ gencode_module_begin (gencodectx_t gctx, name_t *modnp)
 
 } /* gencode_module_begin */
 
+/*
+ * gencode_module_end
+ *
+ * Performs the final verification on a module, generates the
+ * requested output (assembly or object code, and optionally the
+ * LLVM IR), then cleans up the LLVM context.
+ */
 int
 gencode_module_end (gencodectx_t gctx, name_t *np)
 {
@@ -330,12 +397,26 @@ gencode_module_end (gencodectx_t gctx, name_t *np)
 
 } /* gencode_module_end */
 
+/*
+ * gencode_optlevel_set
+ *
+ * Optimization level setter, invoked through the compiler driver
+ * interface.
+ */
 void
 gencode_optlevel_set (gencodectx_t gctx, unsigned int level)
 {
     gctx->optlevel = (level & 3);  // valid values are 0, 1, 2, 3
-}
 
+} /* gencode_optlevel_set */
+
+/*
+ * gencode_postinit
+ *
+ * Some of the initialization cannot happen until other parts of the
+ * front end have been initialized.  Right now, this is just setting
+ * up the handler for the OPTLEVEL switch.
+ */
 void
 gencode_postinit (gencodectx_t gctx)
 {
@@ -347,7 +428,9 @@ gencode_postinit (gencodectx_t gctx)
 /*
  * gencode_init
  *
- * Module initialization.
+ * Initialization for this module.  Called from expression_init().  Sets
+ * up the main context block used throughout the code generator, and calls
+ * the symbol generator's initializatino routine.
  */
 gencodectx_t
 gencode_init (void *ectx, logctx_t logctx, machinedef_t *mach, symctx_t symctx)
