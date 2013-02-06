@@ -198,8 +198,12 @@ llvmgen_cast_trunc_ext (gencodectx_t gctx, LLVMValueRef val, LLVMTypeRef neededt
         }
     } else if (needkind == LLVMPointerTypeKind) {
         val = llvmgen_adjustval(gctx, val, gctx->intptrtszype, machine_addr_signed(gctx->mach));
-        return (constcast ? LLVMConstIntToPtr(val, neededtype)
-                : LLVMBuildIntToPtr(builder, val, neededtype, llvmgen_temp(gctx)));
+        if (constcast) {
+            return LLVMConstIntToPtr(val, neededtype);
+        } else {
+            assert(gctx->curfn != 0);
+            return LLVMBuildIntToPtr(builder, val, neededtype, llvmgen_temp(gctx));
+        }
     }
 
     // XXX I don't think this would ever happen

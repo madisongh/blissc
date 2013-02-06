@@ -59,7 +59,7 @@ llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp,
         type = expr_type(base);
         np = expr_struref_referer(exp);
         if (np != 0) {
-            accinfo->flags |= LLVMGEN_M_SEG_DEREFED;
+            if (accinfo != 0) accinfo->flags |= LLVMGEN_M_SEG_DEREFED;
             llvmgen_deref_push(gctx, np);
         }
     }

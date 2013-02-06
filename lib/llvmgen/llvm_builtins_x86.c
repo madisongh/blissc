@@ -114,7 +114,7 @@ decode_type (gencodectx_t gctx, const char *arginfo, LLVMTypeRef *typep, LLVMVal
                 cp += 1;
             }
             if (negate) val = -val;
-            *xargp = LLVMConstInt(*typep, val, 1);
+            if (xargp != 0) *xargp = LLVMConstInt(*typep, val, 1);
             if (*cp != '\0') cp += 1;
             break;
         }
