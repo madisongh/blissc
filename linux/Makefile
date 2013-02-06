@@ -8,12 +8,13 @@ LIBS = $(shell llvm-config --libs) -lstdc++ -lpthread -ldl
 LIBDIRS := driver frontend llvmgen support
 
 driver_SRCS := driver.c
-frontend_SRCS := chf_generic.c declarations.c execfuncs.c \
+frontend_SRCS := charfuncs.c declarations.c execfuncs.c \
 	expr_control.c expression.c lexeme.c lexer.c listings.c \
 	macros.c nametable.c parser.c scanner.c structures.c \
 	switches.c symbols.c
 llvmgen_SRCS := llvm_ctrlexpgen.c llvm_execfuncgen.c llvm_expgen.c \
-	llvm_gencode.c llvm_machines.c llvm_opexpgen.c llvm_symgen.c
+	llvm_gencode.c llvm_machines.c llvm_opexpgen.c llvm_symgen.c \
+	llvm_builtins_x86.c
 llvmgen_CXXSRCS := llvm_helper.cpp
 support_SRCS := fileio.c logging.c statcodes.c strings.c utils.c
 

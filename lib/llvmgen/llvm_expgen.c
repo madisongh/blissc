@@ -87,7 +87,7 @@ llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp,
     }
 
     if (type == EXPTYPE_PRIM_SEG) {
-        expr_node_t *offexp = expr_seg_offset(base);
+        long off = expr_seg_offset(base);
         llvm_stgclass_t valclass;
         unsigned int sflags;
         addr = llvmgen_segaddress(gctx, expr_seg_name(base), &valclass, &sflags);
@@ -103,13 +103,13 @@ llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp,
                 accinfo->size = expr_seg_width(base);
             }
         }
-        if (offexp != 0) {
-            LLVMValueRef off = LLVMConstInt(gctx->fullwordtype, offexp, 1);
+        if (off != 0) {
+            LLVMValueRef offval = LLVMConstInt(gctx->fullwordtype, off, 1);
             addr = llvmgen_adjustval(gctx, addr, gctx->unitptrtype, 0);
             if (LLVMIsConstant(addr)) {
-                addr = LLVMConstGEP(addr, &off, 1);
+                addr = LLVMConstGEP(addr, &offval, 1);
             } else {
-                addr = LLVMBuildGEP(gctx->curfn->builder, addr, &off, 1, llvmgen_temp(gctx));
+                addr = LLVMBuildGEP(gctx->curfn->builder, addr, &offval, 1, llvmgen_temp(gctx));
             }
         }
     } else {

@@ -165,7 +165,8 @@ gen_asminstr (gencodectx_t gctx, void *fctx, expr_node_t *exp, LLVMTypeRef neede
         argvals[i] = llvmgen_expression(gctx, arg, asmp->argtypes[i]);
     }
     while (i < asmp->argcount) {
-        argvals[i++] = asmp->xargs[i];
+        argvals[i] = asmp->xargs[i];
+	i += 1;
     }
     if (LLVMGetTypeKind(asmp->rettype) == LLVMVoidTypeKind) {
         LLVMBuildCall(gctx->curfn->builder, asmp->asminstr, argvals, asmp->argcount, "");
@@ -263,7 +264,8 @@ llvmgen_asminstr (gencodectx_t gctx, const char *name, LLVMValueRef *arg, unsign
         argvals[i] = llvmgen_adjustval(gctx, arg[i], asmp->argtypes[i], 1);
     }
     while (i < asmp->argcount) {
-        argvals[i++] = asmp->xargs[i];
+        argvals[i] = asmp->xargs[i];
+	i += 1;
     }
     if (LLVMGetTypeKind(asmp->rettype) == LLVMVoidTypeKind) {
         LLVMBuildCall(gctx->curfn->builder, asmp->asminstr, argvals, asmp->argcount, "");
