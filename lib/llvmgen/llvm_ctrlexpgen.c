@@ -18,6 +18,12 @@
 
 #include "llvmgen.h"
 
+/*
+ * gen_conditional
+ *
+ * Generates code for a conditional (IF-THEN-ELSE)
+ * expression.
+ */
 static LLVMValueRef
 gen_conditional (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -61,6 +67,11 @@ gen_conditional (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 
 } /* gen_conditional */
 
+/*
+ * gen_case
+ *
+ * Generates a CASE expression.
+ */
 static LLVMValueRef
 gen_case (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -79,6 +90,8 @@ gen_case (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     LLVMValueRef idxval, actval, swval, result;
     unsigned int i;
 
+    // If we have a reasonable number of case actions,
+    // just use the local buffer to hold them.
     if (actioncount <= 256) {
         bbvec = localvec;
     } else {
@@ -124,6 +137,11 @@ gen_case (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 
 } /* gen_case */
 
+/*
+ * gen_loop_or_block_exit
+ *
+ * Generates code for LEAVE and EXITLOOP exit expresions.
+ */
 static LLVMValueRef
 gen_loop_or_block_exit (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -138,6 +156,11 @@ gen_loop_or_block_exit (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededt
 
 } /* gen_loop_or_block_exit */
 
+/*
+ * gen_return
+ *
+ * Generates code for RETURN expressions.
+ */
 static LLVMValueRef
 gen_return (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -151,6 +174,11 @@ gen_return (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 
 } /* gen_return */
 
+/*
+ * gen_select
+ *
+ * Generates code for SELECT/SELECTONE expressions.
+ */
 static LLVMValueRef
 gen_select (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -326,6 +354,11 @@ gen_select (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 
 } /* gen_select */
 
+/*
+ * gen_while_until_loop
+ *
+ * Generates code for WHILE/UNTIL loops.
+ */
 static LLVMValueRef
 gen_while_until_loop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -365,6 +398,11 @@ gen_while_until_loop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtyp
 
 } /* gen_while_until_loop */
 
+/*
+ * gen_incr_decr_loop
+ *
+ * Generates code for INCR and DECR loops.
+ */
 static LLVMValueRef
 gen_incr_decr_loop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -436,6 +474,13 @@ gen_incr_decr_loop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 
 } /* gen_incr_decr_loop */
 
+/*
+ * llvmgen_ctrlexpgen_init
+ *
+ * Initialization routine.  Installs the hooks into the
+ * dispatcher for the expression types handled in this 
+ * module.
+ */
 void
 llvmgen_ctrlexpgen_init (gencodectx_t gctx)
 {

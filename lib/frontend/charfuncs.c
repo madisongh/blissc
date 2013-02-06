@@ -6,6 +6,15 @@
  *
  *  Module description:
  *		This module implements the CH$ executable functions.
+ *      This module hooks into the executable function handling
+ *      system in the execfuncs module.  A subset of the CH$
+ *      functions are implemented (partially, at least) in
+ *      the front end, as the LRM specifies certain behavior
+ *      when they are applied to compile-time constant
+ *      expressions.  Others are "passed through" to the
+ *      back-end code generator.  See the table in the
+ *      initialization function at the bottom of this
+ *      module for info on which is which.
  *
  *	Author:		M. Madison
  *				Copyright © 2013, Matthew Madison
@@ -22,6 +31,17 @@
 #include "blissc/nametable.h"
 #include "blissc/lexeme.h"
 
+/*
+ * charfunc_ALLOCATION
+ *
+ * CH$ALLOCATION(n [,cs])
+ *
+ * Returns the allocation, in fullwords to accommodate a
+ * character sequence of length 'n'.  If the character size
+ * 'cs' is not specified, the machine's default character size
+ * is used in the calculation.  If everything here is CTCE,
+ * a CTCE is returned.
+ */
 static expr_node_t *
 charfunc_ALLOCATION (expr_ctx_t ctx, void *fctx, name_t *fnp,
                 exprseq_t *arglist, textpos_t curpos)
@@ -64,6 +84,15 @@ charfunc_ALLOCATION (expr_ctx_t ctx, void *fctx, name_t *fnp,
 
 } /* charfunc_ALLOCATION */
 
+/*
+ * charfunc_SIZE
+ *
+ * CH$SIZE([cs])
+ * 
+ * Character size function.  If no parameter is
+ * specified, and the machine supports only one
+ * character size, this is CTCE.
+ */
 static expr_node_t *
 charfunc_SIZE (expr_ctx_t ctx, void *fctx, name_t *fnp,
           exprseq_t *arglist, textpos_t curpos)
@@ -91,6 +120,15 @@ charfunc_SIZE (expr_ctx_t ctx, void *fctx, name_t *fnp,
 
 } /* charfunc_SIZE */
 
+/*
+ * charfunc_PTR
+ *
+ * CH$PTR(seg [,offset] [,cs])
+ *
+ * Returns a pointer to the character sequence at 'offset'
+ * characters past 'seg'.  'cs' represents the character
+ * size.
+ */
 static expr_node_t *
 charfunc_PTR (expr_ctx_t ctx, void *fctx, name_t *fnp,
          exprseq_t *arglist, textpos_t curpos)
@@ -131,6 +169,15 @@ charfunc_PTR (expr_ctx_t ctx, void *fctx, name_t *fnp,
 
 } /* charfunc_PTR */
 
+/*
+ * charfunc_DIFF
+ *
+ * CH$DIFF(ptr1, ptr2)
+ *
+ * Returns the difference between 'ptr1' and 'ptr2'.
+ * XXX This currently assumes that a simple subtraction
+ * is adequate for this operation.
+ */
 static expr_node_t *
 charfunc_DIFF (expr_ctx_t ctx, void *fctx, name_t *fnp,
           exprseq_t *arglist, textpos_t curpos)
@@ -149,6 +196,12 @@ charfunc_DIFF (expr_ctx_t ctx, void *fctx, name_t *fnp,
 
 } /* charfunc_DIFF */
 
+/*
+ * charfunc_passthru
+ *
+ * Pass-through function - simply creates an expression node
+ * so the back-end code generator can process the function.
+ */
 static expr_node_t *
 charfunc_passthru (expr_ctx_t ctx, void *fctx, name_t *fnp,
               exprseq_t *arglist, textpos_t curpos)
@@ -319,6 +372,11 @@ static funcdef_t charfunc_funcs[] = {
     FUNCDEF("CH$TRANSLATE",     charfunc_passthru,   0, 6, 0)
 };
 
+/*
+ * charfuncs_init
+ *
+ * Initializes the execfuncs hooks for the CH$ functions.
+ */
 void
 charfuncs_init (expr_ctx_t ctx, scopectx_t scope)
 {

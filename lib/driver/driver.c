@@ -52,6 +52,12 @@ struct blissc_driverctx_s {
     int             free_irfn;
 };
 
+/*
+ * blissc_init
+ *
+ * Initializes the driver, setting up the context block.
+ * This should be first routine called by a driver program.
+ */
 blissc_driverctx_t
 blissc_init (jmp_buf retenv)
 {
@@ -70,6 +76,12 @@ blissc_init (jmp_buf retenv)
 
 } /* blissc_init */
 
+/*
+ * blissc_output_set
+ *
+ * Sets the output format and, optionally, the output
+ * file name.
+ */
 int
 blissc_output_set (blissc_driverctx_t ctx, bliss_output_t outtype,
                    const char *fname, int fnlen)
@@ -85,8 +97,15 @@ blissc_output_set (blissc_driverctx_t ctx, bliss_output_t outtype,
         ctx->free_outfn = 1;
     }
     return 1;
+    
 } /* blissc_output_set */
 
+/*
+ * blissc_listopt_set
+ *
+ * Sets the listing options and, optionally,
+ * the listing file name.
+ */
 int
 blissc_listopt_set (blissc_driverctx_t ctx, unsigned int flags,
                     const char *fname, int fnlen)
@@ -105,6 +124,10 @@ blissc_listopt_set (blissc_driverctx_t ctx, unsigned int flags,
 
 } /* blissc_listopt_set */
 
+/*
+ * Sets the option to dump the IR output to a file
+ * and, optionally, the filename for that output.
+ */
 int
 blissc_dumpir_set (blissc_driverctx_t ctx, int val,
                     const char *fname, int fnlen)
@@ -123,12 +146,24 @@ blissc_dumpir_set (blissc_driverctx_t ctx, int val,
 
 } /* blissc_dumpir_set */
 
+/*
+ * blissc_variant_set
+ *
+ * Sets the value for the %VARIANT lexical
+ * function.
+ */
 int blissc_variant_set (blissc_driverctx_t ctx, unsigned int val)
 {
     ctx->variant = val;
     return 1;
-}
+    
+} /* blissc_variant_set */
 
+/*
+ * blissc_target_set
+ *
+ * Sets the target tuple string for the compiler.
+ */
 int
 blissc_target_set (blissc_driverctx_t ctx, const char *machspec)
 {
@@ -137,15 +172,31 @@ blissc_target_set (blissc_driverctx_t ctx, const char *machspec)
     ctx->pctx = parser_init(ctx->strctx, 0, ctx->mach, &ctx->kwdscope, ctx->logctx, ctx->fioctx);
     ctx->ectx = expr_init(ctx->strctx, ctx->pctx, ctx->kwdscope);
     return 1;
-}
+    
+} /* blissc_target_set */
 
+/*
+ * blissc_optlevel_set
+ *
+ * Sets the optimization level.
+ */
 int
 blissc_optlevel_set (blissc_driverctx_t ctx, unsigned int val)
 {
     ctx->optlevel = val;
     return 1;
-}
+    
+} /* blissc_optlevel_set */
 
+/*
+ * blissc_compile
+ *
+ * Begins a compilation.  This should be called only
+ * after all of the desired compilation options have
+ * been set -- they are processed here (passing the
+ * settings down to the compiler modules) before 
+ * compilation begins.  The source file name is required.
+ */
 int
 blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
 {
@@ -234,8 +285,14 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
     if (status) status = declare_module(ctx->ectx);
 
     return status;
-}
+    
+} /* blissc_compile */
 
+/*
+ * blissc_finish
+ *
+ * Cleans up and frees the compilation context.
+ */
 void
 blissc_finish (blissc_driverctx_t ctx)
 {
@@ -249,4 +306,3 @@ blissc_finish (blissc_driverctx_t ctx)
     free(ctx);
 
 } /* blissc_finish */
-

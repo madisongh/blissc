@@ -6,7 +6,11 @@
  *
  *  Module description:
  *
- *       This module generates LLVM IR for control expressions.
+ *      This module generates LLVM IR for control expressions.
+ *
+ *      Functions implemented in this module should include
+ *      only generic LLVM code; machine-specific functions
+ *      should go into other modules.  XXX
  *
  *	Author:		M. Madison
  *				Copyright © 2013, Matthew Madison
@@ -65,6 +69,11 @@ llvm_execfuncgen_t gentable[] = {
 };
 #undef FUNCGENDEF
 
+/*
+ * gen_execfunc
+ *
+ * Dispatcher for the code generation functions.
+ */
 static LLVMValueRef
 gen_execfunc (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -86,7 +95,12 @@ gen_execfunc (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
  * llvmgen_execfuncgen_init
  *
  * Hooks the generators to the executable functions and
- * into the main expression-generation dispatcher.
+ * into the main expression-generation dispatcher, and sets
+ * up the internal dispatcher for each function we support.
+ *
+ * The initialization call for setting up the generators
+ * for the machine-specific executable functions (typically
+ * BUILTINs) is also invoked here.
  */
 void
 llvmgen_execfuncgen_init (gencodectx_t gctx)
@@ -118,6 +132,11 @@ llvmgen_execfuncgen_init (gencodectx_t gctx)
 
 } /* llvmgen_execfuncgen_init */
 
+/*
+ * gen_SIGN
+ *
+ * Generates code for the SIGN standard function.
+ */
 static LLVMValueRef
 gen_SIGN (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -148,6 +167,11 @@ gen_SIGN (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype
 
 } /* gen_SIGN */
 
+/*
+ * gen_ABS
+ *
+ * Generates code for the ABS standard function.
+ */
 static LLVMValueRef
 gen_ABS (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -173,6 +197,12 @@ gen_ABS (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
 
 } /* gen_ABS */
 
+/*
+ * gen_MINMAX
+ *
+ * Generates code for the MIN and MAX families
+ * of standard functions.
+ */
 static LLVMValueRef
 gen_MINMAX (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
