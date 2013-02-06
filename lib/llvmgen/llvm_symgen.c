@@ -590,8 +590,35 @@ datasym_generator (void *vctx, name_t *np, void *p)
 
     if (attr->dclass == DCLASS_ARG) {
         ld->vclass = LLVM_REG;
-    } else if (((attr->flags & SYM_M_BIND) != 0 && attr->sc != SYMSCOPE_LOCAL) ||
-               ((attr->flags & SYM_M_BIND) == 0 && attr->dclass == DCLASS_STATIC)) {
+    } else if ((attr->flags & SYM_M_BIND) != 0) {
+        initval_t *iv = attr->ivlist;
+        LLVMValueRef bindval;
+        type = gendatatype(gctx, attr, &units);
+        if (iv->type == IVTYPE_SCALAR) {
+            unsigned int bpunit = machine_unit_bits(gctx->mach);
+            LLVMValueRef sval;
+            sval = LLVMConstInt(LLVMIntTypeInContext(gctx->llvmctx,
+                                                     iv->data.scalar.width * bpunit),
+                                   iv->data.scalar.value, iv->data.scalar.signext);
+            bindval = llvmgen_adjustval(gctx, sval, type,
+                                        (attr->flags & SYM_M_SIGNEXT) != 0);
+        } else {
+            expr_node_t *bindexp = iv->data.scalar.expr;
+            bindval = llvmgen_expression(gctx, bindexp, type);
+        }
+        if (attr->sc == SYMSCOPE_LOCAL) {
+            ld->value = bindval;
+            LLVMSetValueName(ld->value, name_azstring(np));
+            ld->vclass = LLVM_REG;
+        } else {
+            ld->value = LLVMAddGlobal(gctx->module, type, name_azstring(np));
+            LLVMSetInitializer(ld->value, bindval);
+            ld->vclass = LLVM_GLOBAL;
+            if (name_globalname(namectx, np) == 0) {
+                LLVMSetLinkage(ld->value, LLVMInternalLinkage);
+            }
+        }
+    } else if (attr->dclass == DCLASS_STATIC) {
         ld->vclass = LLVM_GLOBAL;
         type = gendatatype(gctx, attr, &units);
         if (attr->ivlist != 0) {
@@ -743,9 +770,6 @@ llvmgen_segaddress (gencodectx_t gctx, name_t *np, llvm_stgclass_t *segclassp, u
         if (segclassp != 0) *segclassp = ld->vclass;
         if (flagsp != 0) *flagsp = ld->flags;
         val = ld->value;
-        if ((ld->flags & LLVMGEN_M_SEG_ISBIND) != 0) {
-            val = LLVMBuildLoad(gctx->curfn->builder, val, llvmgen_temp(gctx));
-        }
         if (ld->deref != 0 && (ld->flags & LLVMGEN_M_SEG_ISREF) != 0) {
             if (flagsp != 0) *flagsp |= LLVMGEN_M_SEG_DEREFED;
             if (ld->vclass != LLVM_REG) {
