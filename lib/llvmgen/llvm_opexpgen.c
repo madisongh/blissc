@@ -18,15 +18,22 @@
 #include "llvmgen.h"
 #include "blissc/nametable.h"
 
-static LLVMIntPredicate pred[] = {
-    LLVMIntEQ, LLVMIntNE, LLVMIntSLT, LLVMIntSLE,
-    LLVMIntSGT, LLVMIntSGE, LLVMIntEQ, LLVMIntNE,
-    LLVMIntULT, LLVMIntULE, LLVMIntUGT, LLVMIntUGE
-};
 
+/*
+ * llvmgen_predfromop
+ *
+ * Translates our OPER_xxx operator type code, for a comparison
+ * operator, into an LLVM predicate code.
+ */
 LLVMIntPredicate
 llvmgen_predfromop (optype_t op, int addrsigned)
 {
+    static LLVMIntPredicate pred[] = {
+        LLVMIntEQ, LLVMIntNE, LLVMIntSLT, LLVMIntSLE,
+        LLVMIntSGT, LLVMIntSGE, LLVMIntEQ, LLVMIntNE,
+        LLVMIntULT, LLVMIntULE, LLVMIntUGT, LLVMIntUGE
+    };
+
     if (op >= OPER_CMP_EQLA && op <= OPER_CMP_GEQA) {
         return pred[op-(addrsigned ? 12 : 6)-OPER_CMP_EQL];
     }
@@ -34,8 +41,14 @@ llvmgen_predfromop (optype_t op, int addrsigned)
         return pred[op-OPER_CMP_EQL];
     }
     return 0;
-}
 
+} /* llvmgen_predfromop */
+
+/*
+ * llvmgen_assignment
+ *
+ * Generates a store operation from an assignment expression.
+ */
 LLVMValueRef
 llvmgen_assignment (gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs)
 {
@@ -58,6 +71,9 @@ llvmgen_assignment (gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs)
         expr_signal(gctx->ectx, STC__ADDRVALRQ);
         return rhsvalue;
     }
+    // If we're assigning into a field-reference with a non-zero
+    // bit position or a non-CTCE size, we have to do some bit-shifting
+    // to do the store.
     if (accinfo.posval != 0 || accinfo.sizeval != 0) {
         shifts_required = 1;
         lhstype = gctx->fullwordtype;
@@ -106,6 +122,11 @@ llvmgen_assignment (gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs)
 
 } /* llvmgen_assignment */
 
+/*
+ * gen_fetch
+ *
+ * Generates a load operation for a fetch expression.
+ */
 static LLVMValueRef
 gen_fetch (gencodectx_t gctx, expr_node_t *rhs, LLVMTypeRef neededtype)
 {
@@ -116,6 +137,9 @@ gen_fetch (gencodectx_t gctx, expr_node_t *rhs, LLVMTypeRef neededtype)
     int shifts_required = 0;
     int signext;
 
+    // For field references with non-zero bit position, or with
+    // non-CTCE size, we'll have to do bit shifting to extract
+    // the field.
     addr = llvmgen_addr_expression(gctx, rhs, &accinfo);
     if (accinfo.posval != 0 || accinfo.sizeval != 0) {
         type = gctx->fullwordtype;
@@ -130,6 +154,8 @@ gen_fetch (gencodectx_t gctx, expr_node_t *rhs, LLVMTypeRef neededtype)
     }
     signext = ((accinfo.flags & LLVMGEN_M_SEG_SIGNEXT) != 0);
 
+    // If we're fetching from a register, there's no load intruction
+    // required.
     if (accinfo.segclass == LLVM_REG &&
         (accinfo.flags & (LLVMGEN_M_SEG_DEREFED|LLVMGEN_M_SEG_ISREF)) == 0) {
         val = llvmgen_adjustval(gctx, addr, type, signext);
@@ -218,6 +244,12 @@ gen_shift (gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs, LLVMTypeRef ne
 
 } /* gen_shift */
 
+/*
+ * gen_operator_expression
+ *
+ * Code generation for operator expressions.  Most of them have straightforward
+ * translations into LLVM instructions and are handled directly here.
+ */
 static LLVMValueRef
 gen_operator_expression (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -302,6 +334,8 @@ gen_operator_expression (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef needed
 
 /*
  * llvmgen_opexpgen_init
+ *
+ * Registers the expression-type handler with the dispatcher.
  */
 void
 llvmgen_opexpgen_init (gencodectx_t gctx)

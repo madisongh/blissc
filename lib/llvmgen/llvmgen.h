@@ -22,8 +22,17 @@
 #include <stdio.h>
 
 #define LLVMGEN_K_PHIREFMAX     256
-#define LLVMGEN_K_MAXARGS    16
+#define LLVMGEN_K_MAXARGS       16
 
+// Branch tracking structure.  There are common patterns
+// for handling LLVM branches and phi values for loops,
+// conditionals, etc., encapsulated in the llvmgen_btrack_XXX
+// functions (some of which are inlined below).
+//
+// There are three types of expressions for which these
+// structures need to be exposed globally -- routines,
+// blocks, and loops.  The structure is also stackable, since
+// we can have nested expressions of each of these types.
 struct llvm_btrack_s {
     struct llvm_btrack_s    *next;
     LLVMBasicBlockRef        exitblock;
@@ -33,6 +42,12 @@ struct llvm_btrack_s {
     unsigned int             phirefcount;
 };
 typedef struct llvm_btrack_s llvm_btrack_t;
+
+
+// Routine tracking structure.   Holds the information needed
+// globally while generating code for a routine.  Stackable in
+// the gencode-context structure, since routine definitions
+// can be nested.
 
 #define LLVMGEN_K_BT_FUNC   0
 #define LLVMGEN_K_BT_BLK    1
@@ -50,6 +65,8 @@ struct llvm_rtntrack_s {
 };
 typedef struct llvm_rtntrack_s llvm_rtntrack_t;
 
+// Assembly instruction definition.
+// XXX Should this be made private?
 #define LLVMGEN_K_ASM_MAXARGS    8
 #define LLVMGEN_M_ASM_SIDEEFFECT (1<<0)
 #define LLVMGEN_M_ASM_ALIGNSTACK (1<<1)
@@ -65,9 +82,11 @@ struct llvm_asminstr_s {
 };
 typedef struct llvm_asminstr_s llvm_asminstr_t;
 
+// Function pointers for the dispatchers
 typedef LLVMValueRef (*llvmgen_expgen_fn)(gencodectx_t, expr_node_t *, LLVMTypeRef);
 typedef LLVMValueRef (*llvmgen_execfunc_fn)(gencodectx_t, void *, expr_node_t *, LLVMTypeRef);
 
+// Executable function structure.  Used in multiple modules.
 struct llvm_execfuncgen_s {
     char * const            name;
     llvmgen_execfunc_fn     func;
@@ -75,6 +94,7 @@ struct llvm_execfuncgen_s {
 };
 typedef struct llvm_execfuncgen_s llvm_execfuncgen_t;
 
+// Global code-generation context.
 struct gencodectx_s {
     machine_ctx_t       mctx;
     expr_ctx_t          ectx;
@@ -103,12 +123,17 @@ struct gencodectx_s {
     char                tmpnambuf[NAME_SIZE];
 };
 
+
+// LLVM storage class for data segments.
 typedef enum {
     LLVM_REG,
     LLVM_LOCAL,
     LLVM_GLOBAL
 } llvm_stgclass_t;
 
+// Access information structure, used to pass information
+// about a data segment being accessed (for a fetch or an
+// assignment).
 #define LLVMGEN_M_SEG_SIGNEXT  (1<<0)
 #define LLVMGEN_M_SEG_VOLATILE (1<<1)
 #define LLVMGEN_M_SEG_DEREFED  (1<<2)
@@ -126,7 +151,7 @@ struct llvm_accinfo_s {
 };
 typedef struct llvm_accinfo_s llvm_accinfo_t;
 
-
+// Commonly-used functions.  XXX Revisit inlining decisions
 #define siu static inline __attribute__((unused))
 siu char *llvmgen_temp(gencodectx_t gctx) {
     snprintf(gctx->tmpnambuf, sizeof(gctx->tmpnambuf), "tmp.%u", gctx->curfn->tmpidx++);
@@ -197,4 +222,4 @@ LLVMValueRef llvmgen_builtinfunc(gencodectx_t gctx, const char *name,
                                  expr_node_t *exp, LLVMTypeRef neededtype);
 LLVMValueRef llvmgen_asminstr(gencodectx_t gctx, const char *name, LLVMValueRef *args,
                               unsigned int argcnt);
-#endif
+#endif /* llvmgen_h__ */

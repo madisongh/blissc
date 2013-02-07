@@ -759,6 +759,15 @@ gen_ch_copy (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededt
     
 } /* gen_ch_copy */
 
+/*
+ * gen_ch_translate
+ *
+ * CH$TRANSLATE(table, slen, sptr, fill, dlen, dptr)
+ *
+ * Generates code for CH$TRANSLATE, walking through the
+ * source string and applying the translation one character
+ * at a time.
+ */
 static LLVMValueRef
 gen_ch_translate (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {

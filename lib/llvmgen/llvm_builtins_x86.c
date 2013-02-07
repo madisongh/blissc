@@ -22,7 +22,7 @@
 // Structure for tracking the inline assembly we generate for machine-specific
 // built-ins.
 //
-// The 'arginfo' field takes a character string.  The first character codes
+// The 'arginfo' field is a character string: the first character codes
 // the return type; subsequent characters code argument types and "extra" arguments
 // that are added, where needed, to adjust results. Codes are:
 // V=void (only for return type), P=pointer, F=fullword, or 1,2,4,8 = int size in bytes
@@ -67,6 +67,13 @@ struct asminfo_s asmtable[] = {
 #undef ASMGENDEF
 
 
+/*
+ * decode type
+ *
+ * Called to iterate through the 'arginfo' string, building up the
+ * LLVM function type definition for an assembly instruction, along
+ * with the values for any hidden extra arguments.
+ */
 static const char *
 decode_type (gencodectx_t gctx, const char *arginfo, LLVMTypeRef *typep, LLVMValueRef *xargp)
 {
@@ -127,6 +134,11 @@ decode_type (gencodectx_t gctx, const char *arginfo, LLVMTypeRef *typep, LLVMVal
 
 } /* decode_type */
 
+/*
+ * gen_asminstr_data
+ *
+ * Creates the LLVM constructs representing an assembly instruction.
+ */
 static void
 gen_asminstr_data (gencodectx_t gctx, llvm_asminstr_t *asmp)
 {
@@ -149,6 +161,12 @@ gen_asminstr_data (gencodectx_t gctx, llvm_asminstr_t *asmp)
 
 } /* gen_asminstr_data */
 
+/*
+ * gen_asminstr
+ *
+ * Generates a call to an assembly instruction.  Used primarily for
+ * expanding machine-specific assembly BUILTINs.
+ */
 LLVMValueRef
 gen_asminstr (gencodectx_t gctx, void *fctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -222,6 +240,13 @@ llvmgen_builtins_init (gencodectx_t gctx, scopectx_t kwdscope)
 
 } /* llvmgen_builtins_init */
 
+/*
+ * llvmgen_builtinfunc
+ *
+ * External API for generating an assembly call.  Used for direct
+ * translation of some other executable function expression
+ * (e.g., for a CH$ function) into assembly.
+ */
 LLVMValueRef
 llvmgen_builtinfunc (gencodectx_t gctx, const char *name, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -240,7 +265,12 @@ llvmgen_builtinfunc (gencodectx_t gctx, const char *name, expr_node_t *exp, LLVM
 
 } /* llvmgen_builtinfunc */
 
-
+/*
+ * llvmegen_asminstr
+ *
+ * External API for generating an assembly call with arguments already in
+ * LLVM value form.
+ */
 LLVMValueRef
 llvmgen_asminstr (gencodectx_t gctx, const char *name, LLVMValueRef *arg, unsigned int argcnt)
 {
@@ -279,6 +309,12 @@ llvmgen_asminstr (gencodectx_t gctx, const char *name, LLVMValueRef *arg, unsign
 
 } /* llvmgen_asminstr */
 
+/*
+ * llvmgen_memcpy
+ *
+ * Generates a machine-specific equivalent of an LLVM 'memcpy' intrinsic
+ * (or close enough). Used internally for data segement initialization.
+ */
 void
 llvmgen_memcpy (gencodectx_t gctx, LLVMValueRef dest, LLVMValueRef src, LLVMValueRef len)
 {
@@ -291,6 +327,12 @@ llvmgen_memcpy (gencodectx_t gctx, LLVMValueRef dest, LLVMValueRef src, LLVMValu
 
 } /* llvmgen_memcpy */
 
+/*
+ * llvmgen_memset
+ *
+ * Generates a machine-specific equivalent of an LLVM 'memset' intrinsic
+ * (or close enough). Used internally for data segement initialization.
+ */
 void
 llvmgen_memset (gencodectx_t gctx, LLVMValueRef dest, LLVMValueRef val, LLVMValueRef len)
 {

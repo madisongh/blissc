@@ -6,7 +6,10 @@
  *
  *  Module description:
  *
- *       This module generates LLVM IR for expressions.
+ *       This module generates LLVM IR for expressions.  Includes
+ *      the dispatcher for expression generation based on expression
+ *      type, along with some of the generators.  Control, operator,
+ *      and executable-function expression generators are in other modules.
  *
  *	Author:		M. Madison
  *				Copyright © 2013, Matthew Madison
@@ -19,6 +22,11 @@
 #include "llvmgen.h"
 
 
+/*
+ * llvmgen_expgen_register
+ *
+ * Registers a generator function in the dispatch table.
+ */
 void
 llvmgen_expgen_register (gencodectx_t gctx, exprtype_t type, llvmgen_expgen_fn func)
 {
@@ -27,6 +35,12 @@ llvmgen_expgen_register (gencodectx_t gctx, exprtype_t type, llvmgen_expgen_fn f
 } /* llvmgen_expgen_register */
 
 
+/*
+ * llvmgen_expression
+ *
+ * Dispatches to an expresion generator function based on the
+ * expression type.
+ */
 LLVMValueRef
 llvmgen_expression (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -41,6 +55,16 @@ llvmgen_expression (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 
 } /* llvmgen_expression */
 
+/*
+ * llvmgen_addr_expression
+ *
+ * Evaluates an expression as an address value.  Handles automatic
+ * dereferencing of REFs for structure-reference expressions.  The
+ * 'accinfo' argument is non-NULL when this function is invoked for
+ * a fetch or assignment operation; additional information gets
+ * passed back in that structure specifically for ensuring correct
+ * load/store instruction generation.
+ */
 LLVMValueRef
 llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp,
                          llvm_accinfo_t *accinfo)
@@ -123,6 +147,11 @@ llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp,
 
 } /* llvmgen_addr_expression */
 
+/*
+ * gen_literal
+ *
+ * Generates an LLVM constant for a literal.
+ */
 static LLVMValueRef
 gen_literal (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -163,7 +192,8 @@ gen_seg_or_fieldref (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype
  *
  * The PRIM_STRUREF expression type is really just a way to automatically
  * parenthesize a structure-reference expression, so it's treated as a unit
- * by the expression code.  No special handling required here. XXX Well, maybe there is
+ * by the expression code.  It also triggers automatic pointer dereferencing
+ * for data segements that are declared REF <structure>.
  */
 static LLVMValueRef
 gen_struref (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
@@ -177,6 +207,12 @@ gen_struref (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     
 } /* gen_struref */
 
+/*
+ * gen_block
+ *
+ * Generates code for a block expression.  Handles labels applied
+ * to blocks (so that LEAVE works).
+ */
 static LLVMValueRef
 gen_block (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -187,6 +223,9 @@ gen_block (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     llvm_btrack_t *bt;
     LLVMValueRef val = 0;
 
+    // Multiple labels may be applied to a block; if so, we pick the
+    // first as the master for tracking purposes and use the same value
+    // for all the others.
     bt = 0;
     if (namereflist_length(labels) > 0) {
         LLVMBasicBlockRef exitblk;
@@ -210,6 +249,8 @@ gen_block (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
         }
     }
 
+    // Finalize the block's branch tracking.  Only used if the block is
+    // labelled.
     if (bt != 0) {
         gctx->curfn->btrack[LLVMGEN_K_BT_BLK] = bt->next;
         bt->next = 0;
@@ -237,6 +278,11 @@ gen_block (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     
 } /* gen_block */
 
+/*
+ * gen_routine_call
+ *
+ * Generates a routine call.
+ */
 static LLVMValueRef
 gen_routine_call (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -289,6 +335,11 @@ gen_routine_call (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 
 } /* gen_routine_call */
 
+/*
+ * gen_noop
+ *
+ * Handles NOOP expressions.
+ */
 static LLVMValueRef
 gen_noop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 {
@@ -296,6 +347,13 @@ gen_noop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     
 } /* gen_noop */
 
+/*
+ * llvmgen_expgen_init
+ *
+ * Module initialization.  Registers the expression generators
+ * that appear here, and calls the init routines in the other
+ * expression-generation modules.
+ */
 void
 llvmgen_expgen_init (gencodectx_t gctx)
 {

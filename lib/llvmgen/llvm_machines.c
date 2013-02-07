@@ -6,6 +6,10 @@
  *
  *  Module description:
  *
+ *      Manages the machine-specific context for a compilation,
+ *      mapping it to the appropriate LLVM target.
+ *
+ *      XXX Currently only handles one target machine.
  *
  *	Author:		M. Madison
  *				Copyright © 2013, Matthew Madison
@@ -20,6 +24,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+/*
+ * machine_init
+ *
+ * Initializes the machine context.
+ */
 machinedef_t *
 machine_init (const char *machspec)
 {
@@ -78,6 +87,11 @@ machine_init (const char *machspec)
     
 } /* machine_init */
 
+/*
+ * machine_output_set
+ *
+ * Called by the driver to set the output type and output filename.
+ */
 void
 machine_output_set (machinedef_t *mach, machine_output_t outtype, char *fname, int fnlen)
 {
@@ -93,6 +107,11 @@ machine_output_set (machinedef_t *mach, machine_output_t outtype, char *fname, i
 
 } /* machine_output_set */
 
+/*
+ * machine_dumpir_set
+ *
+ * Called by the driver when an IR dump is requested.
+ */
 void
 machine_dumpir_set (machinedef_t *mach, char *fname, int fnlen)
 {
@@ -113,6 +132,11 @@ machine_dumpir_set (machinedef_t *mach, char *fname, int fnlen)
 
 } /* machine_dumpir_set */
 
+/*
+ * machine_finish
+ *
+ * Context cleanup.
+ */
 void
 machine_finish (machinedef_t *mach)
 {

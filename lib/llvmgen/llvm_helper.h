@@ -1,14 +1,16 @@
-//
-//  llvm_helper.h
-//  blissc
-//
-//  Created by Matthew Madison on 1/5/13.
-//  Copyright (c) 2013 Matthew Madison. All rights reserved.
-//
-
-#ifndef __blissc__llvm_helper__
-#define __blissc__llvm_helper__
-
+#ifndef llvm_helper_h__
+#define llvm_helper_h__
+/*
+ *++
+ *	File:			llvm_helper.h
+ *
+ *	Abstract:		Additional LLVM C APIs
+ *
+ *	Author:			M. Madison
+ *					Copyright © 2013, Matthew Madison
+ *					All rights reserved.
+ *--
+ */
 #ifdef __cplusplus
 
 extern "C" {
@@ -22,4 +24,4 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
-#endif /* defined(__blissc__llvm_helper__) */
+#endif /* llvm_helper_h__ */

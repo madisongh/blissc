@@ -1,11 +1,23 @@
-//
-//  llvm_helper.cpp
-//  blissc
-//
-//  Created by Matthew Madison on 1/5/13.
-//  Copyright (c) 2013 Matthew Madison. All rights reserved.
-//
-
+/*
+ *++
+ *	File:			llvm_helper.cpp
+ *
+ *	Abstract:		Implements C APIs for parts of LLVM.
+ *
+ *  Module description:
+ *
+ *      LLVM provides C-callable APIs for most, but not all,
+ *      of the functionality we need.  This module contains
+ *      helper functions to provide C APIs for the handful
+ *      of other functions not already provided.
+ *
+ *	Author:		M. Madison
+ *				Copyright © 2013, Matthew Madison
+ *				All rights reserved.
+ *	Modification history:
+ *		05-Jan-2013	V1.0	Madison		Initial coding.
+ *--
+ */
 #ifndef __STDC_LIMIT_MACROS
 #define __STDC_LIMIT_MACROS
 #endif
