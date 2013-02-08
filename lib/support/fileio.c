@@ -93,6 +93,12 @@ fileio_finish (fioctx_t fio)
 
 } /* fileio_finish */
 
+/*
+ * file_canonicalname
+ *
+ * Canonicalizes a name using realpath().  The file must exist
+ * in the filesystem for this to work properly.
+ */
 char *
 file_canonicalname (fioctx_t fio, const char *orig, int origlen, unsigned int *lenp)
 {
@@ -110,8 +116,18 @@ file_canonicalname (fioctx_t fio, const char *orig, int origlen, unsigned int *l
     }
     if (rpath != 0 && lenp != 0) *lenp = (unsigned int)strlen(rpath);
     return rpath;
-}
 
+} /* file_canonicalname */
+
+/*
+ * file_splitname
+ *
+ * Parses a filename into its directory path, base name, and suffix.
+ * If 'canonicalize' is non-zero, will canonicalize the filename before
+ * parsing.  In either case, the fio_pathparts_t structure gets filled
+ * in, and the file_fullname pointer in that structure will point to
+ * a string buffer that the caller must free.
+ */
 int
 file_splitname (fioctx_t fio, const char *orig, int origlen, int canonicalize,
                 fio_pathparts_t *parts)
@@ -156,8 +172,19 @@ file_splitname (fioctx_t fio, const char *orig, int origlen, int canonicalize,
     }
 
     return 1;
-}
 
+} /* file_splitname */
+
+/*
+ * file_combinename
+ *
+ * Creates a complete path for a filename from the directory,
+ * basename, and suffix parts pointed to the 'parts' structure.
+ * the path_fullname pointer in that structure will be freed if
+ * non-NULL, with a new string buffer allocated, and filled in,
+ * for the constructed name.  The caller must free the allocated
+ * buffer.
+ */
 int
 file_combinename (fioctx_t fio, fio_pathparts_t *parts)
 {
@@ -187,8 +214,16 @@ file_combinename (fioctx_t fio, fio_pathparts_t *parts)
     parts->path_fullname[len] = '\0';
     parts->path_fullnamelen = len;
     return 1;
-}
 
+} /* file_combinename */
+
+/*
+ * file_freeparts
+ *
+ * Frees the string buffer allocated by one of the above
+ * routines, and clears the contents of the 'parts'
+ * structure.
+ */
 void
 file_freeparts (fioctx_t fio, fio_pathparts_t *parts)
 {
@@ -196,7 +231,8 @@ file_freeparts (fioctx_t fio, fio_pathparts_t *parts)
         free(parts->path_fullname);
     }
     memset(parts, 0, sizeof(fio_pathparts_t));
-}
+
+} /* file_freeparts */
 
 /*
  * file_open

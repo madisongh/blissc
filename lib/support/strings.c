@@ -34,9 +34,6 @@
  *		implementation, if that would provide a better balance
  *		between heap usage/fragmentation and speed.
  *
- *		XXX The string pool headers are static structures; this
- *		should probably be fixed so that they, too, are dynamically
- * 		allocated.
  *
  *	Author:		M. Madison
  *				Copyright © 2012, Matthew Madison
