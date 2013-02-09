@@ -2,13 +2,11 @@
 #define llvm_machinectx_h__
 /*
  *++
- *	File:			llvm_machinectx.h
+ * llvm_machinectx.h - LLVM "machine" context.
  *
- *	Abstract:		LLVM "machine" context.
- *
- *	Author:			M. Madison
- *					Copyright © 2013, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 

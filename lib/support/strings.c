@@ -1,45 +1,40 @@
 /*
  *++
- *	File:			strings.c
+ * strings.c - Dynamic string management.
  *
- *	Abstract:		Dynamic string management.
+ * This module contains all of the memory management
+ * for dynamic strings, along with functions for manipulating
+ * strings via string descriptors.
  *
- *  Module description:
- *		This module contains all of the memory management
- *		for dynamic strings, along with functions for manipulating
- *		strings via string descriptors.
+ * Note that descriptors are embedded in each string cell,
+ * and the descriptor-based API will return pointers to
+ * dynamically-allocated descriptors.  However, callers
+ * can create their own descriptors, if it's more
+ * convenient to do so, and statically-allocated strings
+ * (i.e., strings not allocated by this module) can be
+ * referenced through descriptors.
  *
- *		Note that descriptors are embedded in each string cell,
- *		and the descriptor-based API will return pointers to
- *		dynamically-allocated descriptors.  However, callers
- *		can create their own descriptors, if it's more
- *		convenient to do so, and statically-allocated strings
- *		(i.e., strings not allocated by this module) can be
- *		referenced through descriptors.
+ * Strings are allocated out of memory pools.  Three pools
+ * are maintained here, 'small', 'medium', and 'large'.
+ * When a request is made to allocate space for a string,
+ * the length specified in the request is used to select the
+ * pool, based on the SMALLSZ, MEDSZ, and LRGSZ definitions
+ * below.  Lookaside lists are kept with each pool, so
+ * string cells will get reused after being freed.  The
+ * lists are pre-allocated with ALLOCOUNT entries at
+ * initialization time.
  *
- *		Strings are allocated out of memory pools.  Three pools
- *		are maintained here, 'small', 'medium', and 'large'.
- *		When a request is made to allocate space for a string,
- *		the length specified in the request is used to select the
- *		pool, based on the SMALLSZ, MEDSZ, and LRGSZ definitions
- *		below.  Lookaside lists are kept with each pool, so
- *		string cells will get reused after being freed.  The
- *		lists are pre-allocated with ALLOCOUNT entries at
- * 		initialization time.
- *
- *		XXX The choice of sizes here is based on an educated guess
- *		of string-size frequency in a typical compilation.  Some
- *		instrumentation and analysis is called for to tune the
- *		cell sizes for each pool -- or to select a different
- *		implementation, if that would provide a better balance
- *		between heap usage/fragmentation and speed.
+ * XXX The choice of sizes here is based on an educated guess
+ * of string-size frequency in a typical compilation.  Some
+ * instrumentation and analysis is called for to tune the
+ * cell sizes for each pool -- or to select a different
+ * implementation, if that would provide a better balance
+ * between heap usage/fragmentation and speed.
  *
  *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		21-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>
@@ -90,7 +85,7 @@ static struct stringpool_s  pool[POOL_COUNT] = {
  * Internal utility routines.
  */
 static inline int is_static (strdesc_t *dsc) {
-	return ((dsc->flags & STR_M_STATIC) != 0);
+    return ((dsc->flags & STR_M_STATIC) != 0);
 }
 
 static inline int size_to_pool (size_t len) {

@@ -1,18 +1,13 @@
 /*
  *++
- *	File:			llvm_builtins_x86.c
+ * llvm_builtins_x86.c - Builtins for x86 processors.
  *
- *	Abstract:		Builtins for x86 processors.
  *
- *  Module description:
+ * This module generates LLVM IR for X86 assembly instructions.
  *
- *       This module generates LLVM IR for X86 assembly instructions.
- *
- *	Author:		M. Madison
- *				Copyright © 2013, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		02-Feb-2013	V1.0	Madison		Initial coding.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 
@@ -184,7 +179,7 @@ gen_asminstr (gencodectx_t gctx, void *fctx, expr_node_t *exp, LLVMTypeRef neede
     }
     while (i < asmp->argcount) {
         argvals[i] = asmp->xargs[i];
-	i += 1;
+    i += 1;
     }
     if (LLVMGetTypeKind(asmp->rettype) == LLVMVoidTypeKind) {
         LLVMBuildCall(gctx->curfn->builder, asmp->asminstr, argvals, asmp->argcount, "");
@@ -202,10 +197,10 @@ gen_asminstr (gencodectx_t gctx, void *fctx, expr_node_t *exp, LLVMTypeRef neede
 /*
  * llvmgen_builtins_init
  *
- *  1. Sets up a name table for assembly instructions so we can resolve them
- *     lazily.
+ * 1. Sets up a name table for assembly instructions so we can resolve them
+ * lazily.
  *
- *  2. Declares BUILTIN executable functions for the assembly instructions.
+ * 2. Declares BUILTIN executable functions for the assembly instructions.
  */
 void
 llvmgen_builtins_init (gencodectx_t gctx, scopectx_t kwdscope)
@@ -295,7 +290,7 @@ llvmgen_asminstr (gencodectx_t gctx, const char *name, LLVMValueRef *arg, unsign
     }
     while (i < asmp->argcount) {
         argvals[i] = asmp->xargs[i];
-	i += 1;
+    i += 1;
     }
     if (LLVMGetTypeKind(asmp->rettype) == LLVMVoidTypeKind) {
         LLVMBuildCall(gctx->curfn->builder, asmp->asminstr, argvals, asmp->argcount, "");

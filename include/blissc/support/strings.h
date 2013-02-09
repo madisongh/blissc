@@ -2,13 +2,11 @@
 #define strings_h__
 /*
  *++
- *	File:			strings.h
+ * strings.h - string-handling definitions.
  *
- *	Abstract:		String-handling definitions.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license.  See LICENSE.TXT for details.
  *--
  */
 #include <string.h>

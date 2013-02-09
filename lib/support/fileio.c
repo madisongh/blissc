@@ -1,27 +1,22 @@
 /*
  *++
- *	File:			fileio.c
+ * fileio.c - File input and output handling.
  *
- *	Abstract:		File input and output handling.
+ * This module implements all file I/O and path
+ * name handling.
  *
- *  Module description:
- *		This module implements all file I/O and path
- *      name handling.
+ * The implementation here uses standard C I/O
+ * calls, but abstracts the I/O handling such that
+ * some OS-specific implementation could be used
+ * if needed (e.g., for performance reasons).
  *
- *		The implementation here uses standard C I/O
- *		calls, but abstracts the I/O handling such that
- *		some OS-specific implementation could be used
- *		if needed (e.g., for performance reasons).
+ * The readline/writline routines assume that files
+ * are text divided into lines ending with linemarks
+ * (for standard C I/O, '\n').
  *
- *		The readline/writline routines assume that files
- *      are text divided into lines ending with linemarks
- *      (for standard C I/O, '\n').
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		22-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>
@@ -247,7 +242,7 @@ file_open (fioctx_t fio, const char *fname, size_t fnlen, int for_writing)
 
     if (ctx == 0) {
         return ctx;
-	}
+    }
     memset(ctx, 0, sizeof(struct filectx_s));
     memset(&pp, 0, sizeof(pp));
     if (file_splitname(fio, fname, (int) fnlen, (for_writing ? 0 : 1), &pp) == 0) {
@@ -322,7 +317,7 @@ file_close (filectx_t ctx)
     }
     close(cur->fd);
     if (cur->fname != 0) {
-    	free(cur->fname);
+        free(cur->fname);
     }
     free(cur);
 }
@@ -345,9 +340,9 @@ file_getname (filectx_t ctx)
  * Reads a line from a file.
  *
  * Returns:
- *		-1: error occurred (errors are also signalled)
- *		 0: end of file reached, no input
- *		>0: length of line
+ * -1: error occurred (errors are also signalled)
+ * 0: end of file reached, no input
+ * >0: length of line
  */
 int
 file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
@@ -424,8 +419,8 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
  * file_writeline
  *
  * Returns:
- *       -1: error
- *      >-1: length of line written (without linemark)
+ * -1: error
+ * >-1: length of line written (without linemark)
  */
 int
 file_writeline (filectx_t ctx, const char *buf, size_t buflen)

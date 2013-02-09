@@ -1,18 +1,13 @@
 /*
  *++
- *	File:			utils.c
+ * utils.c - Miscellaneous utility functions
  *
- *	Abstract:		Miscellaneous utility functions
+ * This module contains miscellaneous utility functions
+ * used by other modules.
  *
- *  Module description:
- *		This module contains miscellaneous utility functions
- *		used by other modules.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		 20-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>

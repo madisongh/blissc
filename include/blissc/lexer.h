@@ -2,13 +2,11 @@
 #define lexer_h__
 /*
  *++
- *	File:			lexer.h
+ * lexer.h - Lexer interface definitions.
  *
- *	Abstract:		Lexer interface definitions.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include "lexeme.h"

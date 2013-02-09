@@ -1,33 +1,28 @@
 /*
  *++
- *	File:			switches.c
+ * switches.c - Management of compiler switches
  *
- *	Abstract:		Management of compiler switches
+ * This module implements the framework for handling
+ * compiler switches and the parse routine for parsing
+ * the contents of a SWITCHES declaration and the switches
+ * that are specified on a MODULE declaration.
  *
- *  Module description:
- *		This module implements the framework for handling
- *      compiler switches and the parse routine for parsing
- *      the contents of a SWITCHES declaration and the switches
- *      that are specified on a MODULE declaration.
+ * There are two basic types of switches: toggle (called 'on-off' in
+ * the LRM), and special.  Toggle switches have two entries in the
+ * name table: the base name of the toggle, and the "NO" form;
+ * the lextype is used to differentiate the two.  As an added bonus,
+ * this module supports a more generic "value" toggle that has
+ * the same mechanics, for use by other modules (cf. the listings
+ * module).
  *
- *      There are two basic types of switches: toggle (called 'on-off' in
- *      the LRM), and special.  Toggle switches have two entries in the
- *      name table: the base name of the toggle, and the "NO" form;
- *      the lextype is used to differentiate the two.  As an added bonus,
- *      this module supports a more generic "value" toggle that has
- *      the same mechanics, for use by other modules (cf. the listings
- *      module).
+ * Special switches can take values in a variety of formats, and
+ * so require a handler to parse the switch value and take the
+ * appropriate action.  Each special switch is a separate keyword
+ * with its own lextype.
  *
- *      Special switches can take values in a variety of formats, and
- *      so require a handler to parse the switch value and take the
- *      appropriate action.  Each special switch is a separate keyword
- *      with its own lextype.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		25-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include "blissc/switches.h"

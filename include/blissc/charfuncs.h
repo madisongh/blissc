@@ -2,13 +2,11 @@
 #define charfuncs_h__
 /*
  *++
- *	File:			charfuncs.h
+ * charfuncs.h - definitions for CH$ functions.
  *
- *	Abstract:		Definitions for CH$ functions.
- *
- *	Author:			M. Madison
- *					Copyright © 2013, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license.  See LICENSE.TXT for details.
  *--
  */
 #include "expression.h"

@@ -1,18 +1,13 @@
 /*
  *++
- *	File:			expr_control.c
+ * expr_control.c - Control expressions
  *
- *	Abstract:		Control expressions
  *
- *  Module description:
+ * This module parses control expressions.
  *
- *       This module parses control expressions.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		22-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 
@@ -127,7 +122,7 @@ parse_condexp (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
  *
  * CASE exp FROM ctce TO ctce OF
  * SET
- *  [ctce { TO ctce } | INRANGE | OUTRANGE,...]: expression;
+ * [ctce { TO ctce } | INRANGE | OUTRANGE,...]: expression;
  * TES
  */
 static expr_node_t *
@@ -327,7 +322,7 @@ parse_case (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
  *
  * SELECT{A|U}|SELECTONE{A|U} exp OF
  * SET
- *  [ expr { TO expr } | OTHERWISE | ALWAYS,...]: expr;
+ * [ expr { TO expr } | OTHERWISE | ALWAYS,...]: expr;
  * TES
  */
 static expr_node_t *

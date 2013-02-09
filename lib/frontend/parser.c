@@ -1,20 +1,15 @@
 /*
  *++
- *	File:			parser.c
+ * parser.c - Parsing and lexical functions
  *
- *	Abstract:		Parsing and lexical functions
+ * This module is the center of all lexical processing, containing
+ * the main parsing functions and the implementations of all lexical
+ * functions. This module sits above the lexer module, which manages
+ * the lexeme stream.
  *
- *  Module description:
- *		This module is the center of all lexical processing, containing
- * 		the main parsing functions and the implementations of all lexical
- *		functions. This module sits above the lexer module, which manages
- *		the lexeme stream.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		21-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>
@@ -159,9 +154,9 @@ parser_lexeme_add (parse_ctx_t pctx, lextype_t lt, strdesc_t *text)
  * by performing a name lookup.
  *
  * Returns:
- *  -1: error
- *   0: reuse lexeme
- *   1: lexeme freed; use the result sequence
+ * -1: error
+ * 0: reuse lexeme
+ * 1: lexeme freed; use the result sequence
  */
 static int
 name_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
@@ -323,7 +318,7 @@ select_punctclass (parse_ctx_t pctx, lextype_t lt)
 } /* select_punctclass */
 
 /*
- *  --- Public API for this module ---
+ * --- Public API for this module ---
  */
 
 /*
@@ -651,7 +646,7 @@ parser_punct_separator (parse_ctx_t pctx)
                 return 0;
             }
             lex = parser_lexeme_create(pctx, pctx->separator,
-            						   &operstrs[pctx->separator-LEXTYPE_OP_MIN]);
+                                       &operstrs[pctx->separator-LEXTYPE_OP_MIN]);
     }
     return lex;
 
@@ -683,7 +678,7 @@ parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
     lexseq_init(&result);
 
     while (1) {
-    	// Get the next raw lexeme from the lexer
+        // Get the next raw lexeme from the lexer
         lex = lexer_next(pctx->lexctx, pctx->no_eof, &pctx->curpos);
         lt = lexeme_type(lex);
         if (lt == LEXTYPE_NONE || lt == LEXTYPE_END) {
@@ -1029,7 +1024,7 @@ parse_QUOTE (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
  * Common handler for %UNQUOTE and %EXPAND.
  * %UNQUOTE - binds the next lexeme, if it's a name.
  * %EXPAND  - binds the next lexeme, and expands it if it's a
- *            lexical function or a macro.
+ * lexical function or a macro.
  */
 static int
 parse_unquote_expand (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
@@ -1109,8 +1104,8 @@ parse_string_literal (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t cu
  * in the specified 'base'.
  *
  * NB: Assumes that the lextype codes for %B, %O, %DECIMAL,
- *     and %X are together in the lextype_t enumeration, in
- *     that order.
+ * and %X are together in the lextype_t enumeration, in
+ * that order.
  */
 static int
 parse_numeric_literal (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)

@@ -1,29 +1,24 @@
 /*
  *++
- *	File:			macros.c
+ * macros.c - Macro declarations and expansion.
  *
- *	Abstract:		Macro declarations and expansion.
+ * This module handles the processing of macro declarations
+ * and expansion.
  *
- *  Module description:
- *		This module handles the processing of macro declarations
- *		and expansion.
+ * Macro and macro parameter names are managed here, using
+ * the extensions provided by the nametable module.
  *
- *		Macro and macro parameter names are managed here, using
- *		the extensions provided by the nametable module.
+ * Some of the facilities here are used by the structures
+ * module, since structures are implemented essentially as
+ * simple macros.  In particular, structures use the MAC_PARAM
+ * name type for structure parameters, and those get parsed
+ * in the normal way, unlike real macro parameters, which
+ * get stashed in a private table and bound manually during
+ * the prepare_body() phase of macro expansion.
  *
- *		Some of the facilities here are used by the structures
- *		module, since structures are implemented essentially as
- *		simple macros.  In particular, structures use the MAC_PARAM
- *      name type for structure parameters, and those get parsed
- *      in the normal way, unlike real macro parameters, which
- *      get stashed in a private table and bound manually during
- *      the prepare_body() phase of macro expansion.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		22-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdlib.h>
@@ -661,7 +656,7 @@ macparam_lookup (lexctx_t lctx, scopectx_t scope, strdesc_t *pname, lexseq_t *va
  * iterative macro parameter lists.
  *
  * Returns: -1 on error
- *          index of closing delimiter in delims[] array on success
+ * index of closing delimiter in delims[] array on success
  */
 int
 macro_paramlist (expr_ctx_t ctx, scopectx_t curscope,
@@ -705,8 +700,8 @@ macro_paramlist (expr_ctx_t ctx, scopectx_t curscope,
         textpos_t pos;
         // Look for a parameter name
         if (!parse_decl_name(pctx, &namestr, &pos)) {
-        	// Null parameter list is OK, but empty parameter
-        	// after a comma is not
+            // Null parameter list is OK, but empty parameter
+            // after a comma is not
             if (did1) {
                 expr_signal(ctx, STC__NAMEEXP);
             }
@@ -753,7 +748,7 @@ macro_paramlist (expr_ctx_t ctx, scopectx_t curscope,
     }
     parser_scope_end(pctx);
 
-	// Check for the closing delimiter
+    // Check for the closing delimiter
     for (i = 0; i < ndelims && lt != delims[i]; i++);
     if (i >= ndelims) {
         scope_end(pscope);
@@ -843,16 +838,16 @@ declare_macro (expr_ctx_t ctx, scopectx_t scope, lextype_t curlt)
 
         if (lt == LEXTYPE_OP_ASSIGN) {
 
-			// If the type is still unknown, there were no parameter
-			// lists, so we know this is a simple, non-parameterized
-			// macro
+            // If the type is still unknown, there were no parameter
+            // lists, so we know this is a simple, non-parameterized
+            // macro
             if (macro->type == MACRO_UNK) {
                 macro->type = MACRO_SIMPLE;
             }
 
-			// Parse the macro body.  It must be wholly contained within
-			// the currently open file, so we set ERRONEOF to tell the
-			// parser that.
+            // Parse the macro body.  It must be wholly contained within
+            // the currently open file, so we set ERRONEOF to tell the
+            // parser that.
             parser_incr_erroneof(pctx);
             parser_scope_begin(pctx);
             for (lt = parser_next(pctx, QL_MACRO, &lex);
@@ -912,7 +907,7 @@ prepare_body (macroctx_t mctx, expansion_t *curexp, lexseq_t *result)
     static strdesc_t mend = STRDEF("<macro-end>");
 
     // Prepare the grouper and separator lexemes, in case
-	// they are needed (only applicable to iterative macros)
+    // they are needed (only applicable to iterative macros)
     if (curexp->count == 0 && macro->type == MACRO_ITER) {
         curexp->sep = parser_punct_separator(pctx);
         lex = parser_punct_grouper(pctx, 0);
@@ -993,8 +988,8 @@ macro_expand (macroctx_t mctx, name_t *macroname, lexseq_t *result)
     }
     memset(curexp, 0, sizeof(struct expansion_s));
 
-	// We save the punctuation class here, since it will get
-	// munged by the parsing of the macro parameters.
+    // We save the punctuation class here, since it will get
+    // munged by the parsing of the macro parameters.
     parser_punctclass_get(pctx, &pcl, &psep);
 
     prev_exp = 0;
@@ -1150,10 +1145,10 @@ macro_expand (macroctx_t mctx, name_t *macroname, lexseq_t *result)
 
     } /* if which < 3 */
 
-	// The macro actual parameters are now processed; hook
-	// the scope into the current hierarchy, restore the punctuation
-	// class to what it was before we parsed the actuals, and
-	// generate the expansion sequence.
+    // The macro actual parameters are now processed; hook
+    // the scope into the current hierarchy, restore the punctuation
+    // class to what it was before we parsed the actuals, and
+    // generate the expansion sequence.
 
     parser_punctclass_set(pctx, pcl, psep);
 

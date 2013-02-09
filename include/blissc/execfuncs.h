@@ -2,13 +2,11 @@
 #define execfuncs_h__
 /*
  *++
- *	File:			execfuncs.h
+ * execfuncs.h - Definitions for executable functions.
  *
- *	Abstract:		Definitions for executable functions.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include "expression.h"

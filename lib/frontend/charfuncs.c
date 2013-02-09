@@ -1,26 +1,19 @@
 /*
  *++
- *	File:			charfuncs.c
+ * charfuncs.c - Character-handling function package.
  *
- *	Abstract:		Character-handling function package.
+ * This module implements the CH$ executable functions.  It hooks i
+ * to the executable function handling system in the execfuncs module.
+ * A subset of the CH$ functions are implemented (partially, at least) in
+ * the front end, as the LRM specifies certain behavior when they are
+ * applied to compile-time constant expressions.  Others are "passed
+ * through" to the back-end code generator.  See the table in the
+ * initialization function at the bottom of this module for info on
+ * which is which.
  *
- *  Module description:
- *		This module implements the CH$ executable functions.
- *      This module hooks into the executable function handling
- *      system in the execfuncs module.  A subset of the CH$
- *      functions are implemented (partially, at least) in
- *      the front end, as the LRM specifies certain behavior
- *      when they are applied to compile-time constant
- *      expressions.  Others are "passed through" to the
- *      back-end code generator.  See the table in the
- *      initialization function at the bottom of this
- *      module for info on which is which.
- *
- *	Author:		M. Madison
- *				Copyright © 2013, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		19-Jan-2013	V1.0	Madison		Initial coding.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license.  See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>
@@ -88,7 +81,7 @@ charfunc_ALLOCATION (expr_ctx_t ctx, void *fctx, name_t *fnp,
  * charfunc_SIZE
  *
  * CH$SIZE([cs])
- * 
+ *
  * Character size function.  If no parameter is
  * specified, and the machine supports only one
  * character size, this is CTCE.
@@ -339,7 +332,7 @@ charfunc_TRANSTABLE (expr_ctx_t ctx, void *fctx, name_t *fnp,
     expr_is_ltce_set(e, 1);
 
     return e;
-    
+
 } /* charfunc_TRANSTABLE */
 
 static funcdef_t charfunc_funcs[] = {

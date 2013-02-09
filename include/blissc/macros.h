@@ -2,13 +2,11 @@
 #define macros_h__
 /*
  *++
- *	File:			macros.h
+ * macros.h - Definitions for macros.
  *
- *	Abstract:		Definitions for macros.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include "expression.h"

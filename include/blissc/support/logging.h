@@ -2,13 +2,11 @@
 #define logging_h__
 /*
  *++
- *	File:			logging.h
+ * logging.h - Logging definitions.
  *
- *	Abstract:		Logging definitions.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license.  See LICENSE.TXT for details.
  *--
  */
 #include <setjmp.h>

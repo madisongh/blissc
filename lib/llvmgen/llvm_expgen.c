@@ -1,21 +1,16 @@
 /*
  *++
- *	File:			llvm_expgen.c
+ * llvm_expgen.c - Expression generation for LLVM back-end
  *
- *	Abstract:		Expression generation for LLVM back-end
  *
- *  Module description:
+ * This module generates LLVM IR for expressions.  Includes
+ * the dispatcher for expression generation based on expression
+ * type, along with some of the generators.  Control, operator,
+ * and executable-function expression generators are in other modules.
  *
- *       This module generates LLVM IR for expressions.  Includes
- *      the dispatcher for expression generation based on expression
- *      type, along with some of the generators.  Control, operator,
- *      and executable-function expression generators are in other modules.
- *
- *	Author:		M. Madison
- *				Copyright © 2013, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		19-Jan-2013	V1.0	Madison		Initial coding.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 

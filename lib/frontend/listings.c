@@ -1,18 +1,13 @@
 /*
  *++
- *	File:			listings.c
+ * listings.c - Output handling for listings
  *
- *	Abstract:		Output handling for listings
+ * This module implements compiler listing output,
+ * including tracing, assembly listings, etc.
  *
- *  Module description:
- *		This module implements compiler listing output,
- *      including tracing, assembly listings, etc.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		25-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 

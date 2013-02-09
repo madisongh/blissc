@@ -2,13 +2,11 @@
 #define llvmgen_h__
 /*
  *++
- *	File:			llvmgen.h
+ * llvmgen.h - Common definitions for LLVM code generation.
  *
- *	Abstract:		Common definitions for LLVM code generation.
- *
- *	Author:			M. Madison
- *					Copyright © 2013, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 

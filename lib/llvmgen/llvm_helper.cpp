@@ -1,21 +1,16 @@
 /*
  *++
- *	File:			llvm_helper.cpp
+ * llvm_helper.cpp - Implements C APIs for parts of LLVM.
  *
- *	Abstract:		Implements C APIs for parts of LLVM.
  *
- *  Module description:
+ * LLVM provides C-callable APIs for most, but not all,
+ * of the functionality we need.  This module contains
+ * helper functions to provide C APIs for the handful
+ * of other functions not already provided.
  *
- *      LLVM provides C-callable APIs for most, but not all,
- *      of the functionality we need.  This module contains
- *      helper functions to provide C APIs for the handful
- *      of other functions not already provided.
- *
- *	Author:		M. Madison
- *				Copyright © 2013, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		05-Jan-2013	V1.0	Madison		Initial coding.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #ifndef __STDC_LIMIT_MACROS

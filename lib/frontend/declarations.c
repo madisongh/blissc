@@ -1,30 +1,25 @@
 /*
  *++
- *	File:			declarations.c
+ * declarations.c - Data, routine, module declarations
  *
- *	Abstract:		Data, routine, module declarations
+ * This module implements the parsing and binding of data
+ * and routine names, as well as declarations for
+ * labels, psects, and modules.
  *
- *  Module description:
- *		This module implements the parsing and binding of data
- *		and routine names, as well as declarations for
- *		labels, psects, and modules.
+ * COMPILETIME names are simple signed integers; the value
+ * is stored directly in the name_t cell.
  *
- *		COMPILETIME names are simple signed integers; the value
- *		is stored directly in the name_t cell.
+ * The MODULE name has attributes, but is relatively easy
+ * to track, since there is only one of these per module.
  *
- *		The MODULE name has attributes, but is relatively easy
- *		to track, since there is only one of these per module.
+ * All other names have attributes and run-time scope
+ * that needs to be tracked; this module handles parsing of
+ * the various attributes and calls on the symbols module
+ * to manage the names.
  *
- *		All other names have attributes and run-time scope
- *		that needs to be tracked; this module handles parsing of
- *		the various attributes and calls on the symbols module
- *		to manage the names.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		23-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>
@@ -1267,7 +1262,7 @@ declare_map (expr_ctx_t ctx, scopectx_t scope)
  * of the input and output parameters.
  *
  * Returns: 1 on success
- *          0 on failure
+ * 0 on failure
  */
 static int
 parse_formals (expr_ctx_t ctx, scopectx_t curscope,

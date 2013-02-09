@@ -2,13 +2,11 @@
 #define lexeme_h__
 /*
  *++
- *	File:			lexeme.h
+ * lexeme.h - Lexeme definitions.
  *
- *	Abstract:		Lexeme definitions.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 
@@ -47,17 +45,17 @@ typedef enum {
 
 // Naming convention for identifying classes of lexeme types:
 //
-// xxx			= basic lexeme type or special marker
-// OP_xxx 		= operator (single char or keyword)
-// DELIM_xxx	= delimiter (single char only)
-// LXF_xxx 		= lexical function
-// NAME_xxx		= Declarable names, builtins, and executable functions
-// DCL_xxx		= declaration keyword
-// ATTR_xxx		= attribute for a data or routine symbol
-// AU_xxx		= allocation-unit
+// xxx          = basic lexeme type or special marker
+// OP_xxx       = operator (single char or keyword)
+// DELIM_xxx    = delimiter (single char only)
+// LXF_xxx      = lexical function
+// NAME_xxx     = Declarable names, builtins, and executable functions
+// DCL_xxx      = declaration keyword
+// ATTR_xxx     = attribute for a data or routine symbol
+// AU_xxx       = allocation-unit
 // EXP_DELIM_xx = expression-level delimiter (BEGIN and END)
-// CTRL_xxx		= control-expression introducer
-// KWD_xxx		= other keyword, semantics may depend on context
+// CTRL_xxx     = control-expression introducer
+// KWD_xxx      = other keyword, semantics may depend on context
 #undef DOLEXTYPE
 #define DOLEXTYPES \
     DOLEXTYPE(NONE) \

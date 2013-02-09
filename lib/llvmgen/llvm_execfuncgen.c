@@ -1,22 +1,17 @@
 /*
  *++
- *	File:			llvm_execfuncgen.c
+ * llvm_execfuncgen.c - Executable function generation for LLVM back-end
  *
- *	Abstract:		Executable function generation for LLVM back-end
  *
- *  Module description:
+ * This module generates LLVM IR for control expressions.
  *
- *      This module generates LLVM IR for control expressions.
+ * Functions implemented in this module should include
+ * only generic LLVM code; machine-specific functions
+ * should go into other modules.  XXX
  *
- *      Functions implemented in this module should include
- *      only generic LLVM code; machine-specific functions
- *      should go into other modules.  XXX
- *
- *	Author:		M. Madison
- *				Copyright © 2013, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		21-Jan-2013	V1.0	Madison		Initial coding.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 
@@ -452,8 +447,8 @@ gen_ch_fill (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededt
  *
  * CH${EQL,NEQ,LSS,GTR,LEQ,GEQ,COMPARE}(len1, ptr1, len2, ptr2, padchr)
  * Returns:
- *   for CH${EQL,NEQ,LSS,GTR,LEQ,GEQ}, 1 if true, 0 if false
- *   for CH$COMPARE: -1 if less, 0 if equal, 1 if greater
+ * for CH${EQL,NEQ,LSS,GTR,LEQ,GEQ}, 1 if true, 0 if false
+ * for CH$COMPARE: -1 if less, 0 if equal, 1 if greater
  *
  * On x86, uses CMPSB to compare the string lengths and a form of
  * SCASB to compare against the padding character when the lengths
@@ -532,7 +527,7 @@ gen_ch_compare (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef need
  *
  * CH$FIND_CH(len, ptr, char), CH$FIND_NOT_CH(len, ptr, char)
  * Returns: pointer to matching (FIND) or not-matching (FIND_NOT) character,
- *          or null pointer on failure.
+ * or null pointer on failure.
  *
  * On x86, uses SCASB.
  */
@@ -574,19 +569,19 @@ gen_ch_fail (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededt
  * Generates code for CH$FIND_SUB.  The algorithm is:
  * 1. If the pattern length is zero, return the start of the string.
  * 2. While the string length >= pattern length:
- *      2a. Scan for the first character of the pattern in the string.
- *      2b. If not found, return failure.
- *      2c. Calculate the remaining length from the start point.
- *      2d. If the remaining length < pattern length, return failure.
- *      2e. Do the comparison with the pattern from that start point.
- *      2f. If a match, return the found start point.
- *      2g. Set the current string pointer to one past the start point.
- *      2h. Set the current string length to (remaining length)-1.
- *      2i. Iterate.
+ * 2a. Scan for the first character of the pattern in the string.
+ * 2b. If not found, return failure.
+ * 2c. Calculate the remaining length from the start point.
+ * 2d. If the remaining length < pattern length, return failure.
+ * 2e. Do the comparison with the pattern from that start point.
+ * 2f. If a match, return the found start point.
+ * 2g. Set the current string pointer to one past the start point.
+ * 2h. Set the current string length to (remaining length)-1.
+ * 2i. Iterate.
  * 3. If the loop exits, return failure.
  *
  * XXX This is a fair amount of code.  Might make sense to shift this
- *     to a runtime support routine instead of inlining.
+ * to a runtime support routine instead of inlining.
  */
 static LLVMValueRef
 gen_ch_findsub (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)
@@ -683,17 +678,17 @@ gen_ch_findsub (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef need
  *
  * Generates code for CH$COPY.  Algorithm:
  * 1. Validate the argument count - the front end only checks for
- *    an argument count >= 5
+ * an argument count >= 5
  * 2. Set curlen = dstlen, curptr = dstptr
  * 3. Iterate through the source argument pairs (slen, sptr) while curlen > 0:
- *      3a. If slen > curlen, slen = curlen
- *      3b. curptr = CH$MOVE(slen, sptr, dptr)
- *      3c. curptr = CH$PLUS(curptr, slen), curlen -= slen
- *      3d. Iterate.
+ * 3a. If slen > curlen, slen = curlen
+ * 3b. curptr = CH$MOVE(slen, sptr, dptr)
+ * 3c. curptr = CH$PLUS(curptr, slen), curlen -= slen
+ * 3d. Iterate.
  * 4. If curlen > 0 (ran out of source arguments): CH$FILL(curlen,curptr,fill)
  *
  * XXX This is a fair amount of code.  Might make sense to shift this
- *     to a runtime support routine instead of inlining.
+ * to a runtime support routine instead of inlining.
  */
 static LLVMValueRef
 gen_ch_copy (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededtype)

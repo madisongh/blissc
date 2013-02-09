@@ -2,13 +2,11 @@
 #define parser_h__
 /*
  *++
- *	File:			parser.h
+ * parser.h - Parser definitions.
  *
- *	Abstract:		Parser definitions.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 

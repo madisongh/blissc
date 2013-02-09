@@ -1,22 +1,17 @@
 /*
  *++
- *	File:			structures.c
+ * structures.c - Structure and field handling.
  *
- *	Abstract:		Structure and field handling.
+ * This module handles structure declarations and references.
+ * Structures are implemented as a pair of macros, one for
+ * allocation and one for access, although without the specialized
+ * processing that macro expansion entails.
+ * Fields are also implemented as macros, and field sets are
+ * simply lists of references to field definitions.
  *
- *  Module description:
- *		This module handles structure declarations and references.
- *		Structures are implemented as a pair of macros, one for
- *		allocation and one for access, although without the specialized
- *		processing that macro expansion entails.
- *		Fields are also implemented as macros, and field sets are
- *		simply lists of references to field definitions.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		21-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>
@@ -810,18 +805,18 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
     // address expression
     if (symname == 0) {
 
-		// It might be more correct to use expr_parse_expr() here to get
-		// the address expression, rather than deferring that to the
-		// expansion step later, but just handling it lexically was
-		// simpler to implement. XXX
+        // It might be more correct to use expr_parse_expr() here to get
+        // the address expression, rather than deferring that to the
+        // expansion step later, but just handling it lexically was
+        // simpler to implement. XXX
         ndelims = 3;
         if (!parse_lexeme_seq(pctx, 0, QL_NORMAL, delims, 3, &seq, &delim)) {
             return 0;
         }
         myscope = scope_copy(stru->acctbl, 0);
     } else {
-    	// Here we have an ordinary structure reference, and can use
-    	// the symbol name for the base address.
+        // Here we have an ordinary structure reference, and can use
+        // the symbol name for the base address.
         data_attr_t *attr = datasym_attr(symname);
         if (attr == 0) {
             expr_signal(ctx, STC__INTCMPERR, "structure_reference[1]");
@@ -847,12 +842,12 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
             }
         }
     }
-	// In the expansion, the name of the structure represents the
-	// base address, so define that as a macro parameter.
+    // In the expansion, the name of the structure represents the
+    // base address, so define that as a macro parameter.
     macparam_special(myscope, name_string(struname), &seq);
     lexseq_free(lctx, &seq);
 
-	// Now parse the access-actuals, bringing the field names into scope.
+    // Now parse the access-actuals, bringing the field names into scope.
     if (fldscope != 0) {
         parser_scope_push(pctx, fldscope);
     }
@@ -929,9 +924,9 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RBRACK);
     }
 
-	// At this point, we have built the complete sequence
-	// of lexemes to convert into the structure reference
-	// expression.
+    // At this point, we have built the complete sequence
+    // of lexemes to convert into the structure reference
+    // expression.
     lexseq_init(&seq);
     lexseq_copy(lctx, &seq, &stru->accbody);
     parser_scope_push(pctx, myscope);

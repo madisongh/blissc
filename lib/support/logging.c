@@ -1,28 +1,23 @@
 /*
  *++
- *	File:			logging.c
+ * logging.c - Logging/error handling facility.
  *
- *	Abstract:		Logging/error handling facility.
+ * This module implements logging of diagnostic messages,
+ * based on the status code definitions (see statcodes.c/h).
+ * When a fatal error is encountered, or the number of
+ * non-fatal errors exceeds the maximum-error threshold,
+ * compilation is aborted via longjmp().  Otherwise, diagnostics
+ * are simply formatted and logged to stderr with no
+ * interruption in flow.
  *
- *  Module description:
- *		This module implements logging of diagnostic messages,
- *		based on the status code definitions (see statcodes.c/h).
- *		When a fatal error is encountered, or the number of
- *		non-fatal errors exceeds the maximum-error threshold,
- *		compilation is aborted via longjmp().  Otherwise, diagnostics
- *		are simply formatted and logged to stderr with no
- *		interruption in flow.
+ * Text position will be reported with any diagnostic message,
+ * if possible; for this to work, a function pointer must be
+ * provided for this module to call to map the filename index
+ * in the textpos_t type to an actual file name.
  *
- *		Text position will be reported with any diagnostic message,
- *		if possible; for this to work, a function pointer must be
- *		provided for this module to call to map the filename index
- *		in the textpos_t type to an actual file name.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		22-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>

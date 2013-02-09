@@ -2,13 +2,11 @@
 #define switches_h__
 /*
  *++
- *	File:			switches.h
+ * switches.h - Compiler switches definitions.
  *
- *	Abstract:		Compiler switches definitions.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 

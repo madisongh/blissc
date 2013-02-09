@@ -2,13 +2,11 @@
 #define scanner_h__
 /*
  *++
- *	File:			scanner.h
+ * scanner.h - Scanner definitions.
  *
- *	Abstract:		Scanner definitions.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include "blissc/support/logging.h"

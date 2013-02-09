@@ -2,13 +2,11 @@
 #define expression_h__
 /*
  *++
- *	File:			expression.h
+ * expression.h - Expression definitions.
  *
- *	Abstract:		Expression definitions.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include "parser.h"
@@ -72,7 +70,7 @@ typedef struct expr_ctx_s *expr_ctx_t;
 struct expr_node_s;
 
 struct exprseq_s {
-	TQ_HDR_FIELDS		(struct expr_node_s)
+    TQ_HDR_FIELDS       (struct expr_node_s)
 };
 typedef struct exprseq_s exprseq_t;
 
@@ -174,7 +172,7 @@ struct expr_exit_s { // also used for RETURN
 #define EXPR_M_CTCE   (1<<1)
 #define EXPR_M_LTCE   (1<<2)
 struct expr_node_s {
-	TQ_ENT_FIELDS(struct expr_node_s)
+    TQ_ENT_FIELDS(struct expr_node_s)
     void               *genref;
     exprtype_t          type;
     textpos_t           textpos;
@@ -215,7 +213,7 @@ int oper_is_unary(optype_t op);
 #undef siu
 #define siu static inline __attribute__((unused))
 siu int expr_is_noop(expr_node_t *node) {
-	return (node == 0 ? 1 : node->type == EXPTYPE_NOOP); }
+    return (node == 0 ? 1 : node->type == EXPTYPE_NOOP); }
 siu int expr_is_primary(expr_node_t *node) {
     return (node == 0 ? 0 :
             (node->type >= EXPTYPE_PRIM_LIT && node->type <= EXPTYPE_PRIM_BLK)); }
@@ -254,10 +252,10 @@ siu void expr_is_ltce_set(expr_node_t *node, int v) { if (node == 0) return;
 // PRIM_LIT
 siu long expr_litval(expr_node_t *node) { return node->data.litdata.litval; }
 siu void expr_litval_set(expr_node_t *node, long value) {
-	node->data.litdata.litval = value; }
+    node->data.litdata.litval = value; }
 siu strdesc_t *expr_litstring(expr_node_t *node) { return node->data.litdata.litstring; }
 siu void expr_litstring_set(expr_node_t *node, strdesc_t *str) {
-	node->data.litdata.litstring = str; }
+    node->data.litdata.litstring = str; }
 
 // PRIM_STRUREF
 siu expr_node_t *expr_struref_accexpr(expr_node_t *node) {
@@ -275,13 +273,13 @@ siu void expr_seg_width_set(expr_node_t *node, unsigned int u) {
     node->data.segdata.width = u; }
 siu int expr_seg_signext(expr_node_t *node) { return node->data.segdata.signext; }
 siu void expr_seg_signext_set(expr_node_t *node, int s) {
-	node->data.segdata.signext = s; }
+    node->data.segdata.signext = s; }
 siu long expr_seg_offset(expr_node_t *node) { return node->data.segdata.offset; }
 siu void expr_seg_offset_set(expr_node_t *node, long offset) {
     node->data.segdata.offset = offset; }
 siu name_t *expr_seg_name(expr_node_t *node) { return node->data.segdata.name; }
 siu void expr_seg_name_set(expr_node_t *node, name_t *np) {
-	node->data.segdata.name = np; }
+    node->data.segdata.name = np; }
 
 // PRIM_FLDREF
 siu expr_node_t *expr_fldref_addr(expr_node_t *node) { return node->data.flddata.addr; }
@@ -395,7 +393,7 @@ siu void expr_idloop_decr_set(expr_node_t *node, int val) {
 
 // CTRL_CASE
 siu expr_node_t *expr_case_index(expr_node_t *node) {
-	return node->data.casedata.caseindex; }
+    return node->data.casedata.caseindex; }
 siu void expr_case_index_set(expr_node_t *node, expr_node_t *exp) {
     node->data.casedata.caseindex = exp; }
 siu long expr_case_lowbound(expr_node_t *node) {
@@ -437,7 +435,7 @@ siu int expr_sel_oneonly(expr_node_t *node) { return node->data.seldata.selecton
 siu void expr_sel_oneonly_set(expr_node_t *node, int val) {
     node->data.seldata.selectone = val; }
 siu exprseq_t *expr_sel_selectors(expr_node_t *node) {
-	return &node->data.seldata.sequence; }
+    return &node->data.seldata.sequence; }
 siu expr_node_t *expr_sel_alwaysaction(expr_node_t *node) {
     return node->data.seldata.alwaysaction; }
 siu void expr_sel_alwaysaction_set(expr_node_t *node, expr_node_t *exp) {
@@ -449,7 +447,7 @@ siu void expr_sel_otherwiseaction_set(expr_node_t *node, expr_node_t *exp) {
 // selectors
 siu expr_node_t *expr_selector_low(expr_node_t *node) { return node->data.slctrdata.low; }
 siu expr_node_t *expr_selector_high(expr_node_t *node) {
-	return node->data.slctrdata.high; }
+    return node->data.slctrdata.high; }
 siu void expr_selector_lohi_set(expr_node_t *node, expr_node_t *lo, expr_node_t *hi) {
     node->data.slctrdata.low = lo;
     node->data.slctrdata.high = hi; }
@@ -464,7 +462,7 @@ siu void expr_selector_next_set(expr_node_t *node, expr_node_t *sel) {
 
 // Exit expressions (EXITLOOP, LEAVE, RETURN)
 siu expr_node_t *expr_exit_value(expr_node_t *node) {
-	return node->data.exitdata.exitval; }
+    return node->data.exitdata.exitval; }
 siu void expr_exit_value_set(expr_node_t *node, expr_node_t *val) {
     node->data.exitdata.exitval = val; }
 siu name_t *expr_exit_label(expr_node_t *node) {

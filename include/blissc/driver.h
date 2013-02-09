@@ -2,13 +2,11 @@
 #define blissc_driver_h__
 /*
  *++
- *	File:			driver.h
+ * driver.h - compiler "driver" interface
  *
- *	Abstract:		compiler "driver" interface
- *
- *	Author:			M. Madison
- *					Copyright © 2013, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 

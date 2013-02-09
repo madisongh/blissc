@@ -1,28 +1,23 @@
 /*
  *++
- *	File:			expression.c
+ * expression.c - Expression parsing
  *
- *	Abstract:		Expression parsing
+ * This module is the center of expression handling.  It
+ * sits above the lexical-processing layer (the parser module
+ * and friends), and cooperates with the symbol, storage, and
+ * declaration modules to build the equivalent of an Abstract
+ * Syntax Tree (AST) for a module.
  *
- *  Module description:
- *		This module is the center of expression handling.  It
- *		sits above the lexical-processing layer (the parser module
- *		and friends), and cooperates with the symbol, storage, and
- *		declaration modules to build the equivalent of an Abstract
- *		Syntax Tree (AST) for a module.
+ * Expressions are represented by the expr_node_t type, which
+ * holds exactly one expression of any valid expression type.
+ * Depending on the type, a given expression node may reference
+ * one or more other expressions; for example, a block expression
+ * contains an exprseq_t listing the expressions contained in
+ * the block.
  *
- *		Expressions are represented by the expr_node_t type, which
- *		holds exactly one expression of any valid expression type.
- *		Depending on the type, a given expression node may reference
- *		one or more other expressions; for example, a block expression
- *		contains an exprseq_t listing the expressions contained in
- *		the block.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		22-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdlib.h>
@@ -806,9 +801,9 @@ expr_current_routine (expr_ctx_t ctx)
  * { CODECOMMENT 'qstring'{,...}: }
  * {label: ...}
  * BEGIN or (
- *   {declarations or nothing}
- *   {actions or nothing}
- *   {value or nothing}
+ * {declarations or nothing}
+ * {actions or nothing}
+ * {value or nothing}
  * END or )
  */
 static int
@@ -849,8 +844,8 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
             lexeme_free(ctx->lctx, lex);
             break;
         } else if (lt >= LEXTYPE_DCL_MIN && lt <= LEXTYPE_DCL_MAX) {
-			// Declarations are allowed only if we haven't
-			// yet seen an expressions in the block
+            // Declarations are allowed only if we haven't
+            // yet seen an expressions in the block
             if (exprseq_length(&seq) != 0) {
                 expr_signal(ctx, STC__INTCMPERR, "parse_block");
                 lexeme_free(ctx->lctx, lex);
@@ -889,12 +884,12 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
     }
 
     listing_endblock(ctx->lstgctx, scope);
-	// Check for the degenerate cases:
-	//	1. empty block ==  NOOP
-	//	2. block with single primary expression
-	//  along with no labels, no declarations, and no codecomment
-	//  In these cases, we can eliminate the block and just
-	//  return the NOOP or primary expression.
+    // Check for the degenerate cases:
+    //  1. empty block ==  NOOP
+    //  2. block with single primary expression
+    //  along with no labels, no declarations, and no codecomment
+    //  In these cases, we can eliminate the block and just
+    //  return the NOOP or primary expression.
     if (scope == 0 && codecomment == 0 && namereflist_empty(labels)) {
         if (exprseq_length(&seq) == 0) {
             *expp = expr_node_alloc(ctx, EXPTYPE_NOOP, endpos);
@@ -995,8 +990,8 @@ expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
         while (1) {
-        	// Handle %REF() calls - storing the expression and pushing its
-        	// address into the argument list
+            // Handle %REF() calls - storing the expression and pushing its
+            // address into the argument list
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_PCTREF, 0, 1)) {
                 scopectx_t scope = parser_scope_get(pctx);
                 textpos_t pos = parser_curpos(pctx);
@@ -1028,7 +1023,7 @@ expr_parse_arglist (expr_ctx_t ctx, expr_node_t *rtn)
                 arg = expr_node_alloc(ctx, EXPTYPE_PRIM_SEG, pos);
                 expr_seg_name_set(arg, tmpsym);
             } else if (!expr_parse_expr(ctx, &arg)) {
-            	// Use a zero literal expression for missing/erroneous parameters
+                // Use a zero literal expression for missing/erroneous parameters
                 arg = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
             }
 
@@ -1103,9 +1098,9 @@ size_ok (unsigned int nbits, unsigned int bpunit, unsigned int upval) {
  *
  * primary-expr OR executable-function-call <{args}>
  * Arguments, if present, are:
- *  P - starting bit position
- *	S - size (number of bits)
- *  E - sign-extension indicator (0=unsigned, 1=signed)
+ * P - starting bit position
+ * S - size (number of bits)
+ * E - sign-extension indicator (0=unsigned, 1=signed)
  *
  * Returns 1 on success, 0 otherwise.  If successful, a pointer to
  * the resulting FLDREF expression node is stored in expp.
@@ -1132,7 +1127,7 @@ parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
         expr_signal(ctx, STC__EXPREXP);
         size = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
     }
-	// Sign-extension must be a compile-time constant expression
+    // Sign-extension must be a compile-time constant expression
     if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COMMA, 0, 1)) {
         if (!expr_parse_ctce(ctx, 0, &signext) || (signext != 0 && signext != 1)) {
             expr_signal(ctx, STC__EXPCTCE);
@@ -1146,16 +1141,16 @@ parse_fldref (expr_ctx_t ctx, expr_node_t **expp) {
     // Field-references auto-parenthesize
     base = expr_block_simplify(ctx, *expp);
 
-	// Handle degenerate cases:
-	//	1. If the expression being field-referenced is a literal, do
-	//     the field-extraction now.
-	//  2. If the expression being field-referenced is a segment, and
-	//     the position aligns to an addressable boundary, and
-	//     the size is a power-of-2 number of addressable-unit bits,
-	// 	   stash the offset and number of AUs directly into the
-	//	   segment expression.
-	//  We can only do this if the position and size fields are CTCEs.
-	//
+    // Handle degenerate cases:
+    //  1. If the expression being field-referenced is a literal, do
+    //     the field-extraction now.
+    //  2. If the expression being field-referenced is a segment, and
+    //     the position aligns to an addressable boundary, and
+    //     the size is a power-of-2 number of addressable-unit bits,
+    //     stash the offset and number of AUs directly into the
+    //     segment expression.
+    //  We can only do this if the position and size fields are CTCEs.
+    //
     if (expr_type(pos) == EXPTYPE_PRIM_LIT && expr_type(size) == EXPTYPE_PRIM_LIT) {
         machinedef_t *mach = parser_get_machinedef(pctx);
         unsigned int bpunit = machine_unit_bits(mach);
@@ -1326,7 +1321,7 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         return exp;
     }
 
-	// Any primary can be followed by (...) to become a routine-call.
+    // Any primary can be followed by (...) to become a routine-call.
     if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
         expr_node_t *rtncall = expr_parse_arglist(ctx, exp);
         if (rtncall == 0) {
@@ -1392,7 +1387,7 @@ update_xtce_bits (expr_node_t *opexpr)
 {
     optype_t op = expr_op_type(opexpr);
 
-	// Fetch and assign are never CTCE or LTCE, obviously
+    // Fetch and assign are never CTCE or LTCE, obviously
     if (op == OPER_FETCH || op == OPER_ASSIGN) {
         expr_is_ctce_set(opexpr, 0);
         expr_is_ltce_set(opexpr, 0);
@@ -1412,11 +1407,11 @@ update_xtce_bits (expr_node_t *opexpr)
     }
     // If the LHS is LTCE (checked using is_ltce_only here, since
     // normally CTCEs also qualify as LTCEs):
-    //	- adding or subtracting a CTCE gives an LTCE result
+    //  - adding or subtracting a CTCE gives an LTCE result
     //  - address comparison or subtraction with another LTCE
-    //		that is either static and resides in the same psect
+    //      that is either static and resides in the same psect
     //      or is external and references the same external symbol
-    //		gives an LTCE result.
+    //      gives an LTCE result.
     if (expr_is_ltce_only(expr_op_lhs(opexpr))) {
         if ((op == OPER_ADD || op == OPER_SUBTRACT) &&
             expr_is_ctce(expr_op_rhs(opexpr))) {
@@ -1599,10 +1594,10 @@ parse_op_expr (expr_ctx_t ctx, optype_t curop, expr_node_t *lhs, expr_node_t *rh
  * into an operator expression's node tree, looking for
  * simple reductions:
  *
- *   CTCE <op> CTCE => value of resulting operation
- *   <anything> {add/subtract} <literal zero> => <anything>
- *   <address> {add/subtract} CTCE => adjust offset in the segment expression
- *   <anything> {times} <literal one> => <anything>
+ * CTCE <op> CTCE => value of resulting operation
+ * <anything> {add/subtract} <literal zero> => <anything>
+ * <address> {add/subtract} CTCE => adjust offset in the segment expression
+ * <anything> {times} <literal one> => <anything>
  *
  * Be careful about adding any further reductions/improvements
  * here.  For example, <anything> {times} <literal zero> results
@@ -1866,9 +1861,9 @@ expr_parse_expr (expr_ctx_t ctx, expr_node_t **expp)
     int status = 0;
 
     lhs = rhs = 0;
-	// Loop to keep building an operator expression
-	// as long as we have valid operands and an operator
-	// to process.
+    // Loop to keep building an operator expression
+    // as long as we have valid operands and an operator
+    // to process.
     while (1) {
         if (lhs == 0) {
             if (!parse_operand(ctx, &lhs)) {
@@ -2345,10 +2340,10 @@ parse_ISSTRING (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t lt)
  * %IF lexical-test %THEN ... [ %ELSE ... ] %FI
  *
  * Lexical conditional processing.
- *  - macros using %IF must have a fully formed sequence
- *  - end-of-file not permitted in the middle of this sequence
- *  - must handle nested sequences!!
- *  - The test is TRUE only if the *** low-order bit *** is 1
+ * - macros using %IF must have a fully formed sequence
+ * - end-of-file not permitted in the middle of this sequence
+ * - must handle nested sequences!!
+ * - The test is TRUE only if the *** low-order bit *** is 1
  *
  * We use a stack of state variables to track our current lexical-conditional
  * state.  State values are:
@@ -2366,7 +2361,7 @@ parse_ISSTRING (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t lt)
  * the current state is stacked and we move to a new condlevel.
  *
  * NB: %THEN, %ELSE, and %FI are handled in the parser module.  %IF
- *     is handled here because we need to parse an expression.
+ * is handled here because we need to parse an expression.
  */
 static int
 parse_IF (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
@@ -2531,8 +2526,8 @@ parse_nbits_func (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt
  * parse_ALLOCATION
  *
  * %ALLOCATION(name)
- *   Returns a numeric literal representing the number of addressable
- *   units allocated to <name> (which must have allocated storage).
+ * Returns a numeric literal representing the number of addressable
+ * units allocated to <name> (which must have allocated storage).
  */
 static int
 parse_ALLOCATION (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)

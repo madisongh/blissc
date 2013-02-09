@@ -2,14 +2,12 @@
 #define utils_h__
 /*
  *++
- *	File:			utils.h
+ * utils.h - Miscellaneous utility functions.
  *
- *	Abstract:		Miscellaneous utility functions.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
- *--	
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license.  See LICENSE.TXT for details.
+ *--
  */
 #include <stdlib.h>
 #include <stdint.h>
@@ -21,7 +19,7 @@
  * its text position; positions get saved with declarations.
  *
  * NB: If this is ported to a 32-bit host system, some adjustments
- *     may need to be made.
+ * may need to be made.
  */
 typedef uint64_t textpos_t;
 
@@ -63,8 +61,8 @@ typedef struct initval_s initval_t;
  * translation of integers between the host's "long" format and the target's
  * specific width/sign-extension format.
  *
- * NB: This code cannot handle widths larger than the size of a 'long' on 
- *     the host system.
+ * NB: This code cannot handle widths larger than the size of a 'long' on
+ * the host system.
  */
 long bits_needed(unsigned long);
 
@@ -103,18 +101,18 @@ static inline __attribute__((unused)) long getmvalue(long val, unsigned long mas
  * for the queue header and queue entry structures, respectively.
  *
  * Functions (<p> represents the prefix mentioned above):
- * <p>_init:		initializes the tail-queue header fields.
- * <p>_empty:		returns 1 if the queue is empty.
- * <p>_inshead: 	insert an entry at the head of the queue.
- * <p>_instail:		insert an entry at the tail of the queue.
- * <p>_append:		append one queue to another.
- * <p>_prepend:		prepend one queue at the front of another.
- * <p>_remhead:		remove the entry at the head of the queue.
- * <p>_remtail:		remove the entry at the tail of the queue.
- * <p>_remove:		remove an arbitrary entry from the queue.
- * <p>_head:		return a pointer to the first element in the queue.
- * <p>_tail:		return a pointer to the last element in the queue.
- * <p>_length:		return the number of entries in the queue.
+ * <p>_init:        initializes the tail-queue header fields.
+ * <p>_empty:       returns 1 if the queue is empty.
+ * <p>_inshead:     insert an entry at the head of the queue.
+ * <p>_instail:     insert an entry at the tail of the queue.
+ * <p>_append:      append one queue to another.
+ * <p>_prepend:     prepend one queue at the front of another.
+ * <p>_remhead:     remove the entry at the head of the queue.
+ * <p>_remtail:     remove the entry at the tail of the queue.
+ * <p>_remove:      remove an arbitrary entry from the queue.
+ * <p>_head:        return a pointer to the first element in the queue.
+ * <p>_tail:        return a pointer to the last element in the queue.
+ * <p>_length:      return the number of entries in the queue.
  *
  * Note that the 'remove' function is the most expensive, requiring
  * a linear search of the queue until the entry is found.  If you need

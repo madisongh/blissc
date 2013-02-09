@@ -1,21 +1,15 @@
 /*
  *++
- *	File:			llvm_gencode.c
+ * llvm_gencode.c - Common codegen to LLVM IR.
  *
- *	Abstract:		Common codegen to LLVM IR.
  *
- *  Module description:
+ * This module contains the main code generation entry
+ * points and some common routines shared by the other
+ * llvmgen modules.
  *
- *      This module contains the main code generation entry
- *      points and some common routines shared by the other
- *      llvmgen modules.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, 2013  Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		28-Dec-2012	V1.0	Madison		Initial coding.
- *      24-Jan-2013 V1.1    Madison     After refactoring.
+ * Copyright © 2012, 2013  Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 

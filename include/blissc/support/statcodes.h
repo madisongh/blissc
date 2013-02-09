@@ -2,13 +2,11 @@
 #define statcodes_h__
 /*
  *++
- *	File:			statcodes.h
+ * statcodes.h - status code and message definitions.
  *
- *	Abstract:		Status code and message definitions.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license.  See LICENSE.TXT for details.
  *--
  */
 #include <string.h>
@@ -171,9 +169,9 @@ STATCODES
 #undef STATCODE
 
 static inline __attribute__((unused)) unsigned int stc_severity (statcode_t s) {
-	return (s >> STC_V_SEVERITY) & ~((-1) << STC_S_SEVERITY); }
+    return (s >> STC_V_SEVERITY) & ~((-1) << STC_S_SEVERITY); }
 static inline __attribute__((unused)) unsigned int stc_msgno (statcode_t s) {
-	return (s >> STC_V_MSGNO) & ~((-1) << STC_S_MSGNO); }
+    return (s >> STC_V_MSGNO) & ~((-1) << STC_S_MSGNO); }
 static inline __attribute__((unused)) int stc_success (statcode_t s) { return (int) s >= 0; }
 static inline __attribute__((unused)) int stc_fail (statcode_t s) { return (int) s < 0; }
 

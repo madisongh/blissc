@@ -1,37 +1,32 @@
 /*
  *++
- *	File:			symbols.c
+ * symbols.c - Symbol management.
  *
- *	Abstract:		Symbol management.
+ * This module contains the routines that manage information
+ * about symbols: LITERALs, data symbols, and routines.  These
+ * are usually just called 'names' in the LRM, but I use 'symbol'
+ * to distinguish these names from names of other things.
+ * COMPILETIME names are also handled in this module, even though
+ * they are purely lexical entities.  LABELs are also managed
+ * here.
  *
- *  Module description:
- *		This module contains the routines that manage information
- *		about symbols: LITERALs, data symbols, and routines.  These
- *		are usually just called 'names' in the LRM, but I use 'symbol'
- *		to distinguish these names from names of other things.
- *		COMPILETIME names are also handled in this module, even though
- *		they are purely lexical entities.  LABELs are also managed
- *      here.
+ * This module layers on top of the generic name table management
+ * routines, which provide the underlying memory management and
+ * name lookup mechanisms.  See nametable.c for further information.
+ * Extension space is used for literals, routines, and data
+ * symbols.  COMPILETIME names make use of the generic 'value'
+ * storage already provided by the name table code.
  *
- *		This module layers on top of the generic name table management
- *		routines, which provide the underlying memory management and
- *		name lookup mechanisms.  See nametable.c for further information.
- *		Extension space is used for literals, routines, and data
- *      symbols.  COMPILETIME names make use of the generic 'value'
- *		storage already provided by the name table code.
+ * The parsing routines in declarations.c call on these routines
+ * to add symbols to the symbol table, once the names and attributes
+ * have been parsed.  A mechanism is provided to partially declare
+ * a symbol, marking it "pending" until all attributes have been
+ * parsed and the symbol information gets updated.
  *
- *		The parsing routines in declarations.c call on these routines
- *		to add symbols to the symbol table, once the names and attributes
- *		have been parsed.  A mechanism is provided to partially declare
- *		a symbol, marking it "pending" until all attributes have been
- *		parsed and the symbol information gets updated.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *
- *	Modification history:
- *		20-Dec-2012	V1.0	Madison		Initial coding.
  *--
  */
 #include <stdio.h>
@@ -50,9 +45,9 @@
  * to the types of symbols tracked here.
  *
  * NB: The 'genspace' field MUST BE LAST, as the code generator
- *     hook can extend these structures for its own purposes, and
- *     those extensions are assumed to immediately follow that
- *     field.
+ * hook can extend these structures for its own purposes, and
+ * those extensions are assumed to immediately follow that
+ * field.
  */
 struct sym_literal_s {
     literal_attr_t attr;
@@ -738,9 +733,9 @@ compare_data_attrs (data_attr_t *a, data_attr_t *b) {
         return 0;
     }
 
-	// Check that the field names are the same.  Since the names
-	// aren't kept in a particular order, we just do the O(n**2)
-	// walk through the lists.
+    // Check that the field names are the same.  Since the names
+    // aren't kept in a particular order, we just do the O(n**2)
+    // walk through the lists.
     // XXX A more efficient implementation should be considered. XXX
     for (aref = namereflist_head(&a->fields); aref != 0; aref = aref->tq_next) {
         for (bref = namereflist_head(&b->fields);

@@ -2,13 +2,11 @@
 #define llvm_helper_h__
 /*
  *++
- *	File:			llvm_helper.h
+ * llvm_helper.h - Additional LLVM C APIs
  *
- *	Abstract:		Additional LLVM C APIs
- *
- *	Author:			M. Madison
- *					Copyright © 2013, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #ifdef __cplusplus

@@ -1,22 +1,17 @@
 /*
  *++
- *	File:			lexeme.c
+ * lexeme.c - Lexeme handling
  *
- *	Abstract:		Lexeme handling
+ * This module implements the basic handling of lexemes.
+ * It provides memory management of the lexeme pool, routines
+ * for manipulating lexemes and lexeme sequences (along with the
+ * inlined functions in the counterpart header file), and
+ * the plug-in framework for lexical binding that the parser and other
+ * modules use.
  *
- *  Module description:
- *		This module implements the basic handling of lexemes.
- *		It provides memory management of the lexeme pool, routines
- *		for manipulating lexemes and lexeme sequences (along with the
- *		inlined functions in the counterpart header file), and
- *		the plug-in framework for lexical binding that the parser and other
- *		modules use.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		22-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>
@@ -134,11 +129,11 @@ lexeme_alloc (lexctx_t lctx, lextype_t type, const char *text, size_t len)
  * handling here.
  *
  * Returns:
- *  -1: error
- *   0: binding/unbinding occurred normally, original
- *      lexeme modified accordingly
- *   1: binding/unbinding resulted in modification of
- *      lexeme sequence (could be null result)
+ * -1: error
+ * 0: binding/unbinding occurred normally, original
+ * lexeme modified accordingly
+ * 1: binding/unbinding resulted in modification of
+ * lexeme sequence (could be null result)
  */
 int
 lexeme_bind (lexctx_t lctx, textpos_t curpos, quotelevel_t ql, quotemodifier_t qm,

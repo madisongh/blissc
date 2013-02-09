@@ -1,17 +1,12 @@
 /*
  *++
- *	File:			testdriver.c
+ * testdriver.c - Test main program for the blissc driver
  *
- *	Abstract:		Test main program for the blissc driver
+ * tbd
  *
- *  Module description:
- *                  tbd
- *
- *	Author:		M. Madison
- *				Copyright © 2013, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		25-Jan-2013	V1.0	Madison		Initial coding.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>

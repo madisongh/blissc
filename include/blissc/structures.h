@@ -2,13 +2,11 @@
 #define structures_h__
 /*
  *++
- *	File:			structures.h
+ * structures.h - Definitions for structures
  *
- *	Abstract:		Definitions for structures
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include "expression.h"

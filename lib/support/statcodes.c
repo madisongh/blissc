@@ -1,18 +1,13 @@
 /*
  *++
- *	File:			statcodes.c
+ * statcodes.c - Status codes and messages
  *
- *	Abstract:		Status codes and messages
+ * This module implements the message formatting
+ * parts of the status code facility.
  *
- *  Module description:
- *		This module implements the message formatting
- *		parts of the status code facility.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		21-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>
@@ -61,14 +56,14 @@ stc_msg_format (statcode_t statcode, char *buf, size_t bufsiz, ...)
  * Do NOT use sprintf-style formatting codes in
  * message strings! Use the formatting directives
  * below:
- *  !SL = text with length (char *str, int len)
- *  !SZ = null-terminated string (char *azstr)
- *  !SD = string descriptor (strdesc_t *sdsc)
- *  !U{I,S,L} = unsigned int, short, long
- *  !I{I,S,L} = signed int, short, long
- *  !X{I,S,L} = hexadecimal int, short, long
- *  !P = pointer
- *  !! = exclamation point
+ * !SL = text with length (char *str, int len)
+ * !SZ = null-terminated string (char *azstr)
+ * !SD = string descriptor (strdesc_t *sdsc)
+ * !U{I,S,L} = unsigned int, short, long
+ * !I{I,S,L} = signed int, short, long
+ * !X{I,S,L} = hexadecimal int, short, long
+ * !P = pointer
+ * !! = exclamation point
  */
 int
 stc_msg_vformat (statcode_t statcode, char *buf, size_t bufsiz, va_list ap)

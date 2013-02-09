@@ -1,31 +1,26 @@
 /*
  *++
- *	File:			llvm_symgen.c
+ * llvm_symgen.c - Symbol generation for the LLVM back-end.
  *
- *	Abstract:		Symbol generation for the LLVM back-end.
  *
- *  Module description:
+ * This module generates LLVM for symbols - literals,
+ * data segments, BINDs, routines, labels, psects, and
+ * modules.
  *
- *      This module generates LLVM for symbols - literals,
- *      data segments, BINDs, routines, labels, psects, and
- *      modules.
+ * Besides generating the symbols themselves, this module
+ * also handles generating addresses for the symbols needed
+ * in fetch and assignment expressions.
  *
- *      Besides generating the symbols themselves, this module
- *      also handles generating addresses for the symbols needed
- *      in fetch and assignment expressions.
+ * The front-end's symbols module has hooks that allow the
+ * code generator to reserve additional memory for each
+ * symbol, for tracking purposes.  We use this for stashing
+ * the LLVM values for symbols, saving us an extra lookup
+ * (and allowing for cases, like BINDs, where the BLISS name
+ * doesn't necessarily map to an LLVM name).
  *
- *      The front-end's symbols module has hooks that allow the
- *      code generator to reserve additional memory for each
- *      symbol, for tracking purposes.  We use this for stashing
- *      the LLVM values for symbols, saving us an extra lookup
- *      (and allowing for cases, like BINDs, where the BLISS name
- *      doesn't necessarily map to an LLVM name).
- *
- *	Author:		M. Madison
- *				Copyright © 2013, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		19-Jan-2013	V1.0	Madison		Initial coding.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include "llvmgen.h"
@@ -73,7 +68,7 @@ typedef struct llvm_module_s llvm_module_t;
  *
  * Set up the default PSECTs and their predeclared names.
  * XXX this is for Mach-O; needs to be selectable by target
- *     object format.
+ * object format.
  */
 void
 machine_psects_init (machinedef_t *mach, void *scope) {

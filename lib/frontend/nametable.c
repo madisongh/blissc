@@ -1,37 +1,32 @@
 /*
  *++
- *	File:			nametable.c
+ * nametable.c - Name table management.
  *
- *	Abstract:		Name table management.
+ * This module manages name tables and lexical scoping.
+ * For these purposes, a 'name' is any identifier that
+ * might need to be stored (possibly with information about
+ * what that identifier represents) and looked up quickly.
+ * Everything in the compiler that looks like a name, including
+ * keywords, is declared as a name.
  *
- *  Module description:
- *		This module manages name tables and lexical scoping.
- *		For these purposes, a 'name' is any identifier that
- *		might need to be stored (possibly with information about
- *		what that identifier represents) and looked up quickly.
- *		Everything in the compiler that looks like a name, including
- *		keywords, is declared as a name.
+ * Names are always defined in a name table, called a 'scope'.
+ * Scopes are chained together in a parent-child relationship,
+ * representing lexical scoping rules for names.  Keywords and
+ * other pre-declared name are always declared in the primary,
+ * outermost scope.  Name searches always extend from the current
+ * scope, through the parent scopes, until the end of the chain
+ * is reached or the name is found.
  *
- *		Names are always defined in a name table, called a 'scope'.
- *		Scopes are chained together in a parent-child relationship,
- *		representing lexical scoping rules for names.  Keywords and
- *		other pre-declared name are always declared in the primary,
- *		outermost scope.  Name searches always extend from the current
- *		scope, through the parent scopes, until the end of the chain
- *		is reached or the name is found.
- *
- *		Extension data can be stored with a name; this module provides
- *		some space for all names for simple value storage.  For
- *		names with types in the range LEXTYPE_NAME_MIN through
- *		LEXTYPE_NAME_MAX, additional extensions can be added by
- *		the modules handling those name types.
+ * Extension data can be stored with a name; this module provides
+ * some space for all names for simple value storage.  For
+ * names with types in the range LEXTYPE_NAME_MIN through
+ * LEXTYPE_NAME_MAX, additional extensions can be added by
+ * the modules handling those name types.
  *
  *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		21-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>
@@ -45,10 +40,10 @@
 /*
  * Internal flags.
  * ALLOCATED: for distinguishing dynamically-allocated
- *            name blocks from others
+ * name blocks from others
  * NODCLCHK:  for overriding the normal check for
- *            redeclaration (used for macro parameter
- *            tables)
+ * redeclaration (used for macro parameter
+ * tables)
  */
 #define NAME_M_ALLOCATED (1<<16)
 #define NAME_M_NODCLCHK  (1<<17)
@@ -324,8 +319,8 @@ name_free (name_t *np)
         np->namescope = ctx->nullscope;
     }
 
-	// OK to free it if it has been dynamically allocated
-	// and doesn't belong to any scope.
+    // OK to free it if it has been dynamically allocated
+    // and doesn't belong to any scope.
     if (np->namescope == ctx->nullscope &&
         (np->nameflags & NAME_M_ALLOCATED)) {
         int i = typeidx(np->nametype);
@@ -684,7 +679,7 @@ scope_copy (scopectx_t src, scopectx_t newparent)
  * Getters/setters for scopes
  */
 scopectx_t scope_getparent (scopectx_t scope) {
-	return (scope == 0 ? 0 : scope->parent); }
+    return (scope == 0 ? 0 : scope->parent); }
 void scope_setparent (scopectx_t scope, scopectx_t newparent) {
     if (scope != 0) scope->parent = newparent; }
 void scope_sclass_psectname_set (scopectx_t scope, storageclass_t cl, name_t *np) {

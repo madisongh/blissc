@@ -2,13 +2,11 @@
 #define machinedef_h__
 /*
  *++
- *	File:			machinedef.h
+ * machinedef.h - Machine-specific definitions.
  *
- *	Abstract:		Machine-specific definitions.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 

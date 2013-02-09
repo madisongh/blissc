@@ -1,19 +1,14 @@
 /*
  *++
- *	File:			driver.c
+ * driver.c - Compiler "driver" interface
  *
- *	Abstract:		Compiler "driver" interface
+ * This module implements the upper edge of the compiler,
+ * providing a callable interface to specify compiler options
+ * and exposing these options to other parts of the compiler.
  *
- *  Module description:
- *		This module implements the upper edge of the compiler,
- *      providing a callable interface to specify compiler options
- *      and exposing these options to other parts of the compiler.
- *
- *	Author:		M. Madison
- *				Copyright © 2013, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		18-Jan-2013	V1.0	Madison		Initial coding.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include "blissc/driver.h"
@@ -97,7 +92,7 @@ blissc_output_set (blissc_driverctx_t ctx, bliss_output_t outtype,
         ctx->free_outfn = 1;
     }
     return 1;
-    
+
 } /* blissc_output_set */
 
 /*
@@ -156,7 +151,7 @@ int blissc_variant_set (blissc_driverctx_t ctx, unsigned int val)
 {
     ctx->variant = val;
     return 1;
-    
+
 } /* blissc_variant_set */
 
 /*
@@ -172,7 +167,7 @@ blissc_target_set (blissc_driverctx_t ctx, const char *machspec)
     ctx->pctx = parser_init(ctx->strctx, 0, ctx->mach, &ctx->kwdscope, ctx->logctx, ctx->fioctx);
     ctx->ectx = expr_init(ctx->strctx, ctx->pctx, ctx->kwdscope);
     return 1;
-    
+
 } /* blissc_target_set */
 
 /*
@@ -185,7 +180,7 @@ blissc_optlevel_set (blissc_driverctx_t ctx, unsigned int val)
 {
     ctx->optlevel = val;
     return 1;
-    
+
 } /* blissc_optlevel_set */
 
 /*
@@ -194,7 +189,7 @@ blissc_optlevel_set (blissc_driverctx_t ctx, unsigned int val)
  * Begins a compilation.  This should be called only
  * after all of the desired compilation options have
  * been set -- they are processed here (passing the
- * settings down to the compiler modules) before 
+ * settings down to the compiler modules) before
  * compilation begins.  The source file name is required.
  */
 int
@@ -285,7 +280,7 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
     if (status) status = declare_module(ctx->ectx);
 
     return status;
-    
+
 } /* blissc_compile */
 
 /*

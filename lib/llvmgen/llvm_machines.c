@@ -1,21 +1,16 @@
 /*
  *++
- *	File:			llvm_machines.c
+ * llvm_machines.c - Maps LLVM targets to BLISS machines.
  *
- *	Abstract:		Maps LLVM targets to BLISS machines.
  *
- *  Module description:
+ * Manages the machine-specific context for a compilation,
+ * mapping it to the appropriate LLVM target.
  *
- *      Manages the machine-specific context for a compilation,
- *      mapping it to the appropriate LLVM target.
+ * XXX Currently only handles one target machine.
  *
- *      XXX Currently only handles one target machine.
- *
- *	Author:		M. Madison
- *				Copyright © 2013, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		18-Jan-2013	V1.0	Madison		Initial coding.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 

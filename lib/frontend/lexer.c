@@ -1,24 +1,19 @@
 /*
  *++
- *	File:			lexer.c
+ * lexer.c - Low-level lexical processing.
  *
- *	Abstract:		Low-level lexical processing.
+ * Low-level lexeme handling.  Maintains the stream of lexemes
+ * used by the parser; lexemes can be inserted into the stream,
+ * files can be passed to the scanner routines for reading and
+ * tokenizing.
  *
- *  Module description:
- *		Low-level lexeme handling.  Maintains the stream of lexemes
- *		used by the parser; lexemes can be inserted into the stream,
- *		files can be passed to the scanner routines for reading and
- *		tokenizing.
+ * At this level, only the most basic token-to-lexeme conversion
+ * happens -- specifically, conversion of operators and delimiters,
+ * and the primitive numeric and string literals.
  *
- *		At this level, only the most basic token-to-lexeme conversion
- *		happens -- specifically, conversion of operators and delimiters,
- *		and the primitive numeric and string literals.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		22-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>

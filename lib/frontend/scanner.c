@@ -1,28 +1,23 @@
 /*
  *++
- *	File:			scanner.c
+ * scanner.c - Lexeme scanner.
  *
- *	Abstract:		Lexeme scanner.
+ * This module is responsible for scanning an external
+ * input stream (a file or programmed input source) and
+ * breaking the input up into tokens that represent BLISS
+ * lexemes.  It is the lowest layer of the lexical processing
+ * subsystem.
  *
- *  Module description:
- *		This module is responsible for scanning an external
- *		input stream (a file or programmed input source) and
- *		breaking the input up into tokens that represent BLISS
- *		lexemes.  It is the lowest layer of the lexical processing
- *		subsystem.
+ * The scanner can be directed to point either files or
+ * "programmed" input sources, where the caller provides
+ * a callback function for fetching the next line of input.
+ * The callback function is expected to return the length of
+ * the input line, zero for EOF, or a negative return code
+ * for an error, just like the file I/O routines do.
  *
- *		The scanner can be directed to point either files or
- *		"programmed" input sources, where the caller provides
- *		a callback function for fetching the next line of input.
- *		The callback function is expected to return the length of
- *		the input line, zero for EOF, or a negative return code
- *		for an error, just like the file I/O routines do.
- *
- *	Author:		M. Madison
- *				Copyright © 2012, Matthew Madison
- *				All rights reserved.
- *	Modification history:
- *		21-Dec-2012	V1.0	Madison		Initial coding.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>

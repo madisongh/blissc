@@ -2,13 +2,11 @@
 #define gencode_h__
 /*
  *++
- *	File:			gencode.h
+ * gencode.h - Generic interface for gencode modules.
  *
- *	Abstract:		Generic interface for gencode modules.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 

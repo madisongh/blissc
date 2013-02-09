@@ -2,13 +2,11 @@
 #define fileio_h__
 /*
  *++
- *	File:			fileio.h
+ * fileio.h - File I/O definitions.
  *
- *	Abstract:		File I/O definitions.
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2013, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license.  See LICENSE.TXT for details.
  *--
  */
 #include <stdio.h>

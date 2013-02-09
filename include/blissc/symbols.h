@@ -2,13 +2,11 @@
 #define symbols_h__
 /*
  *++
- *	File:			symbols.h
+ * symbols.h - Definitions for symbol names
  *
- *	Abstract:		Definitions for symbol names
- *
- *	Author:			M. Madison
- *					Copyright © 2012, Matthew Madison
- *					All rights reserved.
+ * Copyright © 2012, Matthew Madison.
+ * All rights reserved.
+ * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 #include "expression.h"
