@@ -52,9 +52,11 @@ Contributions
 -------------
 
 There is a lot more yet to do on this project!  If you are interested
-in contributing, contact me (@madisongh on GitHub).
+in contributing, contact me (madisongh on GitHub, or by e-mail at
+madison <at> bliss-m.org).
 
 License
 -------
 All sources are released under the BSD 2-clause license.  See the
-LICENSE.TXT file for the license text.
+[LICENSE.TXT](https://github.com/madisongh/blissc/blob/master/LICENSE.TXT)
+file for the license text.
