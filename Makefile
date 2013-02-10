@@ -1,9 +1,22 @@
+# Makefile for blissc
+#
+# Copyright (c) 2013, Matthew Madison.
+# All rights reserved.
+# Distributed under license.  See LICENSE.TXT for details.
+#
+#
+# This file is temporary, and will be replaced when
+# the package is autotooled.
+#
+
 all: blissc
 
-CPPFLAGS += -I$(srcdir)include -I$(shell llvm-config --includedir)
+LLVM_CONFIG = llvm-config
+CPPFLAGS += -I$(srcdir)include -I$(shell $(LLVM_CONFIG) --includedir)
 CFLAGS += -MMD -Wall 
 CXXFLAGS += -MMD
-LIBS = -L $(shell llvm-config --libdir) $(shell llvm-config --libs) -lstdc++ -lpthread -ldl
+LIBS = -L $(shell $(LLVM_CONFIG) --libdir) $(shell $(LLVM_CONFIG) --libs) \
+	-lstdc++ -lpthread -ldl
 
 LIBDIRS := driver frontend llvmgen support
 
@@ -36,12 +49,12 @@ endef
 
 $(foreach libdir,$(LIBDIRS),$(eval $(call librule,$(libdir))))
 
-testdriver.o: $(srcdir)tests/testdriver.c
+blissc.o: $(srcdir)driver/blissc.c
 	$(COMPILE.c) $(OUTPUT_OPTION) $<
 
-blissc: testdriver.o $(OBJS)
-	$(CC) $(LDFLAGS) -o $@ testdriver.o $(OBJS) $(LIBS)
+blissc: blissc.o $(OBJS)
+	$(CC) $(LDFLAGS) -o $@ blissc.o $(OBJS) $(LIBS)
 
 $(foreach dep,$(patsubst %.o,%.d,$(OBJS)),$(eval \
 -include $(dep)))
--include testdriver.d
+-include blissc.d

@@ -1,8 +1,9 @@
 /*
  *++
- * testdriver.c - Test main program for the blissc driver
+ * blissc.c - Main driver program for blissc
  *
- * tbd
+ * Provides a command line interface for invoking
+ * the compiler.
  *
  * Copyright © 2013, Matthew Madison.
  * All rights reserved.
@@ -256,4 +257,5 @@ main (int argc, char * const argv[])
 finish:
     blissc_finish(cctx);
     return status;
-}
+
+} /* main */
