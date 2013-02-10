@@ -53,7 +53,7 @@ Contributions
 
 There is a lot more yet to do on this project!  If you are interested
 in contributing, contact me (madisongh on GitHub, or by e-mail at
-madison <at> bliss-m.org).
+madison _at_ bliss-m.org).
 
 License
 -------
