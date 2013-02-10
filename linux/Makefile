@@ -1,9 +1,9 @@
 all: blissc
 
-CPPFLAGS += -I$(srcdir)include
+CPPFLAGS += -I$(srcdir)include -I$(shell llvm-config --includedir)
 CFLAGS += -MMD -Wall 
 CXXFLAGS += -MMD
-LIBS = $(shell llvm-config --libs) -lstdc++ -lpthread -ldl
+LIBS = -L $(shell llvm-config --libdir) $(shell llvm-config --libs) -lstdc++ -lpthread -ldl
 
 LIBDIRS := driver frontend llvmgen support
 
