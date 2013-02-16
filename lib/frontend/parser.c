@@ -512,7 +512,8 @@ parser_fopen_main (parse_ctx_t pctx, const char *fname, size_t fnlen,
         return 0;
     }
     if (listopts != 0) {
-        listing_open(pctx->lstgctx, listfname, lfnlen, listopts);
+        listing_open(pctx->lstgctx, pctx->main_filename,
+                     strlen(pctx->main_filename), listfname, lfnlen, listopts);
         scan_listfuncs_set(lexer_scanctx(pctx->lexctx),
                            listing_printsrc, listing_file_close, pctx->lstgctx);
         log_lstgprintfn_set(pctx->logctx, listing_printline, pctx->lstgctx);

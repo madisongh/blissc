@@ -238,8 +238,8 @@ listing_file_close (void *vctx)
  * a listing file.
  */
 int
-listing_open (lstgctx_t ctx, const char *listfile, size_t lflen,
-              unsigned int flags)
+listing_open (lstgctx_t ctx, const char *fname, size_t flen,
+              const char *listfile, size_t lflen, unsigned int flags)
 {
     int i;
 
@@ -248,12 +248,12 @@ listing_open (lstgctx_t ctx, const char *listfile, size_t lflen,
         return 0;
     }
     // Use the right-most part of the file name if it's too long
-    if (lflen > FNAME_LEN) {
-        listfile += (lflen-FNAME_LEN);
-        lflen = FNAME_LEN;
+    if (flen > FNAME_LEN) {
+        fname += (flen-FNAME_LEN);
+        flen = FNAME_LEN;
     }
-    memcpy(ctx->main_input, listfile, lflen);
-    memset(ctx->main_input+lflen, ' ', FNAME_LEN-lflen);
+    memcpy(ctx->main_input, fname, flen);
+    memset(ctx->main_input+flen, ' ', FNAME_LEN-flen);
     memcpy(ctx->header2+FNAME_POS, ctx->main_input, FNAME_LEN);
     ctx->nlines = LINESPERPAGE;
 
