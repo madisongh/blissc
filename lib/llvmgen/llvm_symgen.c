@@ -75,21 +75,23 @@ machine_psects_init (machinedef_t *mach, void *scope) {
 
     scopectx_t kwdscope = scope;
     machine_ctx_t mctx = machine_context(mach);
-    gencodectx_t gctx = mctx->genctx;
     name_t *np;
     strdesc_t datadata =   STRDEF("__DATA,__data");
     strdesc_t textconst =  STRDEF("__TEXT,__const");
     strdesc_t texttext =   STRDEF("__TEXT,__text");
-    strdesc_t datacommon = STRDEF("__DATA,__common");
+    strdesc_t dotdata =    STRDEF(".data");
+    strdesc_t dottext =    STRDEF(".text");
 
-    np = psect_declare(kwdscope, &datadata, PSECT_M_ATTR_WRITE, 0);
+    np = psect_declare(kwdscope, (mctx->is_macho ? &datadata : &dotdata),
+                       PSECT_M_ATTR_WRITE, 0);
     scope_sclass_psectname_set(kwdscope, SCLASS_OWN, np);
     scope_sclass_psectname_set(kwdscope, SCLASS_GLOBAL, np);
-    np = psect_declare(kwdscope, &textconst, 0, 0);
+    np = psect_declare(kwdscope, (mctx->is_macho ? &textconst : &dottext), 0, 0);
     scope_sclass_psectname_set(kwdscope, SCLASS_PLIT, np);
-    np = psect_declare(kwdscope, &texttext, PSECT_M_ATTR_EXEC, 0);
+    if (mctx->is_macho) {
+        np = psect_declare(kwdscope, &texttext, PSECT_M_ATTR_EXEC, 0);
+    } // otherwise, just reuse the text psect name
     scope_sclass_psectname_set(kwdscope, SCLASS_CODE, np);
-    gctx->extern_psect = psect_declare(kwdscope, &datacommon, PSECT_M_ATTR_WRITE, 0);
 
 } /* machine_psects_init */
 

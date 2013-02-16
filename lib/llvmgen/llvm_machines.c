@@ -66,6 +66,8 @@ machine_init (const char *machspec)
         return 0;
     }
 
+    m->is_macho = (strstr(machspec, "darwin") != 0); // XXX
+
     mach = (machinedef_t *)(m + 1);
 
     mach->machctx = m;

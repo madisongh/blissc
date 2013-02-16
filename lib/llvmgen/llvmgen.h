@@ -102,7 +102,6 @@ struct gencodectx_s {
     llvm_btrack_t       *freebts;
     llvm_rtntrack_t     *freerts;
     llvm_rtntrack_t     *curfn;
-    name_t              *extern_psect;
     scopectx_t           asmscope;
     llvmgen_expgen_fn    expgen_funcs[EXPTYPE_COUNT];
 
