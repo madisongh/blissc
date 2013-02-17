@@ -10,6 +10,9 @@
 #
 
 all: blissc
+clean:
+	rm -f blissc
+	-find . -name '*.o' -exec rm -f {} \;
 
 LLVM_CONFIG = llvm-config
 CPPFLAGS += -I$(srcdir)include -I$(shell $(LLVM_CONFIG) --includedir)
