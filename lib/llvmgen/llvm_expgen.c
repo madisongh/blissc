@@ -306,7 +306,7 @@ gen_routine_call (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     }
     if (formalcount != 0) LLVMGetParamTypes(type, argtypes);
     for (i = 0, arg = exprseq_head(args); i < argcount && arg != 0; i++, arg = arg->tq_next) {
-        if (i >= formalcount) argtypes[i] = 0;
+        if (i >= formalcount) argtypes[i] = gctx->fullwordtype;
         argvals[i] = llvmgen_expression(gctx, arg, argtypes[i]);
     }
     if (argcount < formalcount) {
