@@ -1640,7 +1640,17 @@ reduce_op_expr (expr_ctx_t ctx, expr_node_t **nodep) {
                 expr_type_set(node, EXPTYPE_PRIM_LIT);
                 expr_litval_set(node, result);
                 expr_litstring_set(node, 0);
+                expr_is_ctce_set(node, 1);
             }
+        } else if (op == OPER_NOT &&
+                   expr_type(rhs) == EXPTYPE_PRIM_LIT) {
+            unsigned long result = ~ (unsigned long) expr_litval(rhs);
+            expr_node_free(ctx, rhs);
+            expr_node_free(ctx, lhs);
+            expr_type_set(node, EXPTYPE_PRIM_LIT);
+            expr_litval_set(node, result);
+            expr_litstring_set(node, 0);
+            expr_is_ctce_set(node, 1);
         }
         return;
     }
@@ -2493,8 +2503,8 @@ parse_nbits_func (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt
         }
         if (curlt == LEXTYPE_LXF_NBITS) {
             thesebits = bits_needed((unsigned long) labs(val));
-            if (val < 0 && thesebits < machine_scalar_bits(mach)-1) {
-                thesebits = machine_scalar_bits(mach)-1;
+            if (val < 0 && (val & (1 << (thesebits-1))) == 0) {
+                thesebits += 1;
             }
         } else {
             thesebits = bits_needed((unsigned long) val);

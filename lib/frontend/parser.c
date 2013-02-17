@@ -166,8 +166,9 @@ name_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
     strdesc_t *ltext = lexeme_text(lex);
     name_t *np;
     lextype_t nt;
+    unsigned int nlen = (ltext->len >= NAME_SIZE ? NAME_SIZE-1 : ltext->len);
 
-    np = name_search(pctx->curscope, ltext->ptr, ltext->len, &nt);
+    np = name_search(pctx->curscope, ltext->ptr, nlen, &nt);
 
     // Check for lexical conditional skips
     if (cs == COND_CWA) {

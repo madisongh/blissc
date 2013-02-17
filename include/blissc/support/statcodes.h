@@ -160,7 +160,8 @@ STATCODE(109,E,EXCRTNPARS,"routine !SD exceeds parameter list size limit") \
 STATCODE(110,E,ADDRVALRQ, "address expression required in this context") \
 STATCODE(111,E,EXCCALPARS,"routine call exceeds parameter list size limit") \
 STATCODE(112,E,INSFPARS,  "insufficient number of parameters in routine call") \
-STATCODE(113,W,INVOPTLVL, "invalid OPTLEVEL setting")
+STATCODE(113,W,INVOPTLVL, "invalid OPTLEVEL setting") \
+STATCODE(114,W,NAMETOOLON,"name \"!SD\" too long, truncating to !UI characters")
 
 #define STATCODE(msg,typ,nam,txt) STC__##nam =  STC_CODE_##typ(msg),
 typedef enum {

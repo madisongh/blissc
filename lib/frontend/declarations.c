@@ -180,7 +180,14 @@ parse_decl_name (parse_ctx_t pctx, strdesc_t **result, textpos_t *pos)
     lt = parser_next(pctx, QL_NAME, &lex);
 
     if (lt == LEXTYPE_NAME || lexeme_boundtype(lex) == LEXTYPE_NAME) {
-        *result = string_copy(parser_strctx(pctx), 0, lexeme_text(lex));
+        strdesc_t *ltext = lexeme_text(lex);
+        if (ltext->len > NAME_SIZE) {
+            log_signal(parser_logctx(pctx), parser_curpos(pctx),
+                       STC__NAMETOOLON, ltext, NAME_SIZE-1);
+            *result = string_from_chrs(parser_strctx(pctx), 0, ltext->ptr, NAME_SIZE-1);
+        } else {
+            *result = string_copy(parser_strctx(pctx), 0, ltext);
+        }
         *pos = parser_curpos(pctx);
         lexeme_free(parser_lexmemctx(pctx), lex);
         return 1;
@@ -522,6 +529,7 @@ plit_items (expr_ctx_t ctx, int defau, int is_static) {
     int itemau = defau;
     lexeme_t *lex;
     int ltces_ok = machine_linktime_constant_initializers(expr_machinedef(ctx));
+    static lextype_t strtypes[] = { LEXTYPE_STRING, LEXTYPE_CSTRING };
 
     if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LPAR, 0, 1)) {
         expr_signal(ctx, STC__DELIMEXP, "(");
@@ -556,7 +564,7 @@ plit_items (expr_ctx_t ctx, int defau, int is_static) {
         } else {
             expr_node_t *exp;
             lex = 0;
-            if (parser_expect(pctx, QL_NORMAL, LEXTYPE_STRING, &lex, 1)) {
+            if (parser_expect_oneof(pctx, QL_NORMAL, strtypes, 2, &lex, 1) >= 0) {
                 ivlist = initval_string_add(symctx, ivlist, 1, lexeme_text(lex));
                 lexeme_free(lctx, lex);
             } else if (expr_parse_expr(ctx, &exp)) {
