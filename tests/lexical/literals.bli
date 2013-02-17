@@ -1,0 +1,43 @@
+MODULE test =
+BEGIN
+
+REQUIRE 'testharness.req';
+
+LITERAL
+    a = 65535,
+    b = -1,
+    c = %DECIMAL'-10',
+    d = %O'177',   ! 127 decimal
+    e = %B'1101',  ! 13 decimal
+    f = %X'7F',
+    g = %C'''';
+
+BIND
+    h = UPLIT('untyped string literal', %CHAR(0)),
+    i = UPLIT(%ASCII'%ASCII string literal', %CHAR(0)),
+    j = UPLIT(%ASCIC'counted string literal') : VECTOR [,BYTE],
+    k = UPLIT(%ASCIZ'null-terminated string literal');
+    
+test_setup(numcases=11);
+
+GLOBAL ROUTINE runtest (caseno) : NOVALUE =
+BEGIN
+    CASE .caseno FROM 1 TO 11 OF
+    SET
+        [1] : test_output(.caseno, 'a = [%d,0x%x]', a, a);
+        [2] : test_output(.caseno, 'b = [%d,0x%x]', b, b);
+        [3] : test_output(.caseno, 'c = [%d,0x%x]', c, c);
+        [4] : test_output(.caseno, 'd = [%d,0x%x]', d, d);
+        [5] : test_output(.caseno, 'e = [%d,0x%x]', e, e);
+        [6] : test_output(.caseno, 'f = [%d,0x%x]', f, f);
+        [7] : test_output(.caseno, 'g = ["%c",0x%x]', g, g);
+        [8] : test_output(.caseno, 'h = "%s"', h);
+        [9] : test_output(.caseno, 'i = "%s"', i);
+       [10] : test_output(.caseno, 'j = "%-*.*s" (length=%d)',
+                          .j[0], .j[0], j[1], .j[0]);
+       [11] : test_output(.caseno, 'k = "%s"', k);
+    TES;
+END;
+
+END
+ELUDOM

@@ -1,0 +1,48 @@
+%TITLE'Test of %TITLE'
+%SBTTL'Test of %SBTTL'
+MODULE test =
+BEGIN
+
+REQUIRE 'testharness.req';
+
+OWN
+    teststrings : VECTOR [4] INITIAL (
+        UPLIT(%STRING (%CHAR(65), %CHAR(66), %CHAR(67), %CHAR(0))),
+        UPLIT(%EXACTSTRING (32, %C' ', 'Padded to 32'), %CHAR(0)),
+        UPLIT(%STRING('CHARCOUNT = ', %NUMBER(%CHARCOUNT('abc')), %CHAR(0))),
+        UPLIT(%STRING(%EXPLODE('An explosion'), %CHAR(0)))),
+    yesno : VECTOR [2] INITIAL(UPLIT(%ASCIZ'NO'),UPLIT(%ASCIZ'YES'));
+
+test_setup(numcases=16);
+
+GLOBAL ROUTINE runtest (caseno) : NOVALUE =
+BEGIN
+    CASE .caseno FROM 1 TO 16 OF
+    SET
+        [1 TO 4] : test_output(.caseno, '"%s"', .teststrings[.caseno-1]);
+        [5] : test_output(.caseno, '%NBITS(7,5,2)=%d', %NBITS(7,5,2));
+        [6] : test_output(.caseno, '%NBITS(-7)=%d', %NBITS(-7));
+        [7] : test_output(.caseno, '%NBITS(-8)=%d', %NBITS(-8));
+        [8] : test_output(.caseno, '%NBITSU(7)=%d', %NBITSU(7));
+        [9] : test_output(.caseno, '%NBITSU(-8)=%d', %NBITSU(-8));
+       [10] : test_output(.caseno, '%s', .yesno[%IDENTICAL(A+B,a+b)]);
+       [11] : test_output(.caseno, '%s',
+                .yesno[%IDENTICAL(A+B,%REMOVE((A+B)))]);
+       [12] : test_output(.caseno, '%s',
+                .yesno[%IDENTICAL(A+B,%REMOVE([A+B]))]);
+       [13] : test_output(.caseno, '%s',
+                .yesno[%IDENTICAL(A+B,%REMOVE(<A+B>))]);
+       [14] : test_output(.caseno, '%s', .yesno[%BLISS(BLISSM)]);
+       [15] : test_output(.caseno, '%d', %VARIANT);
+       [16] : test_output(.caseno, '%s', .yesno[%DECLARED(teststrings)]);
+    TES;
+    
+    %MESSAGE('Test of %MESSAGE')
+    %INFORM('Test of %INFORM')
+    %WARN('Test of %WARN')
+    %ERROR('Test of %ERROR')
+    %PRINT('Test of %PRINT')
+END;
+
+END
+ELUDOM

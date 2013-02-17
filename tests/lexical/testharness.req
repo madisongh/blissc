@@ -1,0 +1,12 @@
+KEYWORDMACRO
+    test_setup (numcases) =
+    EXTERNAL ROUTINE test_printf;
+    GLOBAL ROUTINE test_init =
+    BEGIN
+        RETURN numcases;
+    END%;
+MACRO
+    test_output (num, fmt)[] =
+        test_printf(UPLIT(%STRING('TEST %03d: ', fmt, %CHAR(10), %CHAR(0))),
+                    num %IF NOT %NULL(%REMAINING) %THEN , %REMAINING %FI)%;
+        
