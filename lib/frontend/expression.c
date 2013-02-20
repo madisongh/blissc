@@ -864,16 +864,12 @@ parse_block (expr_ctx_t ctx, lextype_t curlt, expr_node_t **expp,
             parser_insert(pctx, lex);
         }
         exp = 0;
-        if (!expr_parse_expr(ctx, &exp)) {
-            expr_signal(ctx, STC__EXPREXP);
-            parser_skip_to_delim(pctx, closer);
-            endpos = parser_curpos(pctx);
-            break;
+        if (expr_parse_expr(ctx, &exp)) {
+            // The last expression in a block is its value
+            // (as far as we know at compile time)
+            valexp = exp;
+            exprseq_instail(&seq, exp);
         }
-        // The last expression in a block is its value
-        // (as far as we know at compile time)
-        valexp = exp;
-        exprseq_instail(&seq, exp);
         lt = parser_next(pctx, QL_NORMAL, &lex);
         // Semicolon separator also discards the value
         if (lt == LEXTYPE_DELIM_SEMI) {
