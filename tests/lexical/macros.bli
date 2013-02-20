@@ -1,5 +1,3 @@
-%TITLE'Test of %TITLE'
-%SBTTL'Test of %SBTTL'
 MODULE test =
 BEGIN
 
@@ -14,7 +12,8 @@ MACRO
     doswap(a, b) = (LOCAL tmp; tmp = .a; a = .b; b = .tmp)%,
     condmacro(x)[] = %STRING(x), condmacro(%REMAINING) %,
     test_cases(caseindex)[fmt, vals] =
-        [%COUNT+1] : test_output(caseindex, fmt, %REMOVE(vals)) %,
+        %ASSIGN(ctval, %COUNT+1)
+        [ctval] : test_output(caseindex, fmt, %REMOVE(vals)) %,
     macro_argcount(x)[] = %LENGTH %,
     expandthis = %ASCIZ'expanded' %,
     expander(mname) = %EXPAND %QUOTE mname %,
