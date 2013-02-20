@@ -213,6 +213,8 @@ macroend_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
                 if (cur->sep != 0) {
                     lexseq_instail(result, lexeme_copy(lctx, cur->sep));
                 }
+                mctx->state = EXP_NORMAL;
+                parser_skipmode_set(pctx, 0);
                 return prepare_body(mctx, cur, result);
             }
             if (curmac->type == MACRO_ITER && cur->closer != 0) {
