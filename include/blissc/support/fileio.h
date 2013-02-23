@@ -30,6 +30,7 @@ struct fio_pathparts_s {
     size_t       path_filenamelen;
     char        *path_suffix;
     size_t       path_suffixlen;
+    int          path_absolute;
 };
 typedef struct fio_pathparts_s fio_pathparts_t;
 

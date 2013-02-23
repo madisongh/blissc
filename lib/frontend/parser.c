@@ -469,6 +469,7 @@ int
 parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen, char **actnamep)
 {
     fio_pathparts_t pp, mainpp;
+    char dirnamebuf[1024];
     int status;
 
     memset(&pp, 0, sizeof(pp));
@@ -482,10 +483,19 @@ parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen, char **actnamep
         pp.path_suffixlen = 4;
     }
     // XXX - should provide the equivalent of '-I' paths
-    if (pp.path_dirname == 0) {
+    if (!pp.path_absolute) {
         if (file_splitname(pctx->fioctx, pctx->main_filename, -1, 1, &mainpp)) {
-            pp.path_dirname = mainpp.path_dirname;
-            pp.path_dirnamelen = mainpp.path_dirnamelen;
+            if (pp.path_dirnamelen > 0 &&
+                pp.path_dirnamelen + mainpp.path_dirnamelen < sizeof(dirnamebuf)) {
+                memcpy(dirnamebuf, mainpp.path_dirname, mainpp.path_dirnamelen);
+                memcpy(dirnamebuf+mainpp.path_dirnamelen, pp.path_dirname,
+                       pp.path_dirnamelen);
+                pp.path_dirname = dirnamebuf;
+                pp.path_dirnamelen += mainpp.path_dirnamelen;
+            } else {
+                pp.path_dirname = mainpp.path_dirname;
+                pp.path_dirnamelen = mainpp.path_dirnamelen;
+            }
         }
     }
     if (file_combinename(pctx->fioctx, &pp) == 0) {

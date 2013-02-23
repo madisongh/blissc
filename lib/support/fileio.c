@@ -14,7 +14,7 @@
  * are text divided into lines ending with linemarks
  * (for standard C I/O, '\n').
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012-2013, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -161,6 +161,8 @@ file_splitname (fioctx_t fio, const char *orig, int origlen, int canonicalize,
         parts->path_filenamelen = partlen;
         parts->path_dirname = parts->path_fullname;
         parts->path_dirnamelen = (unsigned int) (cp - parts->path_fullname) + 1;
+        parts->path_absolute = (parts->path_dirnamelen > 0 &&
+                                parts->path_dirname[0] == '/');
     } else {
         parts->path_filename = parts->path_fullname;
         parts->path_filenamelen = len;
