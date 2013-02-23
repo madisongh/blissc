@@ -1851,13 +1851,13 @@ reduce_op_expr (expr_ctx_t ctx, expr_node_t **nodep) {
 } /* reduce_op_expr */
 
 /*
- * expr_parse_expr
+ * parse_expr_internal
  *
- * The main entry point for parsing an expression of any
- * kind.
+ * Parses an expression.  Operator expressions are parsed iteratively,
+ * with precedence handling.
  */
-int
-expr_parse_expr (expr_ctx_t ctx, expr_node_t **expp)
+static int
+parse_expr_internal (expr_ctx_t ctx, expr_node_t **expp, optype_t lastop)
 {
     parse_ctx_t pctx = ctx->pctx;
     expr_node_t *lhs, *rhs;
@@ -1866,19 +1866,15 @@ expr_parse_expr (expr_ctx_t ctx, expr_node_t **expp)
     optype_t op;
     int status = 0;
 
-    lhs = rhs = 0;
+    rhs = 0;
+    if (!parse_operand(ctx, &lhs)) {
+        return 0;
+    }
     // Loop to keep building an operator expression
     // as long as we have valid operands and an operator
-    // to process.
-    while (1) {
-        if (lhs == 0) {
-            if (!parse_operand(ctx, &lhs)) {
-                break;
-            }
-        }
-        if (lhs == 0) {
-            break;
-        }
+    // to process that has a precedence higher than the
+    // caller's.
+    while (lhs != 0) {
         if (expr_is_primary(lhs) || expr_is_execfun(lhs) ||
             expr_is_opexp(lhs)) {
             lt = parser_next(pctx, QL_NORMAL, &lex);
@@ -1887,16 +1883,19 @@ expr_parse_expr (expr_ctx_t ctx, expr_node_t **expp)
                 parser_insert(pctx, lex);
                 break;
             }
+            if (lastop != OPER_NONE &&
+                (op_priority(lastop) > op_priority(op) ||
+                 (op_priority(lastop) == op_priority(op) && !op_is_r2l(lastop)))) {
+                parser_insert(pctx, lex);
+                break;
+            }
             lexeme_free(ctx->lctx, lex);
-            if (!parse_operand(ctx, &rhs)) {
+            if (!parse_expr_internal(ctx, &rhs, op)) {
                 expr_signal(ctx, STC__SYNTAXERR);
                 break;
             }
 
             lhs = parse_op_expr(ctx, op, lhs, rhs);
-            if (lhs == 0) {
-                break;
-            }
         } else {
             break;
         }
@@ -1913,7 +1912,20 @@ expr_parse_expr (expr_ctx_t ctx, expr_node_t **expp)
 
     return status;
 
-} /* parse_expr */
+} /* parse_expr_internal */
+
+/*
+ * expr_parse_expr
+ *
+ * External entry point for general expression parsing.
+ * Calls on the internal routine above to do the real work.
+ */
+int
+expr_parse_expr (expr_ctx_t ctx, expr_node_t **expp)
+{
+    return parse_expr_internal(ctx, expp, OPER_NONE);
+
+} /* expr_parse_expr */
 
 /*
  * expr_parse_seq
