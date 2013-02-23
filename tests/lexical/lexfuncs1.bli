@@ -3,7 +3,7 @@
 MODULE test =
 BEGIN
 
-REQUIRE 'testharness.req';
+REQUIRE '../testharness.req';
 
 OWN
     teststrings : VECTOR [4] INITIAL (
