@@ -1,0 +1,57 @@
+MODULE test =
+BEGIN
+
+REQUIRE 'testharness.req';
+
+LITERAL
+    z = 3 + 4,
+    y = z + 2 * 5,
+    bpvaltest1 = -7 : SIGNED(%BPVAL),
+    bpvaltest2 = 255 : UNSIGNED(%BPVAL);
+    
+FIELD
+    testfield = [0,4,4,0];
+    
+GLOBAL
+    testglob;
+    
+OWN
+    testown,    
+    yesno : VECTOR [2] INITIAL(UPLIT(%ASCIZ'NO'),UPLIT(%ASCIZ'YES'));
+
+test_setup(numcases=10);
+
+GLOBAL ROUTINE runtest (caseno) : NOVALUE =
+BEGIN
+    LOCAL
+        testlocal,
+        testalloc   : VECTOR [2];
+
+    testglob = 1;
+    testown = 2;
+    testlocal = 3;
+                    
+    CASE .caseno FROM 1 TO 10 OF
+    SET
+        [1] : test_output(.caseno, '%s,%s', .yesno[%CTCE(z)],.yesno[%CTCE(y)]);
+        [2] : test_output(.caseno, '%d,%d,%d,%d', %FIELDEXPAND(testfield));
+        [3] : test_output(.caseno, '%d,%d', bpvaltest1, bpvaltest2);
+        [4] : test_output(.caseno, '%s,%s',
+                .yesno[%CTCE(testglob)], .yesno[%LTCE(testglob)]);
+        [5] : test_output(.caseno, '%s,%s',
+                .yesno[%CTCE(testown)], .yesno[%LTCE(testown)]);
+        [6] : test_output(.caseno, '%s,%s',
+                .yesno[%CTCE(testlocal)], .yesno[%LTCE(testlocal)]);
+        [7] : test_output(.caseno, '%s,%s',
+                .yesno[%CTCE(.testglob)], .yesno[%LTCE(.testglob)]);
+        [8] : test_output(.caseno, '%d', %ALLOCATION(testalloc));
+        [9] : test_output(.caseno, 
+                %STRING(%NUMBER(y),'+',%NUMBER(z),'=',%NUMBER(y+z)));
+       [10] : test_output(.caseno, '%s,%s', .yesno[%DECLARED(testglob)],
+                .yesno[%DECLARED(nosuchname)]);
+    TES;
+    
+END;
+
+END
+ELUDOM

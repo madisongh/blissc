@@ -1,0 +1,57 @@
+MODULE test =
+BEGIN
+
+REQUIRE 'testharness.req';
+
+    
+OWN
+    yesno : VECTOR [2] INITIAL(UPLIT(%ASCIZ'NO'),UPLIT(%ASCIZ'YES'));
+
+test_setup(numcases=29);
+
+GLOBAL ROUTINE runtest (caseno) : NOVALUE =
+BEGIN
+    LOCAL
+        a, b, val;
+        
+    a = 12;
+    b = 6;
+
+    CASE .caseno FROM 1 TO 29 OF
+    SET
+        [1] : val = +.a;
+        [2] : val = -.a;
+        [3] : val = .a + .b;
+        [4] : val = -.a + (-.b);
+        [5] : val = .a - .b;
+        [6] : val = .a * .b;
+        [7] : val = .a / .b;
+        [8] : val = .a MOD .b;
+        [9] : val = .a ^ .b;
+       [10] : val = .a EQL .b;
+       [11] : val = .a GTR .b;
+       [12] : val = .a LSS .b;
+       [13] : val = .a GEQ .b;
+       [14] : val = .a LEQ .b;
+       [15] : val = NOT .a;
+       [16] : val = .a AND .b;
+       [17] : val = .a OR .b;
+       [18] : val = .a XOR .b;
+       [19] : val = .a EQV .b;
+       [20] : val = (a = .b);
+       [21] : val = .a + .b * 2;
+       [22] : val = .a * 2 + .b;
+       [23] : val = a = .b EQLU 6;
+       [24] : val = .a * (2 + .b);
+       [25] : val = .a / .b + .a MOD .b;
+       [26] : val = .a / 3 * .b + 5;
+       [27] : val = .a * 1;
+       [28] : val = .b * 0;
+       [29] : val = .a + .b * 2 + .a / 3;
+    TES;
+    test_output(.caseno, '%ld', .val);
+    
+END;
+
+END
+ELUDOM
