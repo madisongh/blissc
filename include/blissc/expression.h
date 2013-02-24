@@ -110,7 +110,8 @@ struct expr_cond_s {
     struct expr_node_s  *alt;
 };
 typedef enum {
-    LOOP_PRETEST, LOOP_POSTTEST
+    LOOP_PRETEST_WHILE, LOOP_POSTTEST_WHILE,
+    LOOP_PRETEST_UNTIL, LOOP_POSTTEST_UNTIL
 } looptesttype_t;
 struct expr_loopwu_s {
     struct expr_node_s  *test;

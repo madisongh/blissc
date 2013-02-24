@@ -736,7 +736,8 @@ parse_wu_loop (expr_ctx_t ctx, lextype_t opener, lexeme_t *curlex)
 
     exp = expr_node_alloc(ctx, EXPTYPE_CTRL_LOOPWU, parser_curpos(expr_parse_ctx(ctx)));
     expr_wuloop_test_set(exp, test);
-    expr_wuloop_type_set(exp, LOOP_PRETEST);
+    expr_wuloop_type_set(exp, (lexeme_type(curlex) == LEXTYPE_CTRL_WHILE
+                               ? LOOP_PRETEST_WHILE : LOOP_PRETEST_UNTIL));
     expr_wuloop_body_set(exp, body);
     // XXX should evaluate the loop exits for values
     expr_has_value_set(exp, 1);
@@ -784,7 +785,8 @@ parse_do_loop (expr_ctx_t ctx, lextype_t opener, lexeme_t *curlex)
 
     exp = expr_node_alloc(ctx, EXPTYPE_CTRL_LOOPWU, parser_curpos(expr_parse_ctx(ctx)));
     expr_wuloop_test_set(exp, test);
-    expr_wuloop_type_set(exp, LOOP_POSTTEST);
+    expr_wuloop_type_set(exp, (lt == LEXTYPE_CTRL_WHILE
+                               ? LOOP_POSTTEST_WHILE : LOOP_POSTTEST_UNTIL));
     expr_wuloop_body_set(exp, body);
     // XXX should evaluate the loop exits for values
     expr_has_value_set(exp, 1);

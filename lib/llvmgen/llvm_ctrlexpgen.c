@@ -363,7 +363,8 @@ gen_while_until_loop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtyp
     LLVMBasicBlockRef loopblk, testblk;
     LLVMValueRef result, val;
 
-    if (expr_wuloop_type(exp) == LOOP_PRETEST) {
+    if (expr_wuloop_type(exp) == LOOP_PRETEST_WHILE ||
+        expr_wuloop_type(exp) == LOOP_PRETEST_UNTIL) {
         loopblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, exitblk, llvmgen_label(gctx));
         testblk = LLVMInsertBasicBlockInContext(gctx->llvmctx, loopblk, llvmgen_label(gctx));
         LLVMBuildBr(builder, testblk);
@@ -374,7 +375,12 @@ gen_while_until_loop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtyp
     }
     LLVMPositionBuilderAtEnd(builder, testblk);
     val = llvmgen_expression(gctx, expr_wuloop_test(exp), gctx->int1type);
-    LLVMBuildCondBr(builder, val, loopblk, exitblk);
+    if (expr_wuloop_type(exp) == LOOP_PRETEST_WHILE ||
+        expr_wuloop_type(exp) == LOOP_POSTTEST_WHILE) {
+        LLVMBuildCondBr(builder, val, loopblk, exitblk);
+    } else {
+        LLVMBuildCondBr(builder, val, exitblk, loopblk);
+    }
     llvmgen_btrack_update_brcount(gctx, bt);
     llvmgen_btrack_update_phi(gctx, bt, LLVMGetInsertBlock(builder),
                               LLVMConstAllOnes(gctx->fullwordtype));
