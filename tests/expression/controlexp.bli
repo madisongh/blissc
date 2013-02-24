@@ -1,0 +1,93 @@
+MODULE test =
+BEGIN
+
+REQUIRE '../testharness.req';
+
+    
+test_setup(numcases=10);
+
+GLOBAL ROUTINE runtest (caseno) : NOVALUE =
+BEGIN
+    LOCAL
+        val;
+        
+    IF .caseno GEQ 1 AND .caseno LEQ 3 THEN
+    BEGIN
+        val = (IF .caseno EQL 1 THEN 7654
+                ELSE IF .caseno EQL 2 THEN 3210
+                ELSE 9876);
+    END
+    ELSE IF .caseno EQL 4 THEN
+    BEGIN
+        LOCAL n;
+        n = 1;
+        val = 0;
+        WHILE .n LEQ 100 DO
+        BEGIN
+            val = .val + .n;
+            n = .n * 10;
+        END;
+    END
+    ELSE IF .caseno EQL 5 THEN
+    BEGIN
+        LOCAL n;
+        n = 1000;
+        val = 111;
+        DO
+        BEGIN
+            n = .n / 10;
+            val = .val - .n;
+        END
+        UNTIL .n LEQ 1;
+    END
+    ELSE IF .caseno EQL 6 THEN
+    BEGIN
+        val = 1;
+        INCR i FROM 0 TO 100 BY 10 DO val = .val + .i;
+        DECR i FROM 100 TO 0 BY 10 DO val = .val - .i;
+    END
+    ELSE IF .caseno EQL 7 THEN
+    BEGIN
+        LOCAL n;
+        n = 0;
+        val = (WHILE .n LSS 100 DO
+                BEGIN
+                    n = .n + 20;
+                    IF .n GEQ 40 THEN EXITLOOP .n * 5;
+                END);
+    END
+    ELSE IF .caseno EQL 8 THEN
+    BEGIN
+        SELECTONE .caseno OF
+        SET
+            [8] : val = 999;
+            [OTHERWISE] : val = 0;
+        TES;
+    END
+    ELSE IF .caseno EQL 9 THEN
+    BEGIN
+        SELECT .caseno OF
+        SET
+            [8] : val = 999;
+            [OTHERWISE] : val = 0;
+            [ALWAYS] : val = 333;
+        TES;
+    END
+    ELSE IF .caseno EQL 10 THEN
+    BEGIN
+        LABEL outer;
+        val = 0;
+outer:  BEGIN
+        INCR i FROM 1 TO 100 DO
+        BEGIN
+            val = .val + .i;
+            IF .i GEQ 20 THEN LEAVE outer;
+        END;
+        END; ! outer
+    END;
+    test_output(.caseno, '%ld', .val);
+    
+END;
+
+END
+ELUDOM
