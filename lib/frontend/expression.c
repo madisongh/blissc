@@ -1311,6 +1311,30 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         expr_litval_set(exp, val);
         expr_is_ctce_set(exp, 1);
         expr_has_value_set(exp, 1);
+    } else if (lt == LEXTYPE_NAME) {
+        lextype_t ltnext;
+        lexeme_t *lexnext;
+        // Undeclared name - try to recover by declaring the name.
+        // If it's followed by a colon, make it a label.
+        // If it's followed by an left parenthesis, make it a routine.
+        // Otherwise, make it a data segment.
+        ltnext = parser_next(pctx, QL_NORMAL, &lexnext);
+        if (ltnext == LEXTYPE_DELIM_COLON) {
+            expr_signal(ctx, STC__UNDCLLABEL, lexeme_text(lex));
+            label_declare(parser_scope_get(pctx), lexeme_text(lex),
+                          parser_curpos(pctx));
+        } else {
+            expr_signal(ctx, STC__UNDCLNAME, lexeme_text(lex));
+            if (ltnext == LEXTYPE_DELIM_LPAR) {
+                rtnsym_declare(parser_scope_get(pctx), lexeme_text(lex), 0,
+                               parser_curpos(pctx));
+            } else {
+                datasym_declare(parser_scope_get(pctx), lexeme_text(lex), 0,
+                                parser_curpos(pctx));
+            }
+        }
+        parser_insert(pctx, lexnext);
+        return 0;
     }
 
     if (exp == 0) {
