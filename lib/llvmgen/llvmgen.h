@@ -138,8 +138,8 @@ typedef enum {
 #define LLVMGEN_M_SEG_ISBIND   (1<<4)
 // Flags above are also used in the accinfo structure below,
 // along with the following flags
-#define LLVMGEN_M_ACC_CONSTSIZ (1<<4)
-#define LLVMGEN_M_ACC_GENEXPR  (1<<5)
+#define LLVMGEN_M_ACC_CONSTSIZ (1<<5)
+#define LLVMGEN_M_ACC_GENEXPR  (1<<6)
 struct llvm_accinfo_s {
     llvm_stgclass_t     segclass;
     unsigned int        flags;
