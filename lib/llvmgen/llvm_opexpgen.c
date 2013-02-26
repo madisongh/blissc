@@ -152,7 +152,7 @@ gen_fetch (gencodectx_t gctx, expr_node_t *rhs, LLVMTypeRef neededtype)
     // If we're fetching from a register, there's no load intruction
     // required.
     if (accinfo.segclass == LLVM_REG &&
-        (accinfo.flags & (LLVMGEN_M_SEG_DEREFED|LLVMGEN_M_SEG_ISREF)) == 0) {
+        (accinfo.flags & LLVMGEN_M_SEG_DEREFED) == 0) {
         val = llvmgen_adjustval(gctx, addr, type, signext);
     } else {
         addr = llvmgen_adjustval(gctx, addr, LLVMPointerType(type, 0), 0);
