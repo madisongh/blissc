@@ -599,7 +599,10 @@ gendatatype (gencodectx_t gctx, data_attr_t *attr, unsigned int *ucountp)
     if (attr->struc != 0 || attr->units > machine_scalar_units(gctx->mach)) {
         // BINDs cannot be arrays, since they don't allocate storage.
         if (attr->units == 0 || (attr->flags & SYM_M_BIND) != 0) {
-            basetype = LLVMPointerType(LLVMIntTypeInContext(gctx->llvmctx, bpunit), 0);
+            basetype = LLVMIntTypeInContext(gctx->llvmctx, bpunit);
+            if (attr->dclass != DCLASS_ARG) {
+                basetype = LLVMPointerType(basetype, 0);
+            }
         } else {
             basetype = LLVMArrayType(LLVMIntTypeInContext(gctx->llvmctx, bpunit), attr->units);
         }
