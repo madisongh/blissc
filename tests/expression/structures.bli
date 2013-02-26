@@ -1,0 +1,41 @@
+MODULE test =
+BEGIN
+
+REQUIRE '../testharness.req';
+
+OWN
+    vec : VECTOR [8] INITIAL (1,2,3,4,5,6,7,8);
+    
+test_setup(numcases=13);
+
+ROUTINE testref (caseno, v : REF VECTOR) =
+BEGIN
+    IF .caseno EQL 1 THEN
+        RETURN .v
+    ELSE IF .caseno LEQ 9 THEN
+        RETURN .v[.caseno-2]
+    ELSE
+        RETURN 0
+END;
+
+ROUTINE testbvec (idx, bvarg) =
+BEGIN
+    LOCAL bv : BITVECTOR[%BPVAL] INITIAL(.bvarg);
+    RETURN .bv[.idx];
+END;
+
+GLOBAL ROUTINE runtest (caseno) : NOVALUE =
+BEGIN
+
+    IF .caseno EQL 1 THEN
+        test_output(.caseno, 'vec=%p, test=%p', vec,
+                    testref(.caseno, vec))
+    ELSE IF .caseno LEQ 9 THEN
+        test_output(.caseno, '%ld', testref(.caseno, vec))
+    ELSE IF .caseno LEQ 13 THEN
+        test_output(.caseno, '%d', testbvec(.caseno-10, %B'1010'));
+    
+END;
+
+END
+ELUDOM
