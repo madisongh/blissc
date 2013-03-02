@@ -20,11 +20,11 @@ BEGIN
     CASE .caseno FROM 1 TO 16 OF
     SET
         [1 TO 4] : test_output(.caseno, '"%s"', .teststrings[.caseno-1]);
-        [5] : test_output(.caseno, '%NBITS(7,5,2)=%d', %NBITS(7,5,2));
-        [6] : test_output(.caseno, '%NBITS(-7)=%d', %NBITS(-7));
-        [7] : test_output(.caseno, '%NBITS(-8)=%d', %NBITS(-8));
-        [8] : test_output(.caseno, '%NBITSU(7)=%d', %NBITSU(7));
-        [9] : test_output(.caseno, '%NBITSU(-8)=%d', %NBITSU(-8));
+        [5] : test_output(.caseno, '%%NBITS(7,5,2)=%d', %NBITS(7,5,2));
+        [6] : test_output(.caseno, '%%NBITS(-7)=%d', %NBITS(-7));
+        [7] : test_output(.caseno, '%%NBITS(-8)=%d', %NBITS(-8));
+        [8] : test_output(.caseno, '%%NBITSU(7)=%d', %NBITSU(7));
+        [9] : test_output(.caseno, '%%NBITSU(-8)=%d', %NBITSU(-8));
        [10] : test_output(.caseno, '%s', .yesno[%IDENTICAL(A+B,a+b)]);
        [11] : test_output(.caseno, '%s',
                 .yesno[%IDENTICAL(A+B,%REMOVE((A+B)))]);
