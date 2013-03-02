@@ -72,7 +72,7 @@ machine_init (const char *machspec)
 
     mach->machctx = m;
     mach->bpaddr = sizeof(int *) * 8;
-    mach->bpval  = sizeof(int) * 8;
+    mach->bpval  = sizeof(long) * 8;
     mach->bpunit = 8;
     mach->charsize_count = 1;
     mach->charsizes[0] = 8;
