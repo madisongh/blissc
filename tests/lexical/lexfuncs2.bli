@@ -44,7 +44,8 @@ BEGIN
                 .yesno[%CTCE(testlocal)], .yesno[%LTCE(testlocal)]);
         [7] : test_output(.caseno, '%s,%s',
                 .yesno[%CTCE(.testglob)], .yesno[%LTCE(.testglob)]);
-        [8] : test_output(.caseno, '%d', %ALLOCATION(testalloc));
+        [8] : test_output(.caseno, '%s',
+                .yesno[%ALLOCATION(testalloc) EQLU %UPVAL * 2]);
         [9] : test_output(.caseno, 
                 %STRING(%NUMBER(y),'+',%NUMBER(z),'=',%NUMBER(y+z)));
        [10] : test_output(.caseno, '%s,%s', .yesno[%DECLARED(testglob)],

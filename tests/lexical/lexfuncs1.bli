@@ -24,7 +24,7 @@ BEGIN
         [6] : test_output(.caseno, '%%NBITS(-7)=%d', %NBITS(-7));
         [7] : test_output(.caseno, '%%NBITS(-8)=%d', %NBITS(-8));
         [8] : test_output(.caseno, '%%NBITSU(7)=%d', %NBITSU(7));
-        [9] : test_output(.caseno, '%%NBITSU(-8)=%d', %NBITSU(-8));
+        [9] : test_output(.caseno, '%s', .yesno[%NBITSU(-8) EQLU %BPVAL]);
        [10] : test_output(.caseno, '%s', .yesno[%IDENTICAL(A+B,a+b)]);
        [11] : test_output(.caseno, '%s',
                 .yesno[%IDENTICAL(A+B,%REMOVE((A+B)))]);
