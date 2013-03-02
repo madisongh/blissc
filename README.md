@@ -11,13 +11,14 @@ Current Status
 
 Work in progress.   The front-end is mostly complete, with a fully
 functioning parser and macro facility.  Back-end support is currently
-limited to LLVM and x86-64 CPUs, with only a limited amount of BLISS
-machine-specific support.
+limited to LLVM and x86 CPUs (32- or 64-bit), with a limited amount
+of machine-specific support.
 
 Prerequisites
 -------------
 
-Known to build on Mac OS X 10.8 (using Xcode 4.6) and Ubuntu 12.04.
+Known to build on Mac OS X 10.8 (using Xcode 4.6) and Ubuntu 12.04
+and 12.10 (32- or 64-bit).
 
 The LLVM-based code generator was developed against LLVM 3.2, which
 can be obtained [here](http://llvm.org/releases/download.html#3.2).
@@ -53,7 +54,7 @@ Contributions
 
 There is a lot more yet to do on this project!  If you are interested
 in contributing, contact me (madisongh on GitHub, or by e-mail at
-madison _at_ bliss-m.org).
+madison _at_ bliss-m _dot_ org).
 
 License
 -------
