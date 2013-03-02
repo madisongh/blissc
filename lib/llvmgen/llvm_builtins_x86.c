@@ -37,7 +37,7 @@ struct asminfo_s {
     unsigned int        flags;
 };
 
-#define ASMGENS \
+#define ASMGENS64 \
 ASMGENDEF("MOVSB", "cld;rep;movsb", "={rdi},{rcx},{rsi},{rdi},~{dflag},~{rcx},~{rsi}", \
                                                                          3, 3, "PFPP", LLVMGEN_M_ASM_SIDEEFFECT) \
 ASMGENDEF("STOSB", "cld;rep;stosb", "={rdi},{al},{rcx},{rdi},~{dflag},~{rcx}", \
@@ -54,10 +54,30 @@ ASMGENDEF("SCASB_CMP", "cld;repe;scasb;cmovb %rbx,%rcx;cmova %rdx,%rcx", \
                        "={rcx},{rcx},{rdi},{al},{rbx},{rdx},~{dflag},~{rcx},~{rdi}", \
                                                                          3, 5, "FFP1X(-1)X(1)", 0)
 
+#define ASMGENS32 \
+ASMGENDEF("MOVSB", "cld;rep;movsb", "={edi},{ecx},{esi},{edi},~{dflag},~{ecx},~{esi}", \
+                                                                         3, 3, "PFPP", LLVMGEN_M_ASM_SIDEEFFECT) \
+ASMGENDEF("STOSB", "cld;rep;stosb", "={edi},{al},{ecx},{edi},~{dflag},~{ecx}", \
+                                                                         3, 3, "P1FP", LLVMGEN_M_ASM_SIDEEFFECT) \
+ASMGENDEF("CMPSB", "cld;repe;cmpsb;cmovb %eax,%ecx;cmova %edx,%ecx", \
+                   "={ecx},{ecx},{esi},{edi},{eax},{edx},~{dflag},~{ecx},~{edi},~{esi}", \
+                                                                         3, 5, "FFPPX(-1)X(1)", 0) \
+ASMGENDEF("SCASB_REPE", "cld;repe;scasb;cmovel %edx,%edi;subl %edx,%edi", \
+                        "={edi},{ecx},{edi},{al},{edx},~{dflag},~{ecx}", 3, 4, "PFP1X(1)", 0) \
+ASMGENDEF("SCASB_REPNE", "cld;repne;scasb;cmovne %edx,%edi;subl %edx,%edi", \
+                         "={edi},{ecx},{edi},{al},{edx},~{dflag},~{ecx}", \
+                                                                         3, 4, "PFP1X(1)", 0) \
+ASMGENDEF("SCASB_CMP", "cld;repe;scasb;cmovb %ebx,%ecx;cmova %edx,%ecx", \
+                       "={ecx},{ecx},{edi},{al},{ebx},{edx},~{dflag},~{ecx},~{edi}", \
+                                                                         3, 5, "FFP1X(-1)X(1)", 0)
+
 
 #define ASMGENDEF(n_, i_, r_, ac1_, ac2_, ai_, f_) { n_, i_, r_, ac1_, ac2_, ai_, f_ },
-struct asminfo_s asmtable[] = {
-    ASMGENS
+struct asminfo_s asmtable64[] = {
+    ASMGENS64
+};
+struct asminfo_s asmtable32[] = {
+    ASMGENS32
 };
 #undef ASMGENDEF
 
@@ -205,15 +225,23 @@ gen_asminstr (gencodectx_t gctx, void *fctx, expr_node_t *exp, LLVMTypeRef neede
 void
 llvmgen_builtins_init (gencodectx_t gctx, scopectx_t kwdscope)
 {
+    machinedef_t *mach = gctx->mach;
     int i, numinstr;
     funcdef_t fdef;
     llvm_asminstr_t *asminstrs, *asmp;
-
-    numinstr = sizeof(asmtable)/sizeof(asmtable[0]);
+    struct asminfo_s *asmtable;
+    
+    if (machine_scalar_bits(mach) == 64) {
+        asmtable = asmtable64;
+        numinstr = sizeof(asmtable64)/sizeof(asmtable64[0]);
+    } else {
+        asmtable = asmtable32;
+        numinstr = sizeof(asmtable32)/sizeof(asmtable32[0]);
+    }
     asminstrs = malloc(numinstr * sizeof(llvm_asminstr_t));
     memset(asminstrs, 0, numinstr * sizeof(llvm_asminstr_t));
 
-    for (i = 0, asmp = asminstrs; i < sizeof(asmtable)/sizeof(asmtable[0]); i++, asmp++) {
+    for (i = 0, asmp = asminstrs; i < numinstr; i++, asmp++) {
         name_t *np;
 
         memset(&fdef, 0, sizeof(fdef));
