@@ -143,16 +143,23 @@ gen_fetch (gencodectx_t gctx, expr_node_t *rhs, LLVMTypeRef neededtype)
         }
         shifts_required = 1;
     } else if ((accinfo.flags & LLVMGEN_M_ACC_CONSTSIZ)) {
-        type = LLVMIntTypeInContext(gctx->llvmctx, accinfo.size);
+        if (accinfo.size == 0) {
+            // XXX signal invalid size
+            type = gctx->int1type;
+        } else {
+            type = LLVMIntTypeInContext(gctx->llvmctx, accinfo.size);
+        }
     } else {
         type = gctx->fullwordtype;
     }
     signext = ((accinfo.flags & LLVMGEN_M_SEG_SIGNEXT) != 0);
 
     // If we're fetching from a register, there's no load intruction
-    // required.
-    if (accinfo.segclass == LLVM_REG &&
-        (accinfo.flags & LLVMGEN_M_SEG_DEREFED) == 0) {
+    // required - EXCEPT if this was a scalar BIND, where the BIND
+
+    if ((accinfo.segclass == LLVM_REG &&
+        (accinfo.flags & LLVMGEN_M_SEG_DEREFED) == 0) &&
+        (accinfo.flags & LLVMGEN_M_SEG_BINDPTR) == 0) {
         val = llvmgen_adjustval(gctx, addr, type, signext);
     } else {
         addr = llvmgen_adjustval(gctx, addr, LLVMPointerType(type, 0), 0);

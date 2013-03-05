@@ -136,6 +136,7 @@ typedef enum {
 #define LLVMGEN_M_SEG_DEREFED  (1<<2)
 #define LLVMGEN_M_SEG_ISREF    (1<<3)
 #define LLVMGEN_M_SEG_ISBIND   (1<<4)
+#define LLVMGEN_M_SEG_BINDPTR  (1<<7)
 // Flags above are also used in the accinfo structure below,
 // along with the following flags
 #define LLVMGEN_M_ACC_CONSTSIZ (1<<5)

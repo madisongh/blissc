@@ -649,6 +649,10 @@ datasym_generator (void *vctx, name_t *np, void *p)
         initval_t *iv = attr->ivlist;
         LLVMValueRef bindval;
         type = gendatatype(gctx, attr, &units);
+        if (attr->struc == 0 && attr->units <= machine_scalar_units(gctx->mach)) {
+            type = LLVMPointerType(type, 0);
+            ld->flags |= LLVMGEN_M_SEG_BINDPTR;
+        }
         if (iv->type == IVTYPE_SCALAR) {
             unsigned int bpunit = machine_unit_bits(gctx->mach);
             LLVMValueRef sval;
