@@ -3,17 +3,29 @@ BEGIN
 
 REQUIRE '../testharness.req';
 
+FIELD
+    fld0 = [0,0,4,0],
+    flds = SET
+            fld1 = [0,4,4,0],
+            fld2 = [1,0,4,0],
+            fld3 = [1,4,4,0]
+           TES;
 OWN
-    vec : VECTOR [8] INITIAL (1,2,3,4,5,6,7,8),
+    blk : BLOCK [2,BYTE] FIELD (fld0,flds),
+    vec : VECTOR [4] INITIAL (1,2,3,4),
     yesno : VECTOR [2] INITIAL(UPLIT(%ASCIZ'NO'),UPLIT(%ASCIZ'YES'));
-    
-test_setup(numcases=13);
+
+BIND
+    gbword = blk : WORD,
+    gbwarr = blk : VECTOR [,WORD];
+        
+test_setup(numcases=10);
 
 ROUTINE testref (caseno, v : REF VECTOR) =
 BEGIN
     IF .caseno EQL 1 THEN
         RETURN .v
-    ELSE IF .caseno LEQ 9 THEN
+    ELSE IF .caseno LEQ 5 THEN
         RETURN .v[.caseno-2]
     ELSE
         RETURN 0
@@ -31,10 +43,22 @@ BEGIN
     IF .caseno EQL 1 THEN
         test_output(.caseno, '%s',
                     .yesno[vec EQLA testref(.caseno, vec)])
-    ELSE IF .caseno LEQ 9 THEN
+    ELSE IF .caseno LEQ 5 THEN
         test_output(.caseno, '%ld', testref(.caseno, vec))
-    ELSE IF .caseno LEQ 13 THEN
-        test_output(.caseno, '%d', testbvec(.caseno-10, %B'1010'));
+    ELSE IF .caseno LEQ 9 THEN
+        test_output(.caseno, '%d', testbvec(.caseno-5, %B'1010'))
+    ELSE
+    BEGIN
+        BIND
+            bword = blk : WORD,
+            bwarr = blk : VECTOR [,WORD];
+        blk [fld0] = .vec[0];
+        blk [fld1] = .vec[1];
+        blk [fld2] = .vec[2];
+        blk [fld3] = .vec[3];
+        test_output(.caseno, '%x,%x,%x,%x',
+                    .bword, .gbword, .bwarr[0], .gbwarr[0]);
+    END;
     
 END;
 
