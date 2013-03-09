@@ -71,14 +71,14 @@ llvmgen_assignment (gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs)
     // to do the store.
     if (accinfo.posval != 0 || accinfo.sizeval != 0) {
         shifts_required = 1;
-        lhstype = gctx->fullwordtype;
+        lhstype = LLVMIntTypeInContext(gctx->llvmctx, accinfo.width);
         if ((accinfo.flags & LLVMGEN_M_ACC_CONSTSIZ) != 0) {
             accinfo.sizeval = LLVMConstInt(gctx->fullwordtype, accinfo.size, 0);
         }
     } else if ((accinfo.flags & LLVMGEN_M_ACC_CONSTSIZ) != 0) {
         lhstype = LLVMIntTypeInContext(gctx->llvmctx, accinfo.size);
     } else {
-        lhstype = gctx->fullwordtype;
+        lhstype = LLVMIntTypeInContext(gctx->llvmctx, accinfo.width);
     }
     lhsaddr = llvmgen_adjustval(gctx, lhsaddr, LLVMPointerType(lhstype, 0), 0);
     if (shifts_required) {

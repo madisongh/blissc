@@ -138,6 +138,20 @@ uint_log2 (unsigned int n) {
 } /* uint_log2 */
 
 /*
+ * calc_width
+ *
+ * Compute a power-of-2 segment width from its allocation
+ * size in units.
+ */
+static unsigned int
+calc_width (unsigned int u, machinedef_t *mach) {
+    unsigned int upval = machine_scalar_units(mach);
+    if (u == 0 || u >= upval) return machine_scalar_bits(mach);
+    while (uint_log2(u) < 0) u += 1;
+    return machine_unit_bits(mach) * u;
+} /* calc_width */
+
+/*
  * data_free
  *
  * Destructor function for data symbols.
@@ -776,7 +790,7 @@ datasym_declare (scopectx_t scope, strdesc_t *dsc, data_attr_t *attrp, textpos_t
             }
         }
         if (attrp->width == 0) {
-            attrp->width = machine_scalar_bits(symctx->mach);
+            attrp->width = calc_width(attrp->units, symctx->mach);
         }
     }
 
@@ -852,7 +866,7 @@ datasym_attr_update (name_t *np, data_attr_t *attrp)
     }
     memcpy(&sym->attr, attrp, sizeof(data_attr_t));
     if (attrp->width == 0) {
-        sym->attr.width = machine_scalar_bits(symctx->mach);
+        sym->attr.width = calc_width(attrp->units, symctx->mach);
     }
     if (gsym != 0 && (gsym->attr.flags & SYM_M_PENDING)) {
         memcpy(&gsym->attr, attrp, sizeof(data_attr_t));

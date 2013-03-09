@@ -93,6 +93,9 @@ llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp,
             if (expr_type(sexp) == EXPTYPE_PRIM_LIT) {
                 accinfo->flags |= LLVMGEN_M_ACC_CONSTSIZ;
                 accinfo->size = (unsigned int) expr_litval(sexp);
+                if (expr_type(pexp) == EXPTYPE_PRIM_LIT) {
+                    accinfo->width = expr_litval(pexp) + accinfo->size;
+                }
             } else {
                 accinfo->sizeval = llvmgen_expression(gctx, sexp, gctx->fullwordtype);
             }
@@ -119,7 +122,9 @@ llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp,
             accinfo->segclass = valclass;
             if (!was_fldref) {
                 accinfo->flags |= sflags | LLVMGEN_M_ACC_CONSTSIZ;
-                accinfo->size = expr_seg_width(base);
+                accinfo->width = accinfo->size = expr_seg_width(base);
+            } else if (accinfo->width == 0) {
+                accinfo->width = expr_seg_width(base);
             }
         }
         if (off != 0) {

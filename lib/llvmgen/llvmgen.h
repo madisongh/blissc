@@ -145,6 +145,7 @@ struct llvm_accinfo_s {
     llvm_stgclass_t     segclass;
     unsigned int        flags;
     unsigned int        size;
+    unsigned int        width;
     LLVMValueRef        posval, sizeval;
 };
 typedef struct llvm_accinfo_s llvm_accinfo_t;
