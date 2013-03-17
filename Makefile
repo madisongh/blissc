@@ -13,6 +13,7 @@ all: blissc
 clean:
 	rm -f blissc
 	-find . -name '*.o' -exec rm -f {} \;
+	-find . -name '*.d' -exec rm -f {} \;
 
 LLVM_CONFIG = llvm-config
 CPPFLAGS += -I$(srcdir)include -I$(shell $(LLVM_CONFIG) --includedir)
@@ -20,6 +21,8 @@ CFLAGS += -MMD -Wall
 CXXFLAGS += -MMD
 LIBS = -L $(shell $(LLVM_CONFIG) --libdir) $(shell $(LLVM_CONFIG) --libs) \
 	-lstdc++ -lpthread -ldl
+
+PYTHON = python
 
 LIBDIRS := driver frontend llvmgen support
 
@@ -36,6 +39,12 @@ support_SRCS := fileio.c logging.c statcodes.c strings.c utils.c
 
 lib:
 	mkdir -p lib
+
+tests:
+	mkdir -p tests
+
+check: blissc | tests
+	cd tests; $(PYTHON) $(abspath $(srcdir)tests/runtests.py) --blissc=$(PWD)/blissc --cc=$(CC) $(abspath $(srcdir)tests)
 
 OBJS =
 define librule

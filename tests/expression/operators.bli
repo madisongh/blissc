@@ -20,34 +20,63 @@ BEGIN
     CASE .caseno FROM 1 TO 29 OF
     SET
         [1] : val = +.a;
+!!  1 12
         [2] : val = -.a;
+!!  2 -12
         [3] : val = .a + .b;
+!!  3 18
         [4] : val = -.a + (-.b);
+!!  4 -18
         [5] : val = .a - .b;
+!!  5 6
         [6] : val = .a * .b;
+!!  6 72
         [7] : val = .a / .b;
+!!  7 2
         [8] : val = .a MOD .b;
+!!  8 0
         [9] : val = .a ^ .b;
+!!  9 768
        [10] : val = .a EQL .b;
+!! 10 0
        [11] : val = .a GTR .b;
+!! 11 1
        [12] : val = .a LSS .b;
+!! 12 0
        [13] : val = .a GEQ .b;
+!! 13 1
        [14] : val = .a LEQ .b;
+!! 14 0
        [15] : val = NOT .a;
+!! 15 -13
        [16] : val = .a AND .b;
+!! 16 4
        [17] : val = .a OR .b;
+!! 17 14
        [18] : val = .a XOR .b;
+!! 18 10
        [19] : val = .a EQV .b;
+!! 19 -11
        [20] : val = (a = .b);
+!! 20 6
        [21] : val = .a + .b * 2;
+!! 21 24
        [22] : val = .a * 2 + .b;
+!! 22 30
        [23] : val = a = .b EQLU 6;
+!! 23 1
        [24] : val = .a * (2 + .b);
+!! 24 96
        [25] : val = .a / .b + .a MOD .b;
+!! 25 2
        [26] : val = .a / 3 * .b + 5;
+!! 26 29
        [27] : val = .a * 1;
+!! 27 12
        [28] : val = .b * 0;
+!! 28 0
        [29] : val = .a + .b * 2 + .a / 3;
+!! 29 28
     TES;
     test_output(.caseno, '%ld', .val);
     

@@ -20,27 +20,47 @@ BEGIN
     CASE .caseno FROM 1 TO 16 OF
     SET
         [1 TO 4] : test_output(.caseno, '"%s"', .teststrings[.caseno-1]);
+!!  1 "ABC"
+!!  2 "Padded to 32                    "
+!!  3 "CHARCOUNT = 3"
+!!  4 "An explosion"
         [5] : test_output(.caseno, '%%NBITS(7,5,2)=%d', %NBITS(7,5,2));
+!!  5 %NBITS(7,5,2)=3
         [6] : test_output(.caseno, '%%NBITS(-7)=%d', %NBITS(-7));
+!!  6 %NBITS(-7)=4
         [7] : test_output(.caseno, '%%NBITS(-8)=%d', %NBITS(-8));
+!!  7 %NBITS(-8)=4
         [8] : test_output(.caseno, '%%NBITSU(7)=%d', %NBITSU(7));
+!!  8 %NBITSU(7)=3
         [9] : test_output(.caseno, '%s', .yesno[%NBITSU(-8) EQLU %BPVAL]);
+!!  9 YES
        [10] : test_output(.caseno, '%s', .yesno[%IDENTICAL(A+B,a+b)]);
+!! 10 YES
        [11] : test_output(.caseno, '%s',
                 .yesno[%IDENTICAL(A+B,%REMOVE((A+B)))]);
+!! 11 YES
        [12] : test_output(.caseno, '%s',
                 .yesno[%IDENTICAL(A+B,%REMOVE([A+B]))]);
+!! 12 YES
        [13] : test_output(.caseno, '%s',
                 .yesno[%IDENTICAL(A+B,%REMOVE(<A+B>))]);
+!! 13 YES
        [14] : test_output(.caseno, '%s', .yesno[%BLISS(BLISSM)]);
+!! 14 YES
        [15] : test_output(.caseno, '%d', %VARIANT);
+!! 15 0
        [16] : test_output(.caseno, '%s', .yesno[%DECLARED(teststrings)]);
+!! 16 YES
     TES;
     
     %MESSAGE('Test of %MESSAGE')
+!! cerr % Test of %MESSAGE
     %INFORM('Test of %INFORM')
+!! cerr %BLISS-I-INFORM, Test of %INFORM
     %WARN('Test of %WARN')
+!! cerr %BLISS-W-USRWARN, Test of %WARN
     %ERROR('Test of %ERROR')
+!! cerr %BLISS-E-USRERR, Test of %ERROR
     %PRINT('Test of %PRINT')
 END;
 

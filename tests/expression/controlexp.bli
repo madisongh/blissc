@@ -16,6 +16,9 @@ BEGIN
         val = (IF .caseno EQL 1 THEN 7654
                 ELSE IF .caseno EQL 2 THEN 3210
                 ELSE 9876);
+!!  1 7654
+!!  2 3210
+!!  3 9876
     END
     ELSE IF .caseno EQL 4 THEN
     BEGIN
@@ -27,6 +30,7 @@ BEGIN
             val = .val + .n;
             n = .n * 10;
         END;
+!!  4 111
     END
     ELSE IF .caseno EQL 5 THEN
     BEGIN
@@ -39,12 +43,14 @@ BEGIN
             val = .val - .n;
         END
         UNTIL .n LEQ 1;
+!!  5 0
     END
     ELSE IF .caseno EQL 6 THEN
     BEGIN
         val = 1;
         INCR i FROM 0 TO 100 BY 10 DO val = .val + .i;
         DECR i FROM 100 TO 0 BY 10 DO val = .val - .i;
+!!  6 1
     END
     ELSE IF .caseno EQL 7 THEN
     BEGIN
@@ -55,6 +61,7 @@ BEGIN
                     n = .n + 20;
                     IF .n GEQ 40 THEN EXITLOOP .n * 5;
                 END);
+!!  7 200
     END
     ELSE IF .caseno EQL 8 THEN
     BEGIN
@@ -63,6 +70,7 @@ BEGIN
             [8] : val = 999;
             [OTHERWISE] : val = 0;
         TES;
+!!  8 999
     END
     ELSE IF .caseno EQL 9 THEN
     BEGIN
@@ -72,6 +80,7 @@ BEGIN
             [OTHERWISE] : val = 0;
             [ALWAYS] : val = 333;
         TES;
+!!  9 333
     END
     ELSE IF .caseno EQL 10 THEN
     BEGIN
@@ -84,6 +93,7 @@ outer:  BEGIN
             IF .i GEQ 20 THEN LEAVE outer;
         END;
         END; ! outer
+!! 10 210
     END;
     test_output(.caseno, '%ld', .val);
     

@@ -34,22 +34,32 @@ BEGIN
     CASE .caseno FROM 1 TO 10 OF
     SET
         [1] : test_output(.caseno, '%s,%s', .yesno[%CTCE(z)],.yesno[%CTCE(y)]);
+!!  1 YES,YES
         [2] : test_output(.caseno, '%d,%d,%d,%d', %FIELDEXPAND(testfield));
+!!  2 0,4,4,0
         [3] : test_output(.caseno, '%d,%d', bpvaltest1, bpvaltest2);
+!!  3 -7,255
         [4] : test_output(.caseno, '%s,%s',
                 .yesno[%CTCE(testglob)], .yesno[%LTCE(testglob)]);
+!!  4 NO,YES
         [5] : test_output(.caseno, '%s,%s',
                 .yesno[%CTCE(testown)], .yesno[%LTCE(testown)]);
+!!  5 NO,YES
         [6] : test_output(.caseno, '%s,%s',
                 .yesno[%CTCE(testlocal)], .yesno[%LTCE(testlocal)]);
+!!  6 NO,NO
         [7] : test_output(.caseno, '%s,%s',
                 .yesno[%CTCE(.testglob)], .yesno[%LTCE(.testglob)]);
+!!  7 NO,NO
         [8] : test_output(.caseno, '%s',
                 .yesno[%ALLOCATION(testalloc) EQLU %UPVAL * 2]);
+!!  8 YES
         [9] : test_output(.caseno, 
                 %STRING(%NUMBER(y),'+',%NUMBER(z),'=',%NUMBER(y+z)));
+!!  9 17+7=24
        [10] : test_output(.caseno, '%s,%s', .yesno[%DECLARED(testglob)],
                 .yesno[%DECLARED(nosuchname)]);
+!! 10 YES,NO
     TES;
     
 END;

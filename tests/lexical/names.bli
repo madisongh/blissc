@@ -8,7 +8,7 @@ LITERAL
     $_$_$_$_$_$_$_$_$_$_$_$_$_$_$_$ = 666,
     $abcdefghijklmnopqrs_0123456789 = 999,
     %NAME ('This name can have any arbitrary sequence of characters') = 12345;
-    ! should trigger NAMETOOLON warning
+!! cerr %BLISS-W-NAMETOOLON,
    
 test_setup(numcases=4);
 
@@ -17,11 +17,15 @@ BEGIN
     CASE .caseno FROM 1 TO 4 OF
     SET
         [1] : test_output(.caseno, '%d', ABCDEFGHIJKLMNOPQRSTUVWXYZ12345);
+!! 1 31
         [2] : test_output(.caseno, '%d', $_$_$_$_$_$_$_$_$_$_$_$_$_$_$_$);
+!! 2 666
         [3] : test_output(.caseno, '%d', $abcdefghijklmnopqrs_0123456789);
+!! 3 999
         [4] : test_output(.caseno, '%d',
             %NAME ('This name can have any arbitrary sequence of characters'));
             ! will not trigger warning, just truncation
+!! 4 12345
     TES;
 END;
 

@@ -25,17 +25,28 @@ BEGIN
     CASE .caseno FROM 1 TO 11 OF
     SET
         [1] : test_output(.caseno, 'a = [%d,0x%x]', a, a);
+!! 1 a = [65535,0xffff]
         [2] : test_output(.caseno, 'b = [%d,0x%x]', b, b);
+!! 2 b = [-1,0xffffffff]
         [3] : test_output(.caseno, 'c = [%d,0x%x]', c, c);
+!! 3 c = [-10,0xfffffff6]
         [4] : test_output(.caseno, 'd = [%d,0x%x]', d, d);
+!! 4 d = [127,0x7f]
         [5] : test_output(.caseno, 'e = [%d,0x%x]', e, e);
+!! 5 e = [13,0xd]
         [6] : test_output(.caseno, 'f = [%d,0x%x]', f, f);
+!! 6 f = [127,0x7f]
         [7] : test_output(.caseno, 'g = ["%c",0x%x]', g, g);
+!! 7 g = ["'",0x27]
         [8] : test_output(.caseno, 'h = "%s"', h);
+!! 8 h = "untyped string literal"
         [9] : test_output(.caseno, 'i = "%s"', i);
+!! 9 i = "%ASCII string literal"
        [10] : test_output(.caseno, 'j = "%-*.*s" (length=%d)',
                           .j[0], .j[0], j[1], .j[0]);
+!!10 j = "counted string literal" (length=22)
        [11] : test_output(.caseno, 'k = "%s"', k);
+!!11 k = "null-terminated string literal"
     TES;
 END;
 

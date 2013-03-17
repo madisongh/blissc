@@ -52,6 +52,7 @@ BEGIN
         y = 888;
         doswap(x, y);
         test_output(.caseno, 'x=%d, y=%d', .x, .y);
+!! 1 x=888, y=999
     END
     ELSE IF .caseno EQL 2 THEN
     BEGIN
@@ -60,22 +61,31 @@ BEGIN
         vecseql = (INCR i FROM 0 TO vecsize-1 DO
                 IF .vec1[.i] NEQ .vec2[.i] THEN EXITLOOP 0; 1);
         test_output(.caseno, '%s', .yesno[.vecseql]);
+!! 2 YES
     END
     ELSE
     CASE .caseno-2 FROM 1 TO 8 OF
-    test_cases(.caseno+2,
+    test_cases(.caseno,
                 'nullmacro is null: %s', .yesno[%NULL(nullmacro)],
+!! 3 nullmacro is null: YES
                 '%d', macro_noparams,
+!! 4 1234
                 'count=%d', macro_argcount(1,2,3,4,5),
+!! 5 count=5
                 '%%EXPAND test: %s', UPLIT(expander(%QUOTE expandthis)),
+!! 6 %EXPAND test: expanded
                 'hello=%d', hello,
+!! 7 hello=99
                 '"%s"', UPLIT(test_exititer(%EXPLODE('abcde'))),
+!! 8 "..c.."
                 '"%s"', test_exitmacro(0),
+!! 9 "exit normally"
                 '"%s"', test_exitmacro(1));
-
+!! 10 "exit early"
 
     test_errormacro(generror=0)
     test_errormacro(generror=1)
+!! cerr %BLISS-E-USRERR, %ERRORMACRO invoked
         
 END;
 
