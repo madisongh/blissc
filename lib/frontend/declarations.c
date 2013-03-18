@@ -1625,13 +1625,14 @@ declare_builtin (parse_ctx_t pctx, scopectx_t scope)
  *
  * Initialization routine.
  */
-void
+void *
 declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
                    scopectx_t kwdscope, machinedef_t *mach)
 {
     int i;
     literal_attr_t attr;
     name_t *errson, *errsoff;
+    macroctx_t macroctx;
     static strdesc_t bpdsc[4] = {
         STRDEF("%BPUNIT"), STRDEF("%BPADDR"), STRDEF("%BPVAL"),
         STRDEF("%UPVAL") };
@@ -1643,7 +1644,7 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
 
     parser_lexfunc_register(pctx, ctx, LEXTYPE_LXF_ASSIGN, parse_ASSIGN);
 
-    macros_init(kwdscope, ctx);
+    macroctx = macros_init(kwdscope, ctx);
     machine_psects_init(mach, kwdscope);
 
     attr.width = machine_unit_bits(mach);
@@ -1659,6 +1660,8 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
     litsym_declare(kwdscope, &bpdsc[3], &attr, 0);
     structures_init(ctx, kwdscope);
     switch_toggle_declare(kwdscope, &errswitch, toggle_errs, 0, 0, &errson, &errsoff);
+
+    return macroctx;
 
 } /* declarations_init */
 

@@ -102,6 +102,7 @@ struct gencodectx_s {
     llvm_btrack_t       *freebts;
     llvm_rtntrack_t     *freerts;
     llvm_rtntrack_t     *curfn;
+    void                *builtinsctx;
     scopectx_t           asmscope;
     llvmgen_expgen_fn    expgen_funcs[EXPTYPE_COUNT];
 
@@ -216,7 +217,8 @@ void llvmgen_ctrlexpgen_init(gencodectx_t gctx);
 void llvmgen_execfuncgen_init(gencodectx_t gctx);
 void llvmgen_expgen_init(gencodectx_t gctx);
 LLVMIntPredicate llvmgen_predfromop(optype_t op, int addrsigned);
-void llvmgen_builtins_init(gencodectx_t gctx, scopectx_t kwdscope);
+void *llvmgen_builtins_init(gencodectx_t gctx, scopectx_t kwdscope);
+void llvmgen_builtins_finish(void *actx);
 LLVMValueRef llvmgen_builtinfunc(gencodectx_t gctx, const char *name,
                                  expr_node_t *exp, LLVMTypeRef neededtype);
 LLVMValueRef llvmgen_asminstr(gencodectx_t gctx, const char *name, LLVMValueRef *args,

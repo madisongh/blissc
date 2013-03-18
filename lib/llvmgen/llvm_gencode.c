@@ -298,7 +298,7 @@ optlevel_handler (parse_ctx_t pctx, void *vctx, lextype_t dcltype, lexeme_t *swl
 int
 gencode_module_begin (gencodectx_t gctx, name_t *modnp)
 {
-    char *dl;
+    char *dl, *triple;
 #if 0 // XXX later
     char module_header[256];
     int headerlen;
@@ -320,7 +320,9 @@ gencode_module_begin (gencodectx_t gctx, name_t *modnp)
         return 0;
     }
 
-    LLVMSetTarget(gctx->module, LLVMGetTargetMachineTriple(gctx->mctx->target_machine));
+    triple = LLVMGetTargetMachineTriple(gctx->mctx->target_machine);
+    LLVMSetTarget(gctx->module, triple);
+    free(triple);
     dl = LLVMCopyStringRepOfTargetData(LLVMGetTargetMachineData(gctx->mctx->target_machine));
     LLVMSetDataLayout(gctx->module, dl);
     LLVMDisposeMessage(dl);
@@ -452,3 +454,34 @@ gencode_init (void *ectx, logctx_t logctx, machinedef_t *mach, symctx_t symctx)
     return gctx;
 
 } /* gencode_init */
+
+/*
+ * gencode_finish
+ *
+ * Cleanup for code generator.
+ */
+void
+gencode_finish (gencodectx_t gctx)
+{
+    llvm_btrack_t *bt, *btn;
+    llvm_rtntrack_t *rt, *rtn;
+
+    if (gctx == 0) {
+        return;
+    }
+
+    llvmgen_builtins_finish(gctx->builtinsctx);
+
+    for (bt = gctx->freebts; bt != 0; bt = btn) {
+        btn = bt->next;
+        free(bt);
+    }
+
+    for (rt = gctx->freerts; rt != 0; rt = rtn) {
+        rtn = rt->next;
+        free(rt);
+    }
+
+    free(gctx);
+
+} /* gencode_finish */

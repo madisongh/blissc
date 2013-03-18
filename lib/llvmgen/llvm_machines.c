@@ -80,6 +80,8 @@ machine_init (const char *machspec)
     mach->max_align = 4;
     mach->reg_count = 16;
 
+    free(machspec);
+
     return mach;
     
 } /* machine_init */
@@ -145,6 +147,7 @@ machine_finish (machinedef_t *mach)
 
     if (m->target_machine != 0) LLVMDisposeTargetMachine(m->target_machine);
     if (m->llvmctx != 0) LLVMContextDispose(m->llvmctx);
+    if (m->outfile != 0) free(m->outfile);
     free(m);
     
 } /* machine_finish */

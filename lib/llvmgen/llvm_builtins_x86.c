@@ -222,7 +222,7 @@ gen_asminstr (gencodectx_t gctx, void *fctx, expr_node_t *exp, LLVMTypeRef neede
  *
  * 2. Declares BUILTIN executable functions for the assembly instructions.
  */
-void
+void *
 llvmgen_builtins_init (gencodectx_t gctx, scopectx_t kwdscope)
 {
     machinedef_t *mach = gctx->mach;
@@ -261,7 +261,23 @@ llvmgen_builtins_init (gencodectx_t gctx, scopectx_t kwdscope)
         }
     }
 
+    return asminstrs;
+
 } /* llvmgen_builtins_init */
+
+/*
+ * llvmgen_builtins_finish
+ *
+ * Module cleanup.
+ */
+void
+llvmgen_builtins_finish (void *actx)
+{
+    if (actx != 0) {
+        free(actx);
+    }
+
+} /* llvmgen_builtins_finish */
 
 /*
  * llvmgen_builtinfunc

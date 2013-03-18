@@ -122,7 +122,7 @@ llvmgen_execfuncgen_init (gencodectx_t gctx)
             fd->genfnctx = gentable[i].fctx;
         }
     }
-    llvmgen_builtins_init(gctx, kwdscope);
+    gctx->builtinsctx = llvmgen_builtins_init(gctx, kwdscope);
     llvmgen_expgen_register(gctx, EXPTYPE_EXECFUN, gen_execfunc);
 
 } /* llvmgen_execfuncgen_init */

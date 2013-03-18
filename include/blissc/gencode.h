@@ -19,6 +19,7 @@ struct gencodectx_s;
 typedef struct gencodectx_s *gencodectx_t;
 
 gencodectx_t gencode_init(void *ectx, logctx_t logctx, machinedef_t *mach, symctx_t symctx);
+void gencode_finish(gencodectx_t gctx);
 void gencode_postinit(gencodectx_t gctx);
 void gencode_finish(gencodectx_t gctx);
 int gencode_module_begin(gencodectx_t gctx, name_t *np);

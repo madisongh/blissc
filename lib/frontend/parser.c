@@ -397,7 +397,9 @@ void
 parser_finish (parse_ctx_t pctx)
 {
     scope_end(pctx->curscope);
+    scope_end(pctx->kwdscope);
     nametables_finish(pctx->namectx);
+    listings_finish(pctx->lstgctx);
     if (pctx->lexctx != 0) {
         lexer_finish(pctx->lexctx);
     }

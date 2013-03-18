@@ -414,6 +414,10 @@ listings_finish (lstgctx_t ctx)
         file_close(ctx->outf);
     }
 
+    if (ctx->fio != 0) {
+        fileio_finish(ctx->fio);
+    }
+
     free(ctx);
 
 } /* listings_finish */

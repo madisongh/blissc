@@ -84,7 +84,7 @@ blissc_output_set (blissc_driverctx_t ctx, bliss_output_t outtype,
     ctx->outtype = (outtype == BLISS_K_OUTPUT_ASSEMBLY ? MACH_K_OUTPUT_ASM : MACH_K_OUTPUT_OBJ);
     if (fname != 0) {
         if (fnlen < 0) fnlen = (int) strlen(fname);
-        ctx->outfn = malloc(fnlen);
+        ctx->outfn = malloc(fnlen+1);
         if (ctx->outfn == 0) return 0;
         memcpy(ctx->outfn, fname, fnlen);
         ctx->outfn[fnlen] = '\0';
@@ -221,6 +221,7 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
         ctx->outfnlen = (unsigned int) objparts.path_fullnamelen;
         ctx->free_outfn = 1;
     }
+    free(srcparts.path_fullname);
     machine_output_set(ctx->mach, ctx->outtype, ctx->outfn, ctx->outfnlen);
 
     if (ctx->listflags == 0) {
@@ -292,6 +293,7 @@ void
 blissc_finish (blissc_driverctx_t ctx)
 {
     if (ctx->ectx != 0) expr_finish(ctx->ectx); // which also calls parser_finish()
+    if (ctx->mach) machine_finish(ctx->mach);
     if (ctx->fioctx != 0) fileio_finish(ctx->fioctx);
     if (ctx->logctx != 0) logging_finish(ctx->logctx);
     if (ctx->strctx != 0) strings_finish(ctx->strctx);
