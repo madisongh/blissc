@@ -53,7 +53,7 @@ struct expr_ctx_s {
     machinedef_t       *mach;
     logctx_t            logctx;
     symctx_t            symctx;
-    void               *macroctx;
+    declctx_t           dctx;
     struct extenthdr_s *extents;
     expr_node_t        *freenodes;
     expr_dispatch_fn    dispatchers[LEXTYPE_EXPKWD_MAX-LEXTYPE_EXPKWD_MIN+1];
@@ -692,7 +692,7 @@ expr_init (strctx_t strctx, parse_ctx_t pctx, scopectx_t kwdscope)
     parser_lexfunc_register(pctx, ectx, LEXTYPE_LXF_ALLOCATION, parse_ALLOCATION);
 
     expr_control_init(ectx);
-    ectx->macroctx = declarations_init(ectx, pctx, kwdscope, ectx->mach);
+    ectx->dctx = declarations_init(ectx, pctx, kwdscope, ectx->mach);
     execfunc_init(ectx, kwdscope);
 
     gencode_postinit(ectx->gctx);
@@ -730,7 +730,7 @@ expr_finish (expr_ctx_t ctx)
     parser_finish(ctx->pctx);
     symbols_finish(ctx->symctx);
     gencode_finish(ctx->gctx);
-    macros_finish(ctx->macroctx);
+    declarations_finish(ctx->dctx);
 
     for (e = ctx->extents; e != 0; e = enext) {
         enext = e->next;

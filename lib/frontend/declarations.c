@@ -17,7 +17,7 @@
  * the various attributes and calls on the symbols module
  * to manage the names.
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012, 2013, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -39,6 +39,10 @@
 #include "blissc/support/logging.h"
 #include "blissc/support/strings.h"
 #include "blissc/support/utils.h"
+
+struct declctx_s {
+    macroctx_t mctx;
+};
 
 typedef enum {
     DCL_NORMAL = 0,
@@ -1625,14 +1629,14 @@ declare_builtin (parse_ctx_t pctx, scopectx_t scope)
  *
  * Initialization routine.
  */
-void *
+declctx_t
 declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
                    scopectx_t kwdscope, machinedef_t *mach)
 {
     int i;
     literal_attr_t attr;
     name_t *errson, *errsoff;
-    macroctx_t macroctx;
+    declctx_t dctx;
     static strdesc_t bpdsc[4] = {
         STRDEF("%BPUNIT"), STRDEF("%BPADDR"), STRDEF("%BPVAL"),
         STRDEF("%UPVAL") };
@@ -1644,7 +1648,10 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
 
     parser_lexfunc_register(pctx, ctx, LEXTYPE_LXF_ASSIGN, parse_ASSIGN);
 
-    macroctx = macros_init(kwdscope, ctx);
+    dctx = malloc(sizeof(struct declctx_s));
+    memset(dctx, 0, sizeof(struct declctx_s));
+
+    dctx->mctx = macros_init(kwdscope, ctx);
     machine_psects_init(mach, kwdscope);
 
     attr.width = machine_unit_bits(mach);
@@ -1661,9 +1668,23 @@ declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
     structures_init(ctx, kwdscope);
     switch_toggle_declare(kwdscope, &errswitch, toggle_errs, 0, 0, &errson, &errsoff);
 
-    return macroctx;
+    return dctx;
 
 } /* declarations_init */
+
+/*
+ * declarations_finish
+ *
+ * Module cleanup.
+ */
+void
+declarations_finish (declctx_t dctx)
+{
+    if (dctx == 0) return;
+    macros_finish(dctx->mctx);
+    free(dctx);
+    
+} /* declarations_finish */
 
 /*
  * parse_declaration

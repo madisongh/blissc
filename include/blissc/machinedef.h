@@ -4,7 +4,7 @@
  *++
  * machinedef.h - Machine-specific definitions.
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012, 2013, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -58,6 +58,7 @@ siu unsigned int machine_charsize(machinedef_t *mach, int idx) { return mach->ch
 #undef siu
 
 machinedef_t *machine_init (const char *machspec);
+void machine_finish(machinedef_t *mach);
 void machine_psects_init (machinedef_t *mach, void *scope);
 void machine_output_set (machinedef_t *mach, machine_output_t outtype,
                          char *fname, int fnlen);

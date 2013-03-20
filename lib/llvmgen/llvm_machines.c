@@ -25,12 +25,13 @@
  * Initializes the machine context.
  */
 machinedef_t *
-machine_init (const char *machspec)
+machine_init (const char *mspec)
 {
     machine_ctx_t m = malloc(sizeof(struct machine_ctx_s) + sizeof(struct machinedef_s));
     machinedef_t *mach;
     char *err;
     LLVMTargetRef target;
+    char *machspec = (char *) mspec;
 
     if (m == 0) return 0;
     memset(m, 0, sizeof(struct machine_ctx_s) + sizeof(struct machinedef_s));
@@ -80,7 +81,7 @@ machine_init (const char *machspec)
     mach->max_align = 4;
     mach->reg_count = 16;
 
-    free(machspec);
+    if (mspec == 0) free(machspec);
 
     return mach;
     
