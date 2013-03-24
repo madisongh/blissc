@@ -1,0 +1,25 @@
+# tests/Makefile.in
+#
+# Provides a 'make check' target compatible with
+# the top-level Automake-generated makefile.
+#
+# Copyright (c) 2013, Matthew Madison.
+# All rights reserved.
+# Distributed under license.  See LICENSE.TXT for details.
+
+BLISSC = @top_builddir@/blissc
+TESTDIR = @top_srcdir@/tests
+PYTHON = python
+
+.PHONY: check all install distdir dist
+
+check:
+	$(PYTHON) "$(TESTDIR)/runtests.py" --blissc="$(BLISSC)" --cc="$(CC)" "$(TESTDIR)"
+
+clean:
+	@files=`find $(TESTDIR) -name '*.bli' -print`; \
+	 for srcf in $$files ; do f=`basename $$srcf .bli`; \
+	 echo "rm -f $$f $$f.o" ; rm -f $$f $$f.o ; done
+
+all install distdir dist:
+	@ :

@@ -49,9 +49,34 @@ blissc_SOURCES = driver/blissc.c
 blissc_LDADD = $(noinst_LIBRARIES) $(LLVM_LIBS) -lstdc++ -lpthread -ldl
 blissc_LDFLAGS = -L$(LLVM_LIBDIR)
 
-PYTHON = python
-tests:
-	mkdir tests
-
-check: blissc | tests
-	cd tests; $(PYTHON) $(abspath $(srcdir)/tests/runtests.py) --blissc=$(PWD)/blissc --cc=$(CC) $(abspath $(srcdir)/tests)
+SUBDIRS = tests
+DIST_SUBDIRS =
+EXTRA_DIST = \
+	LICENSE.TXT README.md \
+	include/blissc/charfuncs.h \
+	include/blissc/declarations.h \
+	include/blissc/driver.h \
+	include/blissc/execfuncs.h \
+	include/blissc/expression.h \
+	include/blissc/gencode.h \
+	include/blissc/lexeme.h \
+	include/blissc/lexer.h \
+	include/blissc/listings.h \
+	include/blissc/machinedef.h \
+	include/blissc/macros.h \
+	include/blissc/nametable.h \
+	include/blissc/parser.h \
+	include/blissc/structures.h \
+	include/blissc/switches.h \
+	include/blissc/symbols.h \
+	include/blissc/support/fileio.h \
+	include/blissc/support/logging.h \
+	include/blissc/support/statcodes.h \
+	include/blissc/support/strings.h \
+	include/blissc/support/utils.h \
+	lib/frontend/scanner.h \
+	lib/llvmgen/llvmgen.h \
+	lib/llvmgen/llvm_helper.h \
+	lib/llvmgen/llvm_machinectx.h \
+	tests/runtests.py tests/testharness.req tests/testharness.c \
+	tests/expression tests/lexical
