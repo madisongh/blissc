@@ -24,23 +24,33 @@ The LLVM-based code generator was developed against LLVM 3.2, which
 can be obtained [here](http://llvm.org/releases/download.html#3.2).
 On a Mac, you can use the MacPorts 'llvm-3.2' package, but debugging
 code generation issues is easier if you download the sources and
-create a debug build yourself.
+create a debug build yourself.  You should install it somewhere
+and either include that location in your PATH, or specify the
+full path to the `llvm-config` script that LLVM installs when
+configuring the BLISS-M build.
+
+The build system uses Autoconf and Automake.  On Mac OS X, you'll
+need to install those (e.g., through MacPorts).
 
 Building the compiler
 ---------------------
 
-The supplied makefile, while relatively simple, does support building
-the compiler outside of the source tree.
-
 1. Clone [the repository](https://github.com/madisongh/blissc.git).
-2. cd to your build directory.
-3. With ${SRCTOP} being the location of the top of the source tree:
-   `make -f ${SRCTOP}/Makefile srcdir=${SRCTOP}/` (note the ending
-   slash on the specification of `srcdir`).
 
-If `llvm-config` is not in your PATH, you'll need to specify its
-location by adding `LLVM_CONFIG=path-to-llvm-config` on the `make`
-command as well.
+2. cd to the top-level source directory and run `autoreconf -i`
+   to set up the autotools build.
+
+3. If you want to build outside the source tree, cd to your
+   build directory.
+
+4. Run the `configure` script that was generated in step 2.  If
+   `llvm-config` is not in your PATH, use the `--with-llvm-config`
+   option on `configure` to specify its location.
+
+5. Run `make` to build the compiler.
+
+6. Run `make check` to test the built compiler.
+
 
 Running the compiler
 --------------------
@@ -48,6 +58,7 @@ Running the compiler
 The build will produce a program called **blissc** in your build
 directory.  Run `./blissc --help` for a description of the arguments
 and options.
+
 
 Contributions
 -------------
