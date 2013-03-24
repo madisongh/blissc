@@ -392,7 +392,7 @@ declare_psect (expr_ctx_t ctx, scopectx_t scope)
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     name_t *np;
     int which, has_attr;
-    unsigned int attr;
+    unsigned int attr = 0;
     textpos_t defpos;
     strdesc_t *psname;
     static lextype_t classkws[] = { LEXTYPE_KWD_NODEFAULT,

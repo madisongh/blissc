@@ -140,7 +140,7 @@ litsym_generator (void *vctx, name_t *np, void *p)
     gencodectx_t gctx = vctx;
     literal_attr_t *attr = litsym_attr(np);
     llvm_litsym_t *ll = p;
-    llvm_litsym_t *gll;
+    llvm_litsym_t *gll = 0;
     namectx_t namectx = scope_namectx(name_scope(np));
     name_t *gnp;
     LLVMTypeRef type;
@@ -159,7 +159,7 @@ litsym_generator (void *vctx, name_t *np, void *p)
     } else {
         ll->value = LLVMConstInt(type, name_value_unsigned(np), 0);
     }
-    if (gnp != 0) {
+    if (gnp != 0 && gll != 0) {
         LLVMValueRef globalval;
         gll->value = ll->value;
         globalval = LLVMAddGlobal(gctx->module, type, name_azstring(np));
@@ -223,7 +223,7 @@ llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount
     }
     for (iv = ivlist, valp = valarr, lastvalp = 0; iv != 0; iv = iv->next) {
         int count = iv->repcount;
-        LLVMValueRef thisval;
+        LLVMValueRef thisval = 0;
         switch (iv->type) {
             case IVTYPE_LIST: {
                 LLVMValueRef *savep = valp;
@@ -265,7 +265,8 @@ llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount
                 break;
             }
         }
-        if (iv->type != IVTYPE_LIST) {
+        if (iv->type == IVTYPE_STRING || iv->type == IVTYPE_SCALAR ||
+            iv->type == IVTYPE_EXPR_EXP) {
             LLVMValueRef *dstp = valp;
             while (count-- > 0) *dstp++ = thisval;
             if (allsametype && lastvalp != 0 && LLVMTypeOf(thisval) != LLVMTypeOf(*lastvalp)) {

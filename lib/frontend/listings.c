@@ -199,7 +199,7 @@ listing_require_begin (lstgctx_t ctx, char *fname, size_t fnlen)
             fnlen = FNAME_LEN;
         }
         memcpy(ctx->header2+FNAME_POS, fname, fnlen);
-        memset(ctx->header2+(FNAME_POS+fnlen), ' ', FNAME_LEN-fnlen);
+        if (fnlen < FNAME_LEN) memset(ctx->header2+(FNAME_POS+fnlen), ' ', FNAME_LEN-fnlen);
         ctx->nlines = LINESPERPAGE;
     }
 
@@ -253,7 +253,7 @@ listing_open (lstgctx_t ctx, const char *fname, size_t flen,
         flen = FNAME_LEN;
     }
     memcpy(ctx->main_input, fname, flen);
-    memset(ctx->main_input+flen, ' ', FNAME_LEN-flen);
+    if (flen < FNAME_LEN) memset(ctx->main_input+flen, ' ', FNAME_LEN-flen);
     memcpy(ctx->header2+FNAME_POS, ctx->main_input, FNAME_LEN);
     ctx->nlines = LINESPERPAGE;
 
@@ -430,20 +430,20 @@ void listing_mainscope_set (lstgctx_t ctx, scopectx_t mainscope) {
 void listing_title_set (lstgctx_t ctx, strdesc_t *str) {
     int len = (str->len > TITLE_LEN ? TITLE_LEN : str->len);
     memcpy(ctx->header1+TITLE_POS, str->ptr, len);
-    memset(ctx->header1+(TITLE_POS+len), ' ', TITLE_LEN-len); }
+    if (len < TITLE_LEN) memset(ctx->header1+(TITLE_POS+len), ' ', TITLE_LEN-len); }
 void listing_subtitle_set (lstgctx_t ctx, strdesc_t *str) {
     int len = (str->len > SBTTL_LEN ? SBTTL_LEN : str->len);
     memcpy(ctx->header2+SBTTL_POS, str->ptr, len);
-    memset(ctx->header2+(SBTTL_POS+len), ' ', SBTTL_LEN-len); }
+    if (len < SBTTL_LEN) memset(ctx->header2+(SBTTL_POS+len), ' ', SBTTL_LEN-len); }
 void listing_compilerid_set (lstgctx_t ctx, strdesc_t *str) {
     int len = (str->len > COMPID_LEN ? COMPID_LEN : str->len);
     memcpy(ctx->header1+COMPID_POS, str->ptr, len);
-    memset(ctx->header1+(COMPID_POS+len), ' ', COMPID_LEN-len); }
+    if (len < COMPID_LEN) memset(ctx->header1+(COMPID_POS+len), ' ', COMPID_LEN-len); }
 void listing_ident_set (lstgctx_t ctx, strdesc_t *str) {
     int len = (str->len > IDENT_LEN ? IDENT_LEN : str->len);
     memcpy(ctx->header2+IDENT_POS, str->ptr, len);
-    memset(ctx->header2+(IDENT_POS+len), ' ', IDENT_LEN-len); }
+    if (len < IDENT_LEN) memset(ctx->header2+(IDENT_POS+len), ' ', IDENT_LEN-len); }
 void listing_name_set (lstgctx_t ctx, strdesc_t *str) {
     int len = (str->len > NAME_LEN ? NAME_LEN : str->len);
     memcpy(ctx->header1+NAME_POS, str->ptr, len);
-    memset(ctx->header1+(NAME_POS+len), ' ', NAME_LEN-len); }
+    if (len < NAME_LEN) memset(ctx->header1+(NAME_POS+len), ' ', NAME_LEN-len); }
