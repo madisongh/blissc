@@ -44,7 +44,7 @@ int blissc_dumpir_set(blissc_driverctx_t ctx, int val, const char *fname,
                       int fnlen);
 int blissc_compile(blissc_driverctx_t ctx, const char *fname, int fnlen);
 void blissc_finish(blissc_driverctx_t ctx);
-
-
+char const * const blissc_package_name(void);
+char const * const blissc_package_version(void);
 
 #endif /* blissc_driver_h__ */

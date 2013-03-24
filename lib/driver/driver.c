@@ -21,7 +21,18 @@
 #include "blissc/parser.h"
 #include "blissc/expression.h"
 #include "blissc/declarations.h"
+#include "blissc/config.h"
 #include <stdlib.h>
+
+#ifndef PACKAGE_NAME
+#define PACKAGE_NAME "blissc"
+#endif
+#ifndef PACKAGE_VERSION
+#define PACKAGE_VERSION "<working copy>"
+#endif
+
+static char const package_name[] = PACKAGE_NAME;
+static char const package_version[] = PACKAGE_VERSION;
 
 struct blissc_driverctx_s {
     strctx_t        strctx;
@@ -70,6 +81,30 @@ blissc_init (jmp_buf retenv)
     return ctx;
 
 } /* blissc_init */
+
+/*
+ * blissc_package_name
+ *
+ * Returns the name of this package.
+ */
+char const * const
+blissc_package_name (void)
+{
+    return package_name;
+
+} /* blissc_package_name */
+
+/*
+ * blissc_package_version
+ *
+ * Returns the version of this package.
+ */
+char const * const
+blissc_package_version (void)
+{
+    return package_version;
+
+} /* blissc_package_version */
 
 /*
  * blissc_output_set

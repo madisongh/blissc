@@ -6,7 +6,7 @@
 #
 
 AUTOMAKE_OPTIONS = subdir-objects foreign
-AM_CPPFLAGS = -I$(srcdir)/include -I$(LLVM_INCLUDEDIR)
+AM_CPPFLAGS = -Iinclude -I$(srcdir)/include -I$(LLVM_INCLUDEDIR)
 AM_CFLAGS = -Wall 
 
 noinst_LIBRARIES = libdriver.a libfrontend.a libsupport.a libllvmgen.a

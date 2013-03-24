@@ -19,7 +19,8 @@
 
 enum {
     LONGOPT_SHOW = 4,
-    LONGOPT_DUMP_IR = 6
+    LONGOPT_DUMP_IR = 6,
+    LONGOPT_VERSION = 8
 };
 static struct option options[] = {
     { "output",         required_argument,  0,  'o' },
@@ -30,6 +31,7 @@ static struct option options[] = {
     { "variant",        optional_argument,  0,  'V' },
     { "dump-ir",        optional_argument,  0,  0   },
     { "help",           no_argument,        0,  'h' },
+    { "version",        no_argument,        0,  0   },
     { 0,                0,                  0,  0   }
 };
 static char *optarghelp[] = {
@@ -40,7 +42,8 @@ static char *optarghelp[] = {
     "--show[=option,...]     ",
     "--variant=<n>           ",
     "--dump-ir[=filename]    ",
-    "--help                  "
+    "--help                  ",
+    "--version               "
 };
 static char *opthelp[] = {
     "output file name (default is src name +'.o' or '.s' suffix)",
@@ -50,7 +53,8 @@ static char *opthelp[] = {
     "controls listing output (see below)",
     "sets the %VARIANT value; if no value specified, defaults to 1",
     "dumps the LLVM IR code (default name is outfile + '.ll' suffix)",
-    "displays usage information and exits"
+    "displays usage information and exits",
+    "displays version information and exits"
 };
 static char *listopts [] = {
     "source","require","expand","trace",
@@ -78,10 +82,19 @@ static int dumpir = 0;
 static char *irfile = 0;
 
 static void
+print_version (void)
+{
+    printf("%s version %s\n", blissc_package_name(),
+           blissc_package_version());
+
+} /* print_version */
+
+static void
 print_usage (void)
 {
     int i;
-    printf("Usage:\n");
+    print_version();
+    printf("\nUsage:\n");
     printf("\tblissc [options] filename\n\n");
     printf("Options:\n");
     for (i = 0; i < sizeof(options)/sizeof(options[0]) && options[i].name != 0; i++) {
@@ -133,6 +146,9 @@ parse_args (int argc, char * const argv[])
                 } else if (which == LONGOPT_DUMP_IR) {
                     dumpir = 1;
                     irfile = optarg;
+                } else if (which == LONGOPT_VERSION) {
+                    print_version();
+                    err = 999;
                 } else {
                     fprintf(stderr, "unrecognized long option");
                     err = 1;
