@@ -87,7 +87,7 @@ blissc_init (jmp_buf retenv)
  *
  * Returns the name of this package.
  */
-char const * const
+const char *
 blissc_package_name (void)
 {
     return package_name;
@@ -99,7 +99,7 @@ blissc_package_name (void)
  *
  * Returns the version of this package.
  */
-char const * const
+const char *
 blissc_package_version (void)
 {
     return package_version;
