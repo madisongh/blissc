@@ -17,9 +17,9 @@ AC_PREREQ(2.69)
 dnl Locate the LLVM installation through use of the llvm-config script.
 dnl If the path is not provided by the user, assume it is in the path.
 
-AC_ARG_WITH([llvm],
+AC_ARG_WITH([llvm-config],
         AS_HELP_STRING([--with-llvm-config@<:@=PATH@:>@], [specify llvm-config script location]),
-        AS_IF(["$withval" = "yes"], [ac_llvm_config=`which llvm-config`],
+        AS_IF([test "$withval" = "yes"], [ac_llvm_config=`which llvm-config`],
                           [ac_llvm_config="$withval"]),
         [ac_llvm_config=`which llvm-config`])
 AS_IF([test -e "$ac_llvm_config"],[
