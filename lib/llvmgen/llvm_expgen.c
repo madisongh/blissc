@@ -94,7 +94,7 @@ llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp,
                 accinfo->flags |= LLVMGEN_M_ACC_CONSTSIZ;
                 accinfo->size = (unsigned int) expr_litval(sexp);
                 if (expr_type(pexp) == EXPTYPE_PRIM_LIT) {
-                    accinfo->width = expr_litval(pexp) + accinfo->size;
+                    accinfo->width = (unsigned int)expr_litval(pexp) + accinfo->size;
                 }
             } else {
                 accinfo->sizeval = llvmgen_expression(gctx, sexp, gctx->fullwordtype);
