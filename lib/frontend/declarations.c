@@ -1162,6 +1162,9 @@ declare_bind (expr_ctx_t ctx, scopectx_t scope, decltype_t dt)
             expr_signal(ctx, STC__EXPREXP);
             return 0;
         }
+        if (expr_libgen(ctx) && !expr_is_ctce(exp)) {
+            expr_signal(ctx, STC__INVLIBDCL);
+        }
         // XXX manual says allowed LTCEs are more restrictive
         //     than in other contexts?
         if (dt == DCL_GLOBAL && !expr_is_ltce(exp)) {
@@ -1491,22 +1494,14 @@ declare_routine (expr_ctx_t ctx, scopectx_t scope, decltype_t dt, int is_bind)
                     }
                 }
             }
-#if 0
-            // Now check again, and fake up a return value so
-            // we can keep going
-            if ((is_bind || (attr.flags & SYM_M_NOVALUE) == 0)
-                && !expr_has_value(exp)) {
-                expr_node_t *fakeval;
-                expr_signal(ctx, STC__EXPRVALRQ);
-                // Fake a zero value for t
-                fakeval = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
-                expr_blk_valexp_set(exp, fakeval);
-                exprseq_instail(expr_blk_seq(exp), fakeval);
-            }
-#endif
             if (is_bind) {
                 symctx_t symctx = expr_symctx(ctx);
-                attr.ivlist = initval_expr_add(symctx, 0, 1, exp, 32, 0);
+                machinedef_t *mach = expr_machinedef(ctx);
+                if (expr_libgen(ctx) && !expr_is_ctce(exp)) {
+                    expr_signal(ctx, STC__INVLIBDCL);
+                }
+                attr.ivlist = initval_expr_add(symctx, 0, 1, exp,
+                                               machine_addr_bits(mach), 0);
                 attr.flags &= ~SYM_M_PENDING;
                 rtnsym_attr_update(np, &attr);
             } else {
@@ -1698,6 +1693,7 @@ parse_declaration (expr_ctx_t ctx)
     lextype_t lt;
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     scopectx_t scope = parser_scope_get(pctx);
+    int libgen = expr_libgen(ctx);
     int status;
     int which;
     static lextype_t pfx[] = { LEXTYPE_DCL_GLOBAL, LEXTYPE_DCL_EXTERNAL,
@@ -1733,6 +1729,9 @@ parse_declaration (expr_ctx_t ctx)
             status = declare_builtin(pctx, scope);
             break;
         case LEXTYPE_DCL_BIND:
+            if (libgen && dtypes[which] == DCL_GLOBAL) {
+                expr_signal(ctx, STC__INVLIBDCL);
+            }
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DCL_ROUTINE, 0, 1)) {
                 status = declare_routine(ctx, scope, dtypes[which], 1);
             } else {
@@ -1740,17 +1739,22 @@ parse_declaration (expr_ctx_t ctx)
             }
             break;
         case LEXTYPE_DCL_GLOBAL:
-        case LEXTYPE_DCL_EXTERNAL:
         case LEXTYPE_DCL_OWN:
         case LEXTYPE_DCL_FORWARD:
+        case LEXTYPE_DCL_REGISTER:
+            if (libgen) {
+                expr_signal(ctx, STC__INVLIBDCL);
+            }
+            // FALLTHROUGH
+        case LEXTYPE_DCL_EXTERNAL:
             status = declare_data(ctx, scope, lt, dtypes[which]);
             break;
         case LEXTYPE_DCL_STACKLOCAL:
         case LEXTYPE_DCL_LOCAL:
+            if (libgen) {
+                expr_signal(ctx, STC__INVLIBDCL);
+            }
             status = declare_data(ctx, scope, lt, DCL_NORMAL);
-            break;
-        case LEXTYPE_DCL_REGISTER:
-            status = declare_data(ctx, scope, lt, dtypes[which]);
             break;
         case LEXTYPE_DCL_MACRO:
         case LEXTYPE_DCL_KEYWORDMACRO:
@@ -1760,18 +1764,30 @@ parse_declaration (expr_ctx_t ctx)
             status = declare_compiletime(ctx, scope, lt);
             break;
         case LEXTYPE_DCL_LITERAL:
+            if (libgen && dtypes[which] == DCL_GLOBAL) {
+                expr_signal(ctx, STC__INVLIBDCL);
+            }
             status = declare_literal(ctx, scope, dtypes[which]);
             break;
         case LEXTYPE_DCL_LABEL:
+            if (libgen) {
+                expr_signal(ctx, STC__INVLIBDCL);
+            }
             status = declare_label(pctx, scope);
             break;
         case LEXTYPE_DCL_PSECT:
+            if (libgen) {
+                expr_signal(ctx, STC__INVLIBDCL);
+            }
             status = declare_psect(ctx, scope);
             break;
         case LEXTYPE_DCL_STRUCTURE:
             status = declare_structure(ctx, scope);
             break;
         case LEXTYPE_DCL_MAP:
+            if (libgen) {
+                expr_signal(ctx, STC__INVLIBDCL);
+            }
             status = declare_map(ctx, scope);
             break;
         case LEXTYPE_DCL_FIELD:
@@ -1784,6 +1800,9 @@ parse_declaration (expr_ctx_t ctx)
             status = undeclare(pctx, scope);
             break;
         case LEXTYPE_DCL_ROUTINE:
+            if (libgen && dtypes[which] != DCL_EXTERNAL) {
+                expr_signal(ctx, STC__INVLIBDCL);
+            }
             status = declare_routine(ctx, scope, dtypes[which], 0);
             break;
         case LEXTYPE_DCL_SWITCHES:
@@ -2000,3 +2019,21 @@ parse_ASSIGN (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
     return 1;
 
 } /* parse_ASSIGN */
+
+/*
+ * parse_libgen_declarations
+ *
+ * Parses a sequence of declarations for library generation.
+ */
+int
+parse_libgen_declarations (expr_ctx_t ctx)
+{
+    parse_ctx_t pctx = expr_parse_ctx(ctx);
+
+    while (!parser_atend(pctx)) {
+        parse_declaration(ctx);
+    }
+
+    return 1;
+
+} /* parse_libgen_declarations */

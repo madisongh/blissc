@@ -17,7 +17,8 @@ typedef struct blissc_driverctx_s *blissc_driverctx_t;
 
 typedef enum {
     BLISS_K_OUTPUT_ASSEMBLY,
-    BLISS_K_OUTPUT_OBJECT
+    BLISS_K_OUTPUT_OBJECT,
+    BLISS_K_OUTPUT_LIBRARY
 } bliss_output_t;
 
 // XXX - bit positions must match the enum in

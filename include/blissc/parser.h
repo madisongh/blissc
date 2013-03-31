@@ -75,4 +75,5 @@ lexeme_t *parser_punct_grouper(parse_ctx_t pctx, int docloser);
 lexeme_t *parser_punct_separator(parse_ctx_t pctx);
 lexeme_t *parse_string_params(parse_ctx_t pctx, int openparenparsed);
 void parser_variant_set(parse_ctx_t pctx, unsigned int val);
+int parser_atend(parse_ctx_t pctx);
 #endif /* parser_h__ */

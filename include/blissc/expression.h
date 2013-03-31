@@ -505,6 +505,8 @@ void expr_loopdepth_incr(expr_ctx_t ctx);
 void expr_loopdepth_decr(expr_ctx_t ctx);
 int expr_loopdepth_get(expr_ctx_t ctx);
 void *expr_fake_label_ptr(expr_ctx_t ctx);
+int expr_libgen(expr_ctx_t ctx);
+void expr_libgen_set(expr_ctx_t ctx, int val);
 expr_node_t *expr_block_simplify(expr_ctx_t ctx, expr_node_t *exp);
 void expr_signal(expr_ctx_t ctx, statcode_t code, ...);
 

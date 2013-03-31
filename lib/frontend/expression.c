@@ -15,7 +15,7 @@
  * contains an exprseq_t listing the expressions contained in
  * the block.
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012-2013, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -63,6 +63,7 @@ struct expr_ctx_s {
     unsigned int        loopdepth;
     int                 longstringsok;
     int                 noreduce;
+    int                 libgen;
 };
 
 #define ALLOC_QTY       128
@@ -717,6 +718,8 @@ strctx_t expr_strctx(expr_ctx_t ctx) { return ctx->strctx; }
 lstgctx_t expr_lstgctx(expr_ctx_t ctx) { return ctx->lstgctx; }
 void *expr_symctx(expr_ctx_t ctx) { return ctx->symctx; }
 void *expr_gencodectx(expr_ctx_t ctx) { return ctx->gctx; }
+int expr_libgen(expr_ctx_t ctx) { return ctx->libgen; }
+void expr_libgen_set(expr_ctx_t ctx, int val) { ctx->libgen = val; }
 
 void
 expr_finish (expr_ctx_t ctx)

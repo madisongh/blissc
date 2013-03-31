@@ -4,7 +4,7 @@
  *++
  * declarations.h - Definitions for declarations.
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012-2013, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -26,5 +26,6 @@ name_t *define_plit(expr_ctx_t ctx, lextype_t curlt, textpos_t pos);
 int parse_decl_name(parse_ctx_t pctx, strdesc_t **result, textpos_t *pos);
 int parse_declaration(expr_ctx_t ectx);
 int declare_module(expr_ctx_t ectx);
+int parse_libgen_declarations(expr_ctx_t ectx);
 
 #endif /* declarations_h__ */

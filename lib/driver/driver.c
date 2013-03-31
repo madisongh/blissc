@@ -21,6 +21,7 @@
 #include "blissc/parser.h"
 #include "blissc/expression.h"
 #include "blissc/declarations.h"
+#include "blissc/libgen.h"
 #include "blissc/config.h"
 #include <stdlib.h>
 
@@ -40,11 +41,12 @@ struct blissc_driverctx_s {
     fioctx_t        fioctx;
     parse_ctx_t     pctx;
     expr_ctx_t      ectx;
+    libgen_ctx_t    lgctx;
     machinedef_t    *mach;
     scopectx_t      kwdscope;
     unsigned int    variant;
     unsigned int    listflags;
-    machine_output_t outtype;
+    bliss_output_t  outtype;
     char            *outfn;
     unsigned int    outfnlen;
     int             free_outfn;
@@ -75,7 +77,7 @@ blissc_init (jmp_buf retenv)
     ctx->strctx = strings_init();
     ctx->logctx = logging_init(retenv);
     ctx->fioctx = fileio_init(ctx->logctx);
-    ctx->outtype = MACH_K_OUTPUT_OBJ;
+    ctx->outtype = BLISS_K_OUTPUT_OBJECT;
     ctx->optlevel = -1; // unset
 
     return ctx;
@@ -116,7 +118,7 @@ int
 blissc_output_set (blissc_driverctx_t ctx, bliss_output_t outtype,
                    const char *fname, int fnlen)
 {
-    ctx->outtype = (outtype == BLISS_K_OUTPUT_ASSEMBLY ? MACH_K_OUTPUT_ASM : MACH_K_OUTPUT_OBJ);
+    ctx->outtype = outtype;
     if (fname != 0) {
         if (fnlen < 0) fnlen = (int) strlen(fname);
         ctx->outfn = malloc(fnlen+1);
@@ -140,6 +142,8 @@ int
 blissc_listopt_set (blissc_driverctx_t ctx, unsigned int flags,
                     const char *fname, int fnlen)
 {
+    if (ctx->outtype == BLISS_K_OUTPUT_LIBRARY) return 0;
+
     ctx->listflags = flags;
     if (fname != 0) {
         if (fnlen < 0) fnlen = (int) strlen(fname);
@@ -162,6 +166,8 @@ int
 blissc_dumpir_set (blissc_driverctx_t ctx, int val,
                     const char *fname, int fnlen)
 {
+    if (ctx->outtype == BLISS_K_OUTPUT_LIBRARY) return 0;
+
     ctx->dumpir = val;
     if (fname != 0) {
         if (fnlen < 0) fnlen = (int) strlen(fname);
@@ -241,12 +247,16 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
     if (ctx->outfn == 0) {
         file_splitname(ctx->fioctx, srcparts.path_fullname,
                        (int) srcparts.path_fullnamelen, 0, &objparts);
-        if (ctx->outtype == MACH_K_OUTPUT_ASM) {
+        if (ctx->outtype == BLISS_K_OUTPUT_ASSEMBLY) {
             objparts.path_suffix = ".s";
-        } else {
+            objparts.path_suffixlen = 2;
+        } else if (ctx->outtype == BLISS_K_OUTPUT_OBJECT) {
             objparts.path_suffix = ".o";
+            objparts.path_suffixlen = 2;
+        } else { // BLISS_K_OUTPUT_LIBRARY
+            objparts.path_suffix = ".lib";
+            objparts.path_suffixlen = 4;
         }
-        objparts.path_suffixlen = 2;
         objparts.path_dirnamelen = 0;
         if (!file_combinename(ctx->fioctx, &objparts)) {
             return 0;
@@ -257,7 +267,13 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
         ctx->free_outfn = 1;
     }
     free(srcparts.path_fullname);
-    machine_output_set(ctx->mach, ctx->outtype, ctx->outfn, ctx->outfnlen);
+    if (ctx->outtype == BLISS_K_OUTPUT_LIBRARY) {
+        ctx->lgctx = libgen_init(ctx->outfn, ctx->outfnlen);
+    } else {
+        machine_output_t mo = (ctx->outtype == BLISS_K_OUTPUT_ASSEMBLY
+                               ? MACH_K_OUTPUT_ASM : MACH_K_OUTPUT_OBJ);
+        machine_output_set(ctx->mach, mo, ctx->outfn, ctx->outfnlen);
+    }
 
     if (ctx->listflags == 0) {
         if (ctx->listfn != 0 && ctx->free_listfn) free(ctx->listfn);
@@ -313,7 +329,11 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
     }
     status = parser_fopen_main(ctx->pctx, fname, len,
                                ctx->listflags, ctx->listfn, ctx->listfnlen);
-    if (status) status = declare_module(ctx->ectx);
+    if (status) {
+        status = (ctx->outtype == BLISS_K_OUTPUT_LIBRARY
+                  ? libgen_parse(ctx->lgctx, ctx->ectx)
+                  : declare_module(ctx->ectx));
+    }
 
     return status;
 
@@ -327,6 +347,7 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
 void
 blissc_finish (blissc_driverctx_t ctx)
 {
+    if (ctx->lgctx != 0) libgen_finish(ctx->lgctx);
     if (ctx->ectx != 0) expr_finish(ctx->ectx); // which also calls parser_finish()
     if (ctx->mach) machine_finish(ctx->mach);
     if (ctx->fioctx != 0) fileio_finish(ctx->fioctx);

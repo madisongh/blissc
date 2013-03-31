@@ -833,14 +833,7 @@ parser_expect (parse_ctx_t pctx, quotelevel_t ql, lextype_t expected_lt,
 /*
  * parser_expect_oneof
  *
- * Common routine for parsing one of a set of lexeme types.                // Parenthesize the parameter value if it's non-null, because we're
- // doing lexical substitution and this could be used in an expression
- // that is expecting it to be a single operand.
- if (lexseq_length(&seq) > 0) {
- lexseq_inshead(&seq, lexeme_create(lctx, LEXTYPE_DELIM_LPAR, &leftparen));
- lexseq_instail(&seq, lexeme_create(lctx, LEXTYPE_DELIM_RPAR, &rightparen));
- }
-
+ * Common routine for parsing one of a set of lexeme types.
  * The matching lexeme can be returned, if desired.  Callers can
  * use LEXTYPE_NONE to put "holes" in the array that won't match.
  *
@@ -977,6 +970,20 @@ parse_lexeme_seq (parse_ctx_t pctx, lexseq_t *seq, quotelevel_t ql,
     return status;
 
 } /* parse_lexeme_seq */
+
+/*
+ * parser_atend
+ *
+ * Returns 1 if we are at the end of the input stream, 0 otherwise.
+ */
+int
+parser_atend (parse_ctx_t pctx)
+{
+    lexeme_t *lex = lexer_peek(pctx->lexctx, 0);
+
+    return lexeme_boundtype(lex) == LEXTYPE_END;
+
+} /* parser_atend */
 
 /*
  * --- end of public API ---
