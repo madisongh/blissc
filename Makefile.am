@@ -19,6 +19,7 @@ libfrontend_a_SOURCES = \
 	lib/frontend/expression.c \
 	lib/frontend/lexeme.c \
 	lib/frontend/lexer.c \
+	lib/frontend/libgen.c \
 	lib/frontend/listings.c \
 	lib/frontend/macros.c \
 	lib/frontend/nametable.c \
@@ -61,6 +62,7 @@ EXTRA_DIST = \
 	include/blissc/gencode.h \
 	include/blissc/lexeme.h \
 	include/blissc/lexer.h \
+	include/blissc/libgen.h \
 	include/blissc/listings.h \
 	include/blissc/machinedef.h \
 	include/blissc/macros.h \
