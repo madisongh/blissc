@@ -3,7 +3,7 @@ README for the BLISS-M Compiler
 
 This is the source package for the BLISS-M compiler, a portable
 cross-compiler for the BLISS programming language.
-Visit the [project website](http://madisongh.github.com/blissc)
+Visit the [project website](http://madisongh.github.io/blissc)
 for more information about BLISS-M.
 
 Current Status
