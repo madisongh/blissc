@@ -323,6 +323,7 @@ lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen,
     chain->nextchain = ctx->chain;
     ctx->chain = chain;
     if (actnamep != 0) *actnamep = actname;
+    ctx->atend = 0;
     return 1;
 
 } /* lexer_fopen */
@@ -349,6 +350,7 @@ lexer_popen (lexer_ctx_t ctx, void *vinfn, void *fnctx)
     chain->filename_index = -1;
     chain->nextchain = ctx->chain;
     ctx->chain = chain;
+    ctx->atend = 0;
     return 1;
 
 } /* lexer_popen */
