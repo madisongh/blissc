@@ -286,6 +286,28 @@ file_open_output (fioctx_t fio, const char *fname, size_t fnlen) {
     return file_open(fio, fname, fnlen, 1);
 }
 
+/*
+ * flush_output_buffer
+ *
+ * Flushes the file buffer used for output files.
+ */
+static ssize_t
+flush_output_buffer (filectx_t ctx)
+{
+    ssize_t n;
+
+    n = write(ctx->fd, ctx->filebuf, ctx->buflen);
+    if (n < 0) {
+        char errbuf[64];
+        errbuf[0] = '\0';
+        strerror_r(errno, errbuf, sizeof(errbuf));
+        log_signal(ctx->fio->logctx, 0, STC__FIOERR, errbuf);
+        n = -1;
+    }
+
+    return n;
+
+} /* flush_output_buffer */
 
 /*
  * file_close
@@ -317,6 +339,9 @@ file_close (filectx_t ctx)
     } else {
         prev->next = cur->next;
     }
+    if (cur->is_output) {
+        flush_output_buffer(cur);
+    }
     close(cur->fd);
     if (cur->fname != 0) {
         free(cur->fname);
@@ -343,8 +368,8 @@ file_getname (filectx_t ctx)
  *
  * Returns:
  * -1: error occurred (errors are also signalled)
- * 0: end of file reached, no input
- * >0: length of line
+ *  0: end of file reached, no input
+ * >0: success
  */
 int
 file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
@@ -418,6 +443,93 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
 } /* file_readline */
 
 /*
+ * file_readbuf
+ *
+ * Non-line-oriented file read.
+ *
+ * Returns:
+ * -1: error occurred (errors are also signalled)
+ *  0: end of file reached, no input
+ * >0: success
+ */
+int
+file_readbuf (filectx_t ctx, void *buf, size_t bufsiz, size_t *len)
+{
+    ssize_t ret;
+
+    if (ctx->is_output) {
+        log_signal(ctx->fio->logctx, 0, STC__RDOUTFILE, ctx->fname);
+        return -1;
+    }
+    ret = read(ctx->fd, buf, bufsiz);
+    if (ret < 0) {
+        char errbuf[64];
+        errbuf[0] = '\0';
+        strerror_r(errno, errbuf, sizeof(errbuf));
+        log_signal(ctx->fio->logctx, 0, STC__FIOERR, errbuf);
+        return -1;
+    }
+    if (ret == 0) return 0;
+    *len = ret;
+    return 1;
+
+} /* file_readbuf */
+
+/*
+ * file___write
+ *
+ * Internal write routine, used for both line-oriented
+ * and raw writes.
+ *
+ * Returns:
+ * -1: error
+ * >-1: length of buffer written
+ */
+static ssize_t
+file___write (filectx_t ctx, const void *buf, size_t buflen,
+              int add_linemark)
+{
+    ssize_t n;
+
+    if (buflen == 0 && !add_linemark) return 0;
+
+    // Just append to the file buffer, if we can.
+    if (ctx->buflen + buflen + add_linemark <= sizeof(ctx->filebuf)) {
+        memcpy(ctx->filebuf + ctx->buflen, buf, buflen);
+        ctx->buflen += buflen;
+        if (add_linemark) ctx->filebuf[ctx->buflen++] = '\n';
+        return (int) buflen;
+    }
+    // Too much data for the buffer.  Flush any pending buffered data first.
+    if (ctx->buflen > 0) {
+        if (flush_output_buffer(ctx) < 0) return -1;
+    }
+    // If the data fits in the buffer, put it there; otherwise, write it
+    // directly.
+    if (buflen + add_linemark < sizeof(ctx->filebuf)) {
+        memcpy(ctx->filebuf, buf, buflen);
+        ctx->buflen = buflen;
+        if (add_linemark) ctx->filebuf[ctx->buflen++] = '\n';
+    } else {
+        struct iovec iov[2];
+        iov[0].iov_base = (void *)buf;
+        iov[0].iov_len = buflen;
+        iov[1].iov_base = "\n";
+        iov[1].iov_len = 1;
+        n = writev(ctx->fd, iov, 1 + add_linemark);
+        if (n < 0) {
+            char errbuf[64];
+            errbuf[0] = '\0';
+            strerror_r(errno, errbuf, sizeof(errbuf));
+            log_signal(ctx->fio->logctx, 0, STC__FIOERR, errbuf);
+            return -1;
+        }
+    }
+    return (int) buflen;
+
+} /* file___write */
+
+/*
  * file_writeline
  *
  * Returns:
@@ -427,22 +539,22 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
 int
 file_writeline (filectx_t ctx, const char *buf, size_t buflen)
 {
-    ssize_t n;
-    struct iovec iov[2];
-
-    iov[0].iov_base = (void *)buf;
-    iov[0].iov_len = buflen;
-    iov[1].iov_base = "\n";
-    iov[1].iov_len = 1;
-    n = writev(ctx->fd, iov, 2);
-    if (n < 0) {
-        char errbuf[64];
-        errbuf[0] = '\0';
-        strerror_r(errno, errbuf, sizeof(errbuf));
-        log_signal(ctx->fio->logctx, 0, STC__FIOERR, errbuf);
-        n = -1;
-    }
-
-    return (int)n - 1;
+    return (int) file___write(ctx, buf, buflen, 1);
 
 } /* file_writeline */
+
+/*
+ * file_writebuf
+ *
+ * Non-line-oriented write.
+ *
+ * Returns:
+ * -1: error
+ * >-1: length of buffer written
+ */
+int
+file_writebuf (filectx_t ctx, const void *buf, size_t buflen)
+{
+    return (int) file___write(ctx, buf, buflen, 0);
+
+} /* file_writebuf */

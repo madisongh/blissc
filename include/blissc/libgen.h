@@ -11,11 +11,19 @@
  */
 
 #include "expression.h"
+#include "support/fileio.h"
 
 struct libgen_ctx_s;
 typedef struct libgen_ctx_s *libgen_ctx_t;
 
-libgen_ctx_t libgen_init(const char *libname, int lnlen);
+struct libgen_compilerinfo_s {
+    unsigned int    ver_major, ver_minor;
+    const char     *host_triple;
+};
+typedef struct libgen_compilerinfo_s libgen_compilerinfo_t;
+
+libgen_ctx_t libgen_init(fioctx_t fioctx, const char *libname, int lnlen,
+                         libgen_compilerinfo_t *compilerinfo);
 int libgen_parse(libgen_ctx_t lgctx, expr_ctx_t ectx);
 void libgen_finish(libgen_ctx_t lgctx);
 

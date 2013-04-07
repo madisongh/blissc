@@ -8,11 +8,16 @@ dnl  Distributed under license.  See LICENSE.TXT for details.
 dnl --
 
 AC_INIT([blissc], [0.1], [http://github.com/madisongh/blissc/issues])
+AC_DEFINE([BLISSC_VERSION_MAJOR], [0], [Major version of blissc])
+AC_DEFINE([BLISSC_VERSION_MINOR], [1], [Minor version of blissc])
 AM_INIT_AUTOMAKE([subdir-objects foreign])
 AM_SILENT_RULES([yes])
 AC_COPYRIGHT([Copyright (c) 2013, Matthew Madison])
 
 AC_PREREQ(2.69)
+
+AC_CANONICAL_HOST
+AC_DEFINE_UNQUOTED([BLISSC_HOST_TRIPLE], ["$host"], [Compiler host triple])
 
 dnl Locate the LLVM installation through use of the llvm-config script.
 dnl If the path is not provided by the user, assume it is in the path.

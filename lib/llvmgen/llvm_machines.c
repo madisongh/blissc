@@ -36,14 +36,14 @@ machine_init (const char *mspec)
     if (m == 0) return 0;
     memset(m, 0, sizeof(struct machine_ctx_s) + sizeof(struct machinedef_s));
 
-    LLVMInitializeX86TargetInfo();
-    LLVMInitializeX86Target();
-    LLVMInitializeX86TargetMC();
-    LLVMInitializeX86AsmPrinter();
-    LLVMInitializeX86AsmParser();
+    LLVM_NATIVE_TARGETINFO();
+    LLVM_NATIVE_TARGET();
+    LLVM_NATIVE_TARGETMC();
+    LLVM_NATIVE_ASMPRINTER();
+    LLVM_NATIVE_ASMPARSER();
 
     if (machspec == 0) {
-        machspec = HelperGetDefaultTriple();
+        machspec = LLVM_DEFAULT_TARGET_TRIPLE;
     }
     err = 0;
     target = HelperLookupTarget(machspec, &err);
@@ -80,8 +80,6 @@ machine_init (const char *mspec)
     mach->flags = MACH_M_SIGNEXT | MACH_M_LTC_INIT;
     mach->max_align = 4;
     mach->reg_count = 16;
-
-    if (mspec == 0) free(machspec);
 
     return mach;
     

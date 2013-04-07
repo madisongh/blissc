@@ -62,6 +62,7 @@ DEFINE_TQ_FUNCS(namereflist, namereflist_t, nameref_t)
 #define NAME_M_DECLARED (1<<1) // set if explicitly declared
 #define NAME_M_FORWARD  (1<<2)
 #define NAME_M_BUILTIN  (1<<3)
+#define NAME_M_FROMLIB  (1<<4)
 #define NAME_M_FLAGMASK (0xFFFF) // others are reserved for internal use
 
 // To add more information to a name table entry, a module must register,
@@ -120,6 +121,7 @@ scopectx_t name_scope(name_t *np);
 lexeme_t *name_to_lexeme(lexctx_t lctx, name_t *np);
 strdesc_t *name_string(name_t *np);
 char *name_azstring(name_t *np);
+unsigned int name_flags(name_t *np);
 namectx_t nametables_init(logctx_t logctx);
 void nametables_finish(namectx_t ctx);
 scopectx_t nametables_globalscope(namectx_t ctx);

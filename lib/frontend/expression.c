@@ -64,6 +64,7 @@ struct expr_ctx_s {
     int                 longstringsok;
     int                 noreduce;
     int                 libgen;
+    int                 predeclaring;
 };
 
 #define ALLOC_QTY       128
@@ -720,6 +721,8 @@ void *expr_symctx(expr_ctx_t ctx) { return ctx->symctx; }
 void *expr_gencodectx(expr_ctx_t ctx) { return ctx->gctx; }
 int expr_libgen(expr_ctx_t ctx) { return ctx->libgen; }
 void expr_libgen_set(expr_ctx_t ctx, int val) { ctx->libgen = val; }
+int expr_predeclaring(expr_ctx_t ctx) { return ctx->predeclaring; }
+void expr_predeclaring_set(expr_ctx_t ctx, int val) { ctx->predeclaring = val; }
 
 void
 expr_finish (expr_ctx_t ctx)

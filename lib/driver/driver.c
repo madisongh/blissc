@@ -268,7 +268,13 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
     }
     free(srcparts.path_fullname);
     if (ctx->outtype == BLISS_K_OUTPUT_LIBRARY) {
-        ctx->lgctx = libgen_init(ctx->outfn, ctx->outfnlen);
+        libgen_compilerinfo_t compilerinfo;
+        memset(&compilerinfo, 0, sizeof(compilerinfo));
+        compilerinfo.ver_major = BLISSC_VERSION_MAJOR;
+        compilerinfo.ver_minor = BLISSC_VERSION_MINOR;
+        compilerinfo.host_triple = BLISSC_HOST_TRIPLE;
+        ctx->lgctx = libgen_init(ctx->fioctx, ctx->outfn, ctx->outfnlen,
+                                 &compilerinfo);
     } else {
         machine_output_t mo = (ctx->outtype == BLISS_K_OUTPUT_ASSEMBLY
                                ? MACH_K_OUTPUT_ASM : MACH_K_OUTPUT_OBJ);

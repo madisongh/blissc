@@ -258,16 +258,18 @@ main (int argc, char * const argv[])
         status = 1;
         goto finish;
     }
-    if (!blissc_dumpir_set(cctx, dumpir, irfile, -1)) {
-        fprintf(stderr, "Error setting --dump-ir\n");
-        status = 1;
-        goto finish;
-    }
-    if (optlevel >= 0) {
-        if (!blissc_optlevel_set(cctx, optlevel)) {
-            fprintf(stderr, "Error setting optimization level");
+    if (outtype != BLISS_K_OUTPUT_LIBRARY) {
+        if (!blissc_dumpir_set(cctx, dumpir, irfile, -1)) {
+            fprintf(stderr, "Error setting --dump-ir\n");
             status = 1;
             goto finish;
+        }
+        if (optlevel >= 0) {
+            if (!blissc_optlevel_set(cctx, optlevel)) {
+                fprintf(stderr, "Error setting optimization level");
+                status = 1;
+                goto finish;
+            }
         }
     }
     blissc_variant_set(cctx, variant);

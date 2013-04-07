@@ -182,6 +182,8 @@ void name_value_unsigned_set (name_t *np, unsigned long v) { np->nameextra[0] = 
 void *nametables_symctx_get (namectx_t ctx) { return ctx->symctx; }
 void nametables_symctx_set (namectx_t ctx, void *ptr) { ctx->symctx = ptr; }
 textpos_t name_defpos (name_t *np) { return np->namedclpos; }
+unsigned int name_flags(name_t *np) { return np->nameflags; }
+
 
 /*
  * name_to_lexeme

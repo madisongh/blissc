@@ -434,10 +434,13 @@ structures_init (expr_ctx_t ctx, scopectx_t kwdscope)
     pdinfo.lines[3] = (nounits ? predeclared_blockvector_nu
                        : predeclared_blockvector_u);
 
+    expr_predeclaring_set(ctx, 1);
     parser_popen(pctx, predeclare_structures, &pdinfo);
     for (i = 0; i < 4; i++) {
         parse_declaration(ctx);
     }
+    expr_predeclaring_set(ctx, 0);
+    parser_atend(pctx); // Force the closure of the internal token stream
 
 } /* structures_init */
 
@@ -468,7 +471,7 @@ declare_structure (expr_ctx_t ctx, scopectx_t scope)
         }
         memset(&ndef, 0, sizeof(ndef));
         ndef.lt = LEXTYPE_NAME_STRUCTURE;
-        ndef.flags = NAME_M_DECLARED;
+        ndef.flags = (expr_predeclaring(ctx) ? 0 : NAME_M_DECLARED);
         ndef.name = struname->ptr;
         ndef.namelen = struname->len;
         np = name_declare(scope, &ndef, pos, 0, 0, &stru);
