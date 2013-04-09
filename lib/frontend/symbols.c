@@ -499,6 +499,17 @@ bind_compiletime (lexctx_t lctx, void *vctx, quotelevel_t ql, quotemodifier_t qm
 } /* bind_compiletime */
 
 /*
+ * compiletime_serialize
+ */
+static int
+compiletime_serialize (void *vctx, name_t *np, void *fh)
+{
+    long val = name_value_signed(np);
+    return name_serialize(np, fh, &val, sizeof(val));
+
+} /* compiletime_serialize */
+
+/*
  * bind_literal
  *
  * Binds a literal to its value.  Called by the
@@ -534,6 +545,20 @@ bind_literal (lexctx_t lctx, void *vctx, quotelevel_t ql, quotemodifier_t qm,
     return 0;
 
 } /* bind_literal */
+
+/*
+ * litsym_serialize
+ */
+static int
+litsym_serialize (void *vctx, name_t *np, void *fh)
+{
+    sym_literal_t *lit = name_extraspace(np);
+    if (lit->attr.sc == SYMSCOPE_GLOBAL) {
+        return 0;
+    }
+    return name_serialize(np, fh, &lit->attr, sizeof(lit->attr));
+
+} /* litsym_serialize */
 
 /*
  * bind_data
@@ -616,6 +641,8 @@ symbols_init (expr_ctx_t ctx)
     symctx_t symctx = malloc(sizeof(struct symctx_s));
     lexctx_t lctx = expr_lexmemctx(ctx);
     machinedef_t *mach = expr_machinedef(ctx);
+    static nametype_vectors_t compiletime_vec = { 0, 0, 0, 0,
+            compiletime_serialize };
 
     memset(symctx, 0, sizeof(struct symctx_s));
     symctx->logctx = expr_logctx(ctx);
@@ -634,6 +661,7 @@ symbols_init (expr_ctx_t ctx)
     lextype_register(lctx, ctx, LEXTYPE_NAME_LITERAL, bind_literal);
     expr_dispatch_register(ctx, LEXTYPE_NAME_DATA, bind_data);
     expr_dispatch_register(ctx, LEXTYPE_NAME_ROUTINE, bind_routine);
+    nametype_dataop_register(namectx, LEXTYPE_NAME_COMPILETIME, &compiletime_vec, symctx);
 
     return symctx;
 
@@ -683,13 +711,15 @@ symbols_connect_hooks (symctx_t symctx)
     int i;
 
     static nametype_vectors_t symvec[6] = {
-        { sizeof(sym_literal_t), passthru_init, passthru_free, passthru_copy },
+        { sizeof(sym_literal_t), passthru_init, passthru_free, passthru_copy,
+            litsym_serialize },
         { sizeof(sym_data_t), passthru_init, data_free, data_copy },
         { sizeof(sym_routine_t), passthru_init, passthru_free, passthru_copy },
         { sizeof(sym_module_t), passthru_init, module_free, module_copy },
         { sizeof(sym_label_t), passthru_init, passthru_free, passthru_copy },
         { sizeof(sym_psect_t), passthru_init, psect_free, psect_copy }
     };
+
     for (i = 0; i < sizeof(symvec)/sizeof(symvec[0]); i++) {
         memcpy(&sv, &symvec[i], sizeof(sv));
         if (symctx->genvec.sizefn != 0) {

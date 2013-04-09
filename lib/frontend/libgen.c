@@ -14,6 +14,7 @@
 #include "blissc/libgen.h"
 #include "blissc/declarations.h"
 #include "blissc/expression.h"
+#include "blissc/machinedef.h"
 #include "blissc/support/fileio.h"
 
 struct libgen_ctx_s {
@@ -26,25 +27,30 @@ struct libgen_ctx_s {
 #define LIB_HEADER_VERSION  1
 
 static int
-write_header (libgen_ctx_t lgctx)
+write_header (libgen_ctx_t lgctx, const char *target_triple)
 {
     unsigned char hdrbuf[8];
-    int triplelen = (int) strlen(lgctx->compilerinfo.host_triple);
+    int htlen = (int) strlen(lgctx->compilerinfo.host_triple);
+    int ttlen = (int) strlen(target_triple);
 
-    if (triplelen >= 255) triplelen = 255;
+    if (htlen >= 255) htlen = 255;
+    if (ttlen >= 255) ttlen = 255;
 
     hdrbuf[0] = 'B';
     hdrbuf[1] = 'L';
-    hdrbuf[2] = 'I';
-    hdrbuf[3] = 'B';
-    hdrbuf[4] = LIB_HEADER_VERSION;
-    hdrbuf[5] = (unsigned char) lgctx->compilerinfo.ver_major;
-    hdrbuf[6] = (unsigned char) lgctx->compilerinfo.ver_minor;
-    hdrbuf[7] = (unsigned char) triplelen;
+    hdrbuf[2] = 'B';
+    hdrbuf[3] = LIB_HEADER_VERSION;
+    hdrbuf[4] = (unsigned char) lgctx->compilerinfo.ver_major;
+    hdrbuf[5] = (unsigned char) lgctx->compilerinfo.ver_minor;
+    hdrbuf[6] = (unsigned char) htlen;
+    hdrbuf[7] = (unsigned char) ttlen;
     if (file_writebuf(lgctx->file, hdrbuf, sizeof(hdrbuf)) < 0) {
         return -1;
     }
-    return file_writebuf(lgctx->file, lgctx->compilerinfo.host_triple, triplelen);
+    if (file_writebuf(lgctx->file, lgctx->compilerinfo.host_triple, htlen) < 0) {
+        return -1;
+    }
+    return file_writebuf(lgctx->file, target_triple, ttlen);
 
 } /* write_header */
 
@@ -87,8 +93,8 @@ int
 libgen_parse (libgen_ctx_t lgctx, expr_ctx_t ctx)
 {
     scopectx_t scope = parser_scope_get(expr_parse_ctx(ctx));
-    void *walkctx = 0;
-    name_t *np;
+//    void *walkctx = 0;
+//    name_t *np;
 
     expr_libgen_set(ctx, 1);
     parse_libgen_declarations(ctx);
@@ -97,9 +103,11 @@ libgen_parse (libgen_ctx_t lgctx, expr_ctx_t ctx)
     if (lgctx->file == 0) {
         return 0;
     }
-    if (write_header(lgctx) < 0) {
+    if (write_header(lgctx, machine_triple(expr_machinedef(ctx))) < 0) {
         return 0;
     }
+    scope_serialize(scope, lgctx->file);
+#if 0
     for (np = scope_nextname(scope, &walkctx); np != 0;
          np = scope_nextname(scope, &walkctx)) {
         if ((name_flags(np) & (NAME_M_DECLARED|NAME_M_FROMLIB)) == NAME_M_DECLARED) {
@@ -108,6 +116,7 @@ libgen_parse (libgen_ctx_t lgctx, expr_ctx_t ctx)
             // XXX process this name
         }
     }
+#endif
     file_close(lgctx->file);
 
     return 1;

@@ -27,14 +27,25 @@
 machinedef_t *
 machine_init (const char *mspec)
 {
-    machine_ctx_t m = malloc(sizeof(struct machine_ctx_s) + sizeof(struct machinedef_s));
+    machine_ctx_t m;
     machinedef_t *mach;
     char *err;
     LLVMTargetRef target;
     char *machspec = (char *) mspec;
+    unsigned long allosize;
 
+    if (machspec == 0) {
+        machspec = LLVM_DEFAULT_TARGET_TRIPLE;
+    }
+    allosize = (sizeof(struct machine_ctx_s) +
+                sizeof(struct machinedef_s) +
+                strlen(machspec) + 1);
+    m = malloc(allosize);
     if (m == 0) return 0;
-    memset(m, 0, sizeof(struct machine_ctx_s) + sizeof(struct machinedef_s));
+    memset(m, 0, allosize);
+    m->triple = ((char *) m) + (sizeof(struct machine_ctx_s) +
+                                sizeof(struct machinedef_s));
+    memcpy(m->triple, machspec, strlen(machspec));
 
     LLVM_NATIVE_TARGETINFO();
     LLVM_NATIVE_TARGET();
@@ -42,9 +53,6 @@ machine_init (const char *mspec)
     LLVM_NATIVE_ASMPRINTER();
     LLVM_NATIVE_ASMPARSER();
 
-    if (machspec == 0) {
-        machspec = LLVM_DEFAULT_TARGET_TRIPLE;
-    }
     err = 0;
     target = HelperLookupTarget(machspec, &err);
     if (target == 0) {
@@ -84,6 +92,18 @@ machine_init (const char *mspec)
     return mach;
     
 } /* machine_init */
+
+/*
+ * machine_triple
+ *
+ */
+const char *
+machine_triple (machinedef_t *mach)
+{
+    machine_ctx_t m = machine_context(mach);
+    return m->triple;
+
+} /* machine_triple */
 
 /*
  * machine_output_set

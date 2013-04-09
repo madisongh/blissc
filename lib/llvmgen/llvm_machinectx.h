@@ -31,6 +31,7 @@ struct machine_ctx_s {
     LLVMCodeGenFileType     outputtype;
     char                    *outfile;
     char                    *irdumpfile;
+    char                    *triple;
     int                     is_macho;
 };
 

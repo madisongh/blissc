@@ -417,6 +417,18 @@ macro_copydata (void *vctx, name_t *dst, void *dp, name_t *src, void *sp)
 } /* macro_copydata */
 
 /*
+ * macro_serialize
+ */
+static int
+macro_serialize (void *vctx, name_t *np, void *fh)
+{
+//    struct macrodecl_s *m = name_extraspace(np);
+    return 1;
+//    return name_serialize(np, fh, &lit->attr, sizeof(lit->attr));
+
+} /* macro_serialize */
+
+/*
  * handle_specials
  */
 int

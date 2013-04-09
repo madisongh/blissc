@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include "blissc/lexeme.h"
+#include "blissc/support/fileio.h"
 #include "blissc/support/strings.h"
 
 #define DOLEXTYPE(lt) "LEXTYPE_" #lt,
@@ -336,6 +337,54 @@ lexseq_copy (lexctx_t lctx, lexseq_t *dst, lexseq_t *src)
     return 1;
 
 } /* lexseq_copy */
+
+/*
+ * lexseq_sersize
+ *
+ * Computes the number of bytes required to serialize a
+ * lexeme sequence.
+ */
+unsigned int
+lexseq_sersize (lexseq_t *seq)
+{
+    lexeme_t *lex;
+    unsigned int count = 0;
+
+    for (lex = lexseq_head(seq); lex != 0; lex = lexeme_next(lex)) {
+        strdesc_t *str = lexeme_text(lex);
+        // type, boundtype, string length, string
+        count += sizeof(uint16_t) + sizeof(uint16_t) +
+                 sizeof(uint16_t) + str->len;
+    }
+    return count;
+
+} /* lexseq_sersize */
+
+/*
+ * lexseq_serialize
+ *
+ * Serialize a lexeme sequence.
+ */
+int
+lexseq_serialize (filectx_t fh, lexseq_t *seq)
+{
+    lexeme_t *lex;
+    uint16_t hdr[3];
+    for (lex = lexseq_head(seq); lex != 0; lex = lexeme_next(lex)) {
+        strdesc_t *str = lexeme_text(lex);
+        hdr[0] = lexeme_type(lex);
+        hdr[1] = lexeme_boundtype(lex);
+        hdr[2] = str->len;
+        if (file_writebuf(fh, hdr, sizeof(hdr)) < 0) {
+            return -1;
+        }
+        if (file_writebuf(fh, str->ptr, str->len) < 0) {
+            return -1;
+        }
+    }
+    return 1;
+    
+} /* lexseq_serialize */
 
 /*
  * lexemes_match

@@ -34,6 +34,7 @@
 #include <string.h>
 #include "blissc/nametable.h"
 #include "blissc/support/logging.h"
+#include "blissc/support/fileio.h"
 #include "blissc/support/strings.h"
 #include "blissc/lexeme.h"
 
@@ -737,6 +738,38 @@ scope_nextname (scopectx_t scope, void **ctxp)
 } /* scope_nextname */
 
 /*
+ * scope_serialize
+ *
+ * Walks through a scope and serializes declared names.
+ * Used to generate library files.
+ */
+int
+scope_serialize (scopectx_t scope, void *fh)
+{
+    namectx_t ctx = scope_namectx(scope);
+    name_t *np;
+    int status = 1;
+
+    for (np = namelist_head(&scope->names); np != 0; np = np->tq_next) {
+        int i;
+        name_serialize_fn serfn;
+        if ((np->nameflags & (NAME_M_DECLARED|NAME_M_FROMLIB)) != NAME_M_DECLARED) {
+            continue;
+        }
+        i = typeidx(np->nametype);
+        serfn = ctx->typevec[i].typeser;
+        if (serfn != 0) {
+            if (!serfn(ctx->typectx[i], np, fh)) {
+                status = 0;
+                break;
+            }
+        }
+    }
+    return status;
+
+} /* scope_serialize */
+
+/*
  * nametype_dataop_register
  *
  * Used by name table users to install extension
@@ -1148,3 +1181,30 @@ name_declare_builtin (scopectx_t scope, strdesc_t *namestr, textpos_t pos)
     return 1;
 
 } /* name_declare_builtin */
+
+/*
+ * name_serialize
+ *
+ * Serializes a name_t.
+ */
+int
+name_serialize (name_t *np, void *fh, void *extra, unsigned int extrasize)
+{
+    uint16_t buf[2+(NAME_SIZE/2)];
+    unsigned int totlen;
+
+    totlen = np->namedsc.len + extrasize;
+    if (totlen > 65535) {
+        // XXX
+        return 0;
+    }
+    buf[0] = (uint16_t)(np->nametype);
+    buf[1] = (uint16_t)totlen;
+    memcpy(buf+2, np->name, np->namedsc.len);
+    if (file_writebuf(fh, buf, sizeof(uint16_t)*2+np->namedsc.len) < 0) {
+        return 0;
+    }
+    if (extrasize == 0) return 1;
+    return (file_writebuf(fh, extra, extrasize) >= 0);
+
+} /* name_serialize */

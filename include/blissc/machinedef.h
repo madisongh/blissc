@@ -57,11 +57,12 @@ siu unsigned int machine_cs_count(machinedef_t *mach) { return mach->charsize_co
 siu unsigned int machine_charsize(machinedef_t *mach, int idx) { return mach->charsizes[idx]; }
 #undef siu
 
-machinedef_t *machine_init (const char *machspec);
+machinedef_t *machine_init(const char *machspec);
 void machine_finish(machinedef_t *mach);
-void machine_psects_init (machinedef_t *mach, void *scope);
-void machine_output_set (machinedef_t *mach, machine_output_t outtype,
+void machine_psects_init(machinedef_t *mach, void *scope);
+void machine_output_set(machinedef_t *mach, machine_output_t outtype,
                          char *fname, int fnlen);
-void machine_dumpir_set (machinedef_t *mach, char *fname, int fnlen);
+void machine_dumpir_set(machinedef_t *mach, char *fname, int fnlen);
+const char *machine_triple(machinedef_t *mach);
 
 #endif /* machinedef_h__ */
