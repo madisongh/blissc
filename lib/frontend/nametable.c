@@ -746,23 +746,36 @@ scope_nextname (scopectx_t scope, void **ctxp)
 int
 scope_serialize (scopectx_t scope, void *fh)
 {
-    namectx_t ctx = scope_namectx(scope);
-    name_t *np;
+    uint16_t buf[2];
     int status = 1;
 
-    for (np = namelist_head(&scope->names); np != 0; np = np->tq_next) {
-        int i;
-        name_serialize_fn serfn;
-        if ((np->nameflags & (NAME_M_DECLARED|NAME_M_FROMLIB)) != NAME_M_DECLARED) {
-            continue;
-        }
-        i = typeidx(np->nametype);
-        serfn = ctx->typevec[i].typeser;
-        if (serfn != 0) {
-            if (!serfn(ctx->typectx[i], np, fh)) {
-                status = 0;
-                break;
+    if (scope != 0) {
+        namectx_t ctx;
+        name_t *np;
+        ctx = scope_namectx(scope);
+        for (np = namelist_head(&scope->names); np != 0; np = np->tq_next) {
+            int i;
+            name_serialize_fn serfn;
+            if ((np->nameflags & (NAME_M_DECLARED|NAME_M_FROMLIB)) != NAME_M_DECLARED) {
+                continue;
             }
+            i = typeidx(np->nametype);
+            serfn = ctx->typevec[i].typeser;
+            if (serfn != 0) {
+                if (!serfn(ctx->typectx[i], np, fh)) {
+                    status = 0;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Write the end-of-scope marker
+
+    if (status) {
+        buf[0] = buf[1] = 0xFFFF;
+        if (file_writebuf(fh, buf, sizeof(buf)) < 0) {
+            status = 0;
         }
     }
     return status;
@@ -1208,3 +1221,20 @@ name_serialize (name_t *np, void *fh, void *extra, unsigned int extrasize)
     return (file_writebuf(fh, extra, extrasize) >= 0);
 
 } /* name_serialize */
+
+/*
+ * namereflist_serialize
+ *
+ * Serializes a namereflist_t.  Writes out names only; no count,
+ * no per-name extras.
+ */
+int
+namereflist_serialize (namereflist_t *lst, void *fh)
+{
+    nameref_t *nr;
+    for (nr = namereflist_head(lst); nr != 0; nr = nr->tq_next) {
+        if (!name_serialize(nr->np, fh, 0, 0)) return 0;
+    }
+    return 1;
+
+} /* namereflist_serialize */

@@ -154,5 +154,6 @@ int namereflist_copy(namectx_t ctx, namereflist_t *dst,
 name_t *scope_nextname(scopectx_t scope, void **ctxp);
 int name_declare_builtin(scopectx_t scope, strdesc_t *str, textpos_t pos);
 int name_serialize(name_t *np, void *fh, void *extra, unsigned int extrasize);
+int namereflist_serialize(namereflist_t *lst, void *fh);
 
 #endif /* nametable_h__ */

@@ -326,6 +326,19 @@ macparam_copydata (void *vctx, name_t *dst, void *dp, name_t *src, void *sp)
 } /* macparam_copydata */
 
 /*
+ * macparam_serialize
+ */
+static int
+macparam_serialize (void *vctx, name_t *np, void *fh)
+{
+    if (name_serialize(np, fh, 0, 0)) {
+        return lexseq_serialize(fh, name_extraspace(np));
+    }
+    return 0;
+
+} /* macparam_serialize */
+
+/*
  * Macro constructors/desctructors
  */
 
@@ -422,9 +435,21 @@ macro_copydata (void *vctx, name_t *dst, void *dp, name_t *src, void *sp)
 static int
 macro_serialize (void *vctx, name_t *np, void *fh)
 {
-//    struct macrodecl_s *m = name_extraspace(np);
-    return 1;
-//    return name_serialize(np, fh, &lit->attr, sizeof(lit->attr));
+    struct macrodecl_s *m = name_extraspace(np);
+    uint16_t buf[4];
+    int status;
+
+    buf[0] = (uint16_t)m->type;
+    buf[1] = (uint16_t)namereflist_length(&m->plist);
+    buf[2] = (uint16_t)namereflist_length(&m->ilist);
+    buf[3] = 0;
+    status = name_serialize(np, fh, buf, sizeof(buf));
+    if (status) status = scope_serialize(m->ptable, fh);
+    if (status) status = namereflist_serialize(&m->plist, fh);
+    if (status) status = namereflist_serialize(&m->ilist, fh);
+    if (status) status = lexseq_serialize(fh, &m->body);
+
+    return status;
 
 } /* macro_serialize */
 
@@ -558,12 +583,14 @@ macros_init (scopectx_t kwdscope, expr_ctx_t ctx)
     vec.typeinit = macro_initdata;
     vec.typefree = macro_freedata;
     vec.typecopy = macro_copydata;
+    vec.typeser  = macro_serialize;
     nametype_dataop_register(namectx, LEXTYPE_NAME_MACRO, &vec, ctx);
     memset(&vec, 0, sizeof(vec));
     vec.typesize = sizeof(lexseq_t);
     vec.typeinit = macparam_initdata;
     vec.typefree = macparam_freedata;
     vec.typecopy = macparam_copydata;
+    vec.typeser  = macparam_serialize;
     nametype_dataop_register(namectx, LEXTYPE_NAME_MAC_PARAM, &vec, ctx);
 
     for (i = 0; i < sizeof(predeclared_macros)/sizeof(predeclared_macros[0]); i++) {
