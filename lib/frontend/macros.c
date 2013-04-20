@@ -442,7 +442,7 @@ macro_serialize (void *vctx, name_t *np, void *fh)
     buf[0] = (uint16_t)m->type;
     buf[1] = (uint16_t)namereflist_length(&m->plist);
     buf[2] = (uint16_t)namereflist_length(&m->ilist);
-    buf[3] = 0;
+    buf[3] = (uint16_t)lexseq_sersize(&m->body);
     status = name_serialize(np, fh, buf, sizeof(buf));
     if (status) status = scope_serialize(m->ptable, fh);
     if (status) status = namereflist_serialize(&m->plist, fh);

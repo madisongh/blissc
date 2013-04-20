@@ -23,7 +23,7 @@
  * a symbol, marking it "pending" until all attributes have been
  * parsed and the symbol information gets updated.
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012-2013, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *
@@ -596,6 +596,78 @@ bind_data (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 } /* bind_data */
 
 /*
+ * datasym_serialize
+ */
+struct data_serattr_s {
+    unsigned int units;
+    unsigned int flags;
+    unsigned int alignment;
+    unsigned int width;
+    unsigned long value;
+    unsigned int psectnamelen;
+    unsigned int strucnamelen;
+    unsigned int fieldcount;
+};
+
+static int
+datasym_serialize (void *vctx, name_t *np, void *fh)
+{
+    sym_data_t *d = name_extraspace(np);
+    data_attr_t *attr = &d->attr;
+    struct data_serattr_s serattr;
+    int status;
+
+    memset(&serattr, 0, sizeof(serattr));
+    if ((attr->flags & SYM_M_BIND) == 0) {
+        if (attr->sc != SYMSCOPE_EXTERNAL) {
+            return 0;
+        }
+        if ((attr->flags & SYM_M_PLIT) != 0) {
+            return 0;
+        }
+    } else {
+        initval_t *iv = attr->ivlist;
+        if (iv->type == IVTYPE_EXPR_EXP) {
+            expr_node_t *exp = iv->data.scalar.expr;
+            if (expr_type(exp) == EXPTYPE_PRIM_LIT) {
+                serattr.value = expr_litval(exp);
+            } else {
+                // XXX
+                return 0;
+            }
+        } else if (iv->type == IVTYPE_SCALAR) {
+            serattr.value = iv->data.scalar.value;
+        } else {
+            // XXX
+            return 0;
+        }
+    }
+    serattr.units = attr->units;
+    serattr.flags = attr->flags & (SYM_M_VOLATILE|SYM_M_ALIAS|SYM_M_REF|SYM_M_SIGNEXT|SYM_M_BIND);
+    serattr.alignment = attr->alignment;
+    serattr.width = attr->width;
+    if (attr->owner != 0) {
+        strdesc_t *str = name_string(attr->owner);
+        serattr.psectnamelen = str->len;
+    }
+    if (attr->struc != 0) {
+        strdesc_t *str = name_string(attr->struc);
+        serattr.strucnamelen = str->len;
+    }
+    serattr.fieldcount = namereflist_length(&attr->fields);
+
+    status = name_serialize(np, fh, &serattr, sizeof(serattr));
+    if (status && serattr.psectnamelen != 0) status = name_serialize(attr->owner, fh, 0, 0);
+    if (status && serattr.strucnamelen != 0) {
+        status = name_serialize(attr->struc, fh, 0, 0);
+        if (status) status = scope_serialize(attr->struscope, fh);
+    }
+    if (status && serattr.fieldcount != 0) status = namereflist_serialize(&attr->fields, fh);
+    return status;
+
+} /* datasym_serialize */
+
+/*
  * bind_routine
  *
  * Binds a routine symbol to an expression node.
@@ -624,6 +696,61 @@ bind_routine (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
     return exp;
 
 } /* bind_routine */
+
+struct rtn_serattr_s {
+    unsigned int flags;
+    unsigned long value;
+    unsigned int psectnamelen;
+    unsigned int incount;
+    unsigned int outcount;
+};
+
+static int
+rtnsym_serialize (void *vctx, name_t *np, void *fh)
+{
+    sym_routine_t *r = name_extraspace(np);
+    routine_attr_t *attr = &r->attr;
+    struct rtn_serattr_s serattr;
+    int status;
+
+    memset(&serattr, 0, sizeof(serattr));
+    if ((attr->flags & SYM_M_BIND) == 0) {
+        if (attr->sc != SYMSCOPE_EXTERNAL) {
+            return 0;
+        }
+    } else {
+        initval_t *iv = attr->ivlist;
+        if (iv->type == IVTYPE_EXPR_EXP) {
+            expr_node_t *exp = iv->data.scalar.expr;
+            if (expr_type(exp) == EXPTYPE_PRIM_LIT) {
+                serattr.value = expr_litval(exp);
+            } else {
+                // XXX
+                return 0;
+            }
+        } else if (iv->type == IVTYPE_SCALAR) {
+            serattr.value = iv->data.scalar.value;
+        } else {
+            // XXX
+            return 0;
+        }
+    }
+    serattr.flags = attr->flags & (SYM_M_BIND|SYM_M_NOVALUE|SYM_M_REF);
+    if (attr->owner != 0) {
+        strdesc_t *str = name_string(attr->owner);
+        serattr.psectnamelen = str->len;
+    }
+    serattr.incount = namereflist_length(&attr->inargs);
+    serattr.outcount = namereflist_length(&attr->outargs);
+
+    status = name_serialize(np, fh, &serattr, sizeof(serattr));
+    if (status && serattr.psectnamelen != 0) status = name_serialize(attr->owner, fh, 0, 0);
+    if (status && (serattr.incount + serattr.outcount) != 0) status = scope_serialize(attr->argscope, fh);
+    if (status && serattr.incount != 0) status = namereflist_serialize(&attr->inargs, fh);
+    if (status && serattr.outcount != 0) status = namereflist_serialize(&attr->outargs, fh);
+    return status;
+
+} /* rtnsym_serialize */
 
 /*
  * symbols_init
@@ -713,8 +840,8 @@ symbols_connect_hooks (symctx_t symctx)
     static nametype_vectors_t symvec[6] = {
         { sizeof(sym_literal_t), passthru_init, passthru_free, passthru_copy,
             litsym_serialize },
-        { sizeof(sym_data_t), passthru_init, data_free, data_copy },
-        { sizeof(sym_routine_t), passthru_init, passthru_free, passthru_copy },
+        { sizeof(sym_data_t), passthru_init, data_free, data_copy, datasym_serialize },
+        { sizeof(sym_routine_t), passthru_init, passthru_free, passthru_copy, rtnsym_serialize },
         { sizeof(sym_module_t), passthru_init, module_free, module_copy },
         { sizeof(sym_label_t), passthru_init, passthru_free, passthru_copy },
         { sizeof(sym_psect_t), passthru_init, psect_free, psect_copy }

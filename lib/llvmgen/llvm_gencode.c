@@ -305,8 +305,6 @@ gencode_module_begin (gencodectx_t gctx, name_t *modnp)
     strdesc_t *str;
 #endif // XXX later
 
-    llvmgen_expgen_init(gctx);
-
     gctx->modnp = modnp;
     gctx->module = LLVMModuleCreateWithNameInContext(name_azstring(modnp), gctx->llvmctx);
 
@@ -410,13 +408,16 @@ gencode_optlevel_set (gencodectx_t gctx, unsigned int level)
  * gencode_postinit
  *
  * Some of the initialization cannot happen until other parts of the
- * front end have been initialized.  Right now, this is just setting
- * up the handler for the OPTLEVEL switch.
+ * front end have been initialized.  The expression generator initialization
+ * (which sets up generators for executable functions and declares BUILTINs)
+ * and the OPTLEVEL switch handler fall into this category.
  */
 void
 gencode_postinit (gencodectx_t gctx)
 {
     scopectx_t kwdscope = parser_kwdscope(expr_parse_ctx(gctx->ectx));
+    
+    llvmgen_expgen_init(gctx);
     switch_special_declare(kwdscope, LEXTYPE_SWITCH_OPTLEVEL, optlevel_handler, gctx);
 
 } /* gencode_postinit */

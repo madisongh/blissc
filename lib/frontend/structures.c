@@ -204,6 +204,28 @@ structure_copy (void *vctx, name_t *dst, void *dp,
 
 } /* structure_copy */
 
+static int
+structure_serialize (void *vctx, name_t *np, void *fh)
+{
+    strudef_t *s = name_extraspace(np);
+    uint16_t buf[4];
+    int status;
+
+    buf[0] = (uint16_t)namereflist_length(&s->accformals);
+    buf[1] = (uint16_t)namereflist_length(&s->alloformals);
+    buf[2] = (uint16_t)lexseq_sersize(&s->accbody);
+    buf[3] = (uint16_t)lexseq_sersize(&s->allobody);
+    status = name_serialize(np, fh, buf, sizeof(buf));
+    if (status) status = scope_serialize(s->acctbl, fh);
+    if (status) status = scope_serialize(s->allotbl, fh);
+    if (status) status = namereflist_serialize(&s->accformals, fh);
+    if (status) status = namereflist_serialize(&s->alloformals, fh);
+    if (status) status = lexseq_serialize(fh, &s->accbody);
+    if (status) status = lexseq_serialize(fh, &s->allobody);
+    return status;
+
+} /* structure_serialize */
+
 /*
  * field_init
  *
@@ -249,6 +271,20 @@ field_copy (void *vctx, name_t *dst, void *dp,
     return lexseq_copy(expr_lexmemctx(vctx), dseq, sseq);
 
 } /* field_copy */
+
+static int
+field_serialize (void *vctx, name_t *np, void *fh)
+{
+    lexseq_t *fseq = name_extraspace(np);
+    uint16_t n = (uint16_t)lexseq_sersize(fseq);
+
+    if (name_serialize(np, fh, &n, sizeof(n))) {
+        return lexseq_serialize(fh, fseq);
+    }
+
+    return 0;
+
+} /* field_serialize */
 
 /*
  * field_lexseq
@@ -346,6 +382,20 @@ fieldset_copy (void *vctx, name_t *dst, void *dp,
 
 } /* fieldset_copy */
 
+static int
+fieldset_serialize (void *vctx, name_t *np, void *fh)
+{
+    namereflist_t *frefs = name_extraspace(np);
+    uint16_t n = (uint16_t)namereflist_length(frefs);
+
+    if (name_serialize(np, fh, &n, sizeof(n))) {
+        return namereflist_serialize(frefs, fh);
+    }
+
+    return 0;
+
+} /* fieldset_serialize */
+
 /*
  * fieldset_reflist
  *
@@ -411,16 +461,19 @@ structures_init (expr_ctx_t ctx, scopectx_t kwdscope)
     vec.typeinit = structure_init;
     vec.typefree = structure_free;
     vec.typecopy = structure_copy;
+    vec.typeser  = structure_serialize;
     nametype_dataop_register(namectx, LEXTYPE_NAME_STRUCTURE, &vec, ctx);
     vec.typesize = sizeof(lexseq_t);
     vec.typeinit = field_init;
     vec.typefree = field_free;
     vec.typecopy = field_copy;
+    vec.typeser  = field_serialize;
     nametype_dataop_register(namectx, LEXTYPE_NAME_FIELD, &vec, ctx);
     vec.typesize = sizeof(namereflist_t);
     vec.typeinit = fieldset_init;
     vec.typefree = fieldset_free;
     vec.typecopy = fieldset_copy;
+    vec.typeser  = fieldset_serialize;
     nametype_dataop_register(namectx, LEXTYPE_NAME_FIELDSET, &vec, ctx);
 
     pdinfo.current = 0;

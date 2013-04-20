@@ -24,7 +24,7 @@
  * the modules handling those name types.
  *
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012-2013, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -45,10 +45,13 @@
  * NODCLCHK:  for overriding the normal check for
  * redeclaration (used for macro parameter
  * tables)
+ * DCLBUILTIN: name was declared BUILTIN (for use
+ * in library generation)
  */
-#define NAME_M_ALLOCATED (1<<16)
-#define NAME_M_NODCLCHK  (1<<17)
-#define NAME_K_EXTRAS     4
+#define NAME_M_ALLOCATED  (1<<16)
+#define NAME_M_NODCLCHK   (1<<17)
+#define NAME_M_DCLBUILTIN (1<<18)
+#define NAME_K_EXTRAS      4
 
 struct name_s {
     TQ_ENT_FIELDS(struct name_s)
@@ -759,12 +762,19 @@ scope_serialize (scopectx_t scope, void *fh)
             if ((np->nameflags & (NAME_M_DECLARED|NAME_M_FROMLIB)) != NAME_M_DECLARED) {
                 continue;
             }
-            i = typeidx(np->nametype);
-            serfn = ctx->typevec[i].typeser;
-            if (serfn != 0) {
-                if (!serfn(ctx->typectx[i], np, fh)) {
+            if ((np->nameflags & NAME_M_DCLBUILTIN) != 0) {
+                if (!name_serialize(np, fh, 0, 0)) {
                     status = 0;
                     break;
+                }
+            } else {
+                i = typeidx(np->nametype);
+                serfn = ctx->typevec[i].typeser;
+                if (serfn != 0) {
+                    if (!serfn(ctx->typectx[i], np, fh)) {
+                        status = 0;
+                        break;
+                    }
                 }
             }
         }
@@ -1189,7 +1199,7 @@ name_declare_builtin (scopectx_t scope, strdesc_t *namestr, textpos_t pos)
         return 0;
     }
     np->nameflags &= ~NAME_M_BUILTIN;
-    np->nameflags |= NAME_M_DECLARED;
+    np->nameflags |= NAME_M_DECLARED | NAME_M_DCLBUILTIN;
     name_insert(scope, np);
     return 1;
 
@@ -1211,7 +1221,8 @@ name_serialize (name_t *np, void *fh, void *extra, unsigned int extrasize)
         // XXX
         return 0;
     }
-    buf[0] = (uint16_t)(np->nametype);
+    buf[0] = ((uint16_t)(np->nametype) & 0x7FFF);
+    if (np->nameflags & NAME_M_DCLBUILTIN) buf[0] |= 0x8000;
     buf[1] = (uint16_t)totlen;
     memcpy(buf+2, np->name, np->namedsc.len);
     if (file_writebuf(fh, buf, sizeof(uint16_t)*2+np->namedsc.len) < 0) {
