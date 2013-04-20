@@ -263,6 +263,7 @@ int lexseq_copy_and_setpos(lexctx_t lctx, lexseq_t *dst,
 int lexemes_match(lexseq_t *a, lexseq_t *b);
 unsigned int lexseq_sersize(lexseq_t *seq);
 int lexseq_serialize(filectx_t fh, lexseq_t *seq);
+int lexseq_deserialize(lexctx_t lctx, filectx_t fh, unsigned int totsize, lexseq_t *seq);
 
 // Getters/settters for lexemes
 

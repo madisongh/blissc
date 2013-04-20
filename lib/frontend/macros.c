@@ -331,12 +331,25 @@ macparam_copydata (void *vctx, name_t *dst, void *dp, name_t *src, void *sp)
 static int
 macparam_serialize (void *vctx, name_t *np, void *fh)
 {
-    if (name_serialize(np, fh, 0, 0)) {
+    uint32_t count = (uint32_t)lexseq_sersize(name_extraspace(np));
+    if (name_serialize(np, fh, &count, sizeof(count))) {
         return lexseq_serialize(fh, name_extraspace(np));
     }
     return 0;
 
 } /* macparam_serialize */
+
+/*
+ * macparam_deserialize
+ */
+static int
+macparam_deserialize (void *vctx, name_t *np, void *fh,
+                      unsigned int count)
+{
+    lexctx_t lctx = expr_lexmemctx(vctx);
+    return lexseq_deserialize(lctx, fh, count, name_extraspace(np));
+
+} /* macparam_deserialize */
 
 /*
  * Macro constructors/desctructors
@@ -452,6 +465,32 @@ macro_serialize (void *vctx, name_t *np, void *fh)
     return status;
 
 } /* macro_serialize */
+
+/*
+ * macro_deserialize
+ */
+static int
+macro_deserialize (void *vctx, name_t *np, void *fh,
+                   unsigned int count)
+{
+    expr_ctx_t ctx = vctx;
+    lexctx_t lctx = expr_lexmemctx(ctx);
+    struct macrodecl_s *m = name_extraspace(np);
+    uint16_t buf[4];
+    size_t len;
+    int status;
+
+    if (file_readbuf(fh, buf, sizeof(buf), &len) != sizeof(buf)) {
+        return 0;
+    }
+    m->type = buf[0];
+    status = scope_deserialize(m->ptable, fh);
+    if (status) status = namereflist_deserialize(m->ptable, fh, &m->plist, buf[1]);
+    if (status) status = namereflist_deserialize(m->ptable, fh, &m->ilist, buf[2]);
+    if (status) status = lexseq_deserialize(lctx, fh, buf[3], &m->body);
+    return status;
+    
+} /* macro_deserialize */
 
 /*
  * handle_specials
@@ -584,6 +623,7 @@ macros_init (scopectx_t kwdscope, expr_ctx_t ctx)
     vec.typefree = macro_freedata;
     vec.typecopy = macro_copydata;
     vec.typeser  = macro_serialize;
+    vec.typedes  = macro_deserialize;
     nametype_dataop_register(namectx, LEXTYPE_NAME_MACRO, &vec, ctx);
     memset(&vec, 0, sizeof(vec));
     vec.typesize = sizeof(lexseq_t);
@@ -591,6 +631,7 @@ macros_init (scopectx_t kwdscope, expr_ctx_t ctx)
     vec.typefree = macparam_freedata;
     vec.typecopy = macparam_copydata;
     vec.typeser  = macparam_serialize;
+    vec.typedes  = macparam_deserialize;
     nametype_dataop_register(namectx, LEXTYPE_NAME_MAC_PARAM, &vec, ctx);
 
     for (i = 0; i < sizeof(predeclared_macros)/sizeof(predeclared_macros[0]); i++) {

@@ -75,7 +75,7 @@ typedef int (*name_datainit_fn)(void *ctx, name_t *np, void *p);
 typedef void (*name_datafree_fn)(void *ctx, name_t *np, void *p);
 typedef int (*name_datacopy_fn)(void *ctx, name_t *dst, void *dp, name_t *src, void *sp);
 typedef int (*name_serialize_fn)(void *ctx, name_t *np, void *fh);
-typedef int (*name_deserialize_fn)(void *ctx, void *fh);
+typedef int (*name_deserialize_fn)(void *ctx, name_t *np, void *fh, unsigned int count);
 
 struct nametype_vectors_s {
     size_t              typesize;
@@ -155,5 +155,6 @@ name_t *scope_nextname(scopectx_t scope, void **ctxp);
 int name_declare_builtin(scopectx_t scope, strdesc_t *str, textpos_t pos);
 int name_serialize(name_t *np, void *fh, void *extra, unsigned int extrasize);
 int namereflist_serialize(namereflist_t *lst, void *fh);
+int namereflist_deserialize(scopectx_t scope, void *fh, namereflist_t *lst, unsigned int count);
 
 #endif /* nametable_h__ */

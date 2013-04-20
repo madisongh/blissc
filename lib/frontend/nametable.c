@@ -749,7 +749,7 @@ scope_nextname (scopectx_t scope, void **ctxp)
 int
 scope_serialize (scopectx_t scope, void *fh)
 {
-    uint16_t buf[2];
+    uint16_t buf[3];
     int status = 1;
 
     if (scope != 0) {
@@ -783,7 +783,7 @@ scope_serialize (scopectx_t scope, void *fh)
     // Write the end-of-scope marker
 
     if (status) {
-        buf[0] = buf[1] = 0xFFFF;
+        buf[0] = buf[1] = buf[2] = 0xFFFF;
         if (file_writebuf(fh, buf, sizeof(buf)) < 0) {
             status = 0;
         }
@@ -791,6 +791,56 @@ scope_serialize (scopectx_t scope, void *fh)
     return status;
 
 } /* scope_serialize */
+
+/*
+ * scope_deserialize
+ *
+ * Reconstitutes declarations that have been written to
+ * a library file.
+ */
+int
+scope_deserialize (scopectx_t scope, void *fh)
+{
+    namectx_t ctx = scope_namectx(scope);
+    uint16_t buf[3];
+    lextype_t lt;
+    name_t *np;
+    char namebuf[NAME_SIZE];
+    size_t len, namelen;
+    int status = 0;
+
+    while (1) {
+        if (file_readbuf(fh, buf, sizeof(buf), &len) != sizeof(buf)) {
+            break;
+        }
+        if (buf[0] == 0xFFFF && buf[1] == 0xFFFF && buf[2] == 0xFFFF) {
+            status = 1;
+            break;
+        }
+        lt = (lextype_t)buf[0];
+        namelen = buf[1] & 0xFF;
+        if (file_readbuf(fh, namebuf, namelen, &len) != namelen) {
+            break;
+        }
+        np = name_alloc(ctx, lt, namebuf, namelen);
+        if (np == 0) break;
+        np->nameflags |= NAME_M_FROMLIB|NAME_M_DECLARED;
+        if ((buf[1] & 0xFF00) == 0) {
+            name_deserialize_fn deserfn;
+            int i = typeidx(lt);
+            deserfn = ctx->typevec[i].typedes;
+            if (deserfn != 0) {
+                if (!deserfn(ctx->typectx[i], np, fh, buf[2])) break;
+            }
+        } else {
+            np->nameflags |= NAME_M_DCLBUILTIN;
+            name_insert(scope, np);
+        }
+    }
+
+    return status;
+
+} /* scope_deserialize */
 
 /*
  * nametype_dataop_register
@@ -1213,19 +1263,24 @@ name_declare_builtin (scopectx_t scope, strdesc_t *namestr, textpos_t pos)
 int
 name_serialize (name_t *np, void *fh, void *extra, unsigned int extrasize)
 {
-    uint16_t buf[2+(NAME_SIZE/2)];
-    unsigned int totlen;
+    namectx_t ctx = scope_namectx(np->namescope);
+    unsigned char buf[sizeof(uint16_t)*3+NAME_SIZE];
+    unsigned char *bp = buf;
 
-    totlen = np->namedsc.len + extrasize;
-    if (totlen > 65535) {
-        // XXX
+    if (extrasize > 65535) {
+        log_signal(ctx->logctx, 0, STC__INTCMPERR, "name_serialize");
         return 0;
     }
-    buf[0] = ((uint16_t)(np->nametype) & 0x7FFF);
-    if (np->nameflags & NAME_M_DCLBUILTIN) buf[0] |= 0x8000;
-    buf[1] = (uint16_t)totlen;
-    memcpy(buf+2, np->name, np->namedsc.len);
-    if (file_writebuf(fh, buf, sizeof(uint16_t)*2+np->namedsc.len) < 0) {
+    *((uint16_t *)bp) = (uint16_t)(np->nametype);
+    bp += sizeof(uint16_t);
+    *((uint16_t *)bp) = (((np->nameflags & NAME_M_DCLBUILTIN) == 0 ? 0 : 0x100) |
+                         (np->namedsc.len & 0xFF));
+    bp += sizeof(uint16_t);
+    *((uint16_t *)bp) = extrasize;
+    bp += sizeof(uint16_t);
+    memcpy(bp, np->name, np->namedsc.len);
+    bp += np->namedsc.len;
+    if (file_writebuf(fh, buf, bp-buf) < 0) {
         return 0;
     }
     if (extrasize == 0) return 1;
@@ -1249,3 +1304,34 @@ namereflist_serialize (namereflist_t *lst, void *fh)
     return 1;
 
 } /* namereflist_serialize */
+
+/*
+ * namereflist_deserialize
+ *
+ * Deserialize a namreflist.
+ */
+int
+namereflist_deserialize (scopectx_t scope, void *fh, namereflist_t *lst,
+                         unsigned int count)
+{
+    namectx_t ctx = scope_namectx(scope);
+    uint16_t buf[3];
+    name_t *np;
+    nameref_t *nr;
+    char namebuf[NAME_SIZE];
+    size_t len;
+
+    while (count > 0) {
+        if (file_readbuf(fh, buf, sizeof(buf), &len) != sizeof(buf)) return 0;
+        if (file_readbuf(fh, namebuf, buf[1] & 0xFF, &len) != (buf[1] & 0xFF)) return 0;
+        np = name_search_internal(scope, namebuf, len, 0, 0, 0);
+        if (np == 0 || np->nametype != (lextype_t)(buf[0])) return 0;
+        nr = nameref_alloc(ctx, np);
+        if (nr == 0) return 0;
+        namereflist_instail(lst, nr);
+        count -= 1;
+    }
+
+    return 1;
+
+} /* namereflist_deserialize */

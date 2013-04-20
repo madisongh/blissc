@@ -376,15 +376,53 @@ lexseq_serialize (filectx_t fh, lexseq_t *seq)
         hdr[1] = lexeme_boundtype(lex);
         hdr[2] = str->len;
         if (file_writebuf(fh, hdr, sizeof(hdr)) < 0) {
-            return -1;
+            return 0;
         }
         if (file_writebuf(fh, str->ptr, str->len) < 0) {
-            return -1;
+            return 0;
         }
     }
     return 1;
     
 } /* lexseq_serialize */
+
+/*
+ * lexseq_deserialize
+ *
+ * Reconstitute a serialized lexeme sequence.
+ */
+int
+lexseq_deserialize (lexctx_t lctx, filectx_t fh, unsigned int sersize, lexseq_t *seq)
+{
+    lexeme_t *lex;
+    uint16_t hdr[3];
+    char buf[256], *b;
+    size_t len;
+
+    while (sersize > 0) {
+        if (file_readbuf(fh, hdr, sizeof(hdr), &len) != sizeof(hdr)) {
+            return 0;
+        }
+        if (hdr[2] > sizeof(buf)) {
+            b = malloc(hdr[2]);
+            if (b == 0) return 0;
+        } else {
+            b = buf;
+        }
+        if (file_readbuf(fh, b, hdr[2], &len) != hdr[2]) {
+            free(b);
+            return 0;
+        }
+        lex = lexeme_alloc(lctx, hdr[0], b, len);
+        if (b != buf) free(b);
+        lex->boundtype = hdr[1];
+        lexseq_instail(seq, lex);
+        sersize -= sizeof(uint16_t) * 3 + hdr[2];
+    }
+
+    return 1;
+    
+} /* lexseq_deserialize */
 
 /*
  * lexemes_match
