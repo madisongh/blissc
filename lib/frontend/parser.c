@@ -20,6 +20,7 @@
 #include "blissc/lexeme.h"
 #include "blissc/lexer.h"
 #include "blissc/nametable.h"
+#include "blissc/libgen.h"
 #include "blissc/support/strings.h"
 #include "blissc/listings.h"
 #include "blissc/support/logging.h"
@@ -49,8 +50,9 @@ struct parse_ctx_s {
     lextype_t       separator;
     lexctx_t        lmemctx;
     logctx_t        logctx;
-    char            *main_filename;
+    char           *main_filename;
     unsigned int    variant;
+    compilerinfo_t  compilerinfo;
     lexfunc_t       lexfuncs[LEXTYPE_LXF_MAX-LEXTYPE_LXF_MIN+1];
     void           *lxfctx[LEXTYPE_LXF_MAX-LEXTYPE_LXF_MIN+1];
 };
@@ -427,6 +429,19 @@ lstgctx_t parser_lstgctx (parse_ctx_t pctx) { return pctx->lstgctx; }
 void parser_variant_set (parse_ctx_t pctx, unsigned int val) { pctx->variant = val; }
 condstate_t parser_condstate_get (parse_ctx_t pctx) { return pctx->condstate[pctx->condlevel]; }
 
+
+/*
+ * parser_compilerinfo_set
+ *
+ * Stash the compiler info (version and host).
+ */
+void
+parser_compilerinfo_set (parse_ctx_t pctx, compilerinfo_t *ci)
+{
+    memcpy(&pctx->compilerinfo, ci, sizeof(pctx->compilerinfo));
+
+} /* parser_compilerinfo_set */
+
 /*
  * parser_condstate_push
  *
@@ -511,6 +526,64 @@ parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen, char **actnamep
     return status;
 
 } /* parser_fopen */
+
+/*
+ * parser_lib_process
+ *
+ * Process a library file.
+ *
+ */
+int
+parser_lib_process (parse_ctx_t pctx, strdesc_t *libname)
+{
+    fio_pathparts_t pp, mainpp;
+    filectx_t fh;
+    char dirnamebuf[1024];
+    int status;
+
+    memset(&pp, 0, sizeof(pp));
+    memset(&mainpp, 0, sizeof(mainpp));
+    if (file_splitname(pctx->fioctx, libname->ptr, (int)libname->len, 0, &pp) == 0) {
+        return 0;
+    }
+    // XXX - should provide for target-specific suffixes as well
+    if (pp.path_suffixlen == 0) {
+        pp.path_suffix = ".lib";
+        pp.path_suffixlen = 4;
+    }
+    // XXX - should provide the equivalent of '-I' paths
+    if (!pp.path_absolute) {
+        if (file_splitname(pctx->fioctx, pctx->main_filename, -1, 1, &mainpp)) {
+            if (pp.path_dirnamelen > 0 &&
+                pp.path_dirnamelen + mainpp.path_dirnamelen < sizeof(dirnamebuf)) {
+                memcpy(dirnamebuf, mainpp.path_dirname, mainpp.path_dirnamelen);
+                memcpy(dirnamebuf+mainpp.path_dirnamelen, pp.path_dirname,
+                       pp.path_dirnamelen);
+                pp.path_dirname = dirnamebuf;
+                pp.path_dirnamelen += mainpp.path_dirnamelen;
+            } else {
+                pp.path_dirname = mainpp.path_dirname;
+                pp.path_dirnamelen = mainpp.path_dirnamelen;
+            }
+        }
+    }
+    if (file_combinename(pctx->fioctx, &pp) == 0) {
+        file_freeparts(pctx->fioctx, &pp);
+        file_freeparts(pctx->fioctx, &mainpp);
+        return 0;
+    }
+    fh = file_open_input(pctx->fioctx, pp.path_fullname, pp.path_fullnamelen);
+    file_freeparts(pctx->fioctx, &pp);
+    file_freeparts(pctx->fioctx, &mainpp);
+    if (fh == 0) return 0;
+    status = lib_parse_header(pctx->logctx, pctx->curpos,
+                              fh, &pctx->compilerinfo, pctx->mach);
+    if (status) status = scope_deserialize(pctx->curscope, fh, 0);
+    file_close(fh);
+
+    return status;
+
+} /* parser_lib_process */
 
 /*
  * parser_fopen_main

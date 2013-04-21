@@ -400,7 +400,8 @@ lexseq_deserialize (lexctx_t lctx, filectx_t fh, unsigned int sersize, lexseq_t 
     size_t len;
 
     while (sersize > 0) {
-        if (file_readbuf(fh, hdr, sizeof(hdr), &len) != sizeof(hdr)) {
+        if (file_readbuf(fh, hdr, sizeof(hdr), &len) <= 0
+            || len != sizeof(hdr)) {
             return 0;
         }
         if (hdr[2] > sizeof(buf)) {
@@ -409,7 +410,8 @@ lexseq_deserialize (lexctx_t lctx, filectx_t fh, unsigned int sersize, lexseq_t 
         } else {
             b = buf;
         }
-        if (file_readbuf(fh, b, hdr[2], &len) != hdr[2]) {
+        if (file_readbuf(fh, b, hdr[2], &len) <= 0
+            || len != hdr[2]) {
             free(b);
             return 0;
         }

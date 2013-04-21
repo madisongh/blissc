@@ -139,8 +139,8 @@ namectx_t scope_namectx(scopectx_t scope);
 name_t *scope_sclass_psectname(scopectx_t scope, storageclass_t cl);
 void scope_sclass_psectname_set(scopectx_t scope, storageclass_t cl, name_t *np);
 void scope_setparent(scopectx_t scope, scopectx_t newparent);
-int scope_serialize(scopectx_t scope, void *fh);
-int scope_deserialize(scopectx_t scope, void *fh);
+int scope_serialize(scopectx_t scope, void *fh, int allnames);
+int scope_deserialize(scopectx_t scope, void *fh, int allnames);
 void nametype_dataop_register(namectx_t ctx, lextype_t lt,
                               nametype_vectors_t *vec, void *vctx);
 int name_undeclare(scopectx_t scope, name_t *np, textpos_t pos);
@@ -154,6 +154,8 @@ int namereflist_copy(namectx_t ctx, namereflist_t *dst,
 name_t *scope_nextname(scopectx_t scope, void **ctxp);
 int name_declare_builtin(scopectx_t scope, strdesc_t *str, textpos_t pos);
 int name_serialize(name_t *np, void *fh, void *extra, unsigned int extrasize);
+int name_deserialize(void *fh, char namebuf[NAME_SIZE], size_t *namelen,
+                     lextype_t *nametype, unsigned int *flags, unsigned int *count);
 int namereflist_serialize(namereflist_t *lst, void *fh);
 int namereflist_deserialize(scopectx_t scope, void *fh, namereflist_t *lst, unsigned int count);
 

@@ -13,6 +13,16 @@
 #include <stdint.h>
 
 /*
+ * Compiler info - version and compiling host.
+ */
+struct compilerinfo_s {
+    unsigned int    ver_major, ver_minor;
+    const char     *host_triple;
+};
+typedef struct compilerinfo_s compilerinfo_t;
+
+
+/*
  * Text position tracking.  A textpos is a 64-bit integer, divided
  * up into a file index number (the indices are tracked by the lexer),
  * a line number, and a column number.  Every lexeme scanned carries

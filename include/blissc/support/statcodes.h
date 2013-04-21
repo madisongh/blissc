@@ -164,7 +164,12 @@ STATCODE(113,W,INVOPTLVL, "invalid OPTLEVEL setting") \
 STATCODE(114,W,NAMETOOLON,"name \"!SD\" too long, truncating to !UI characters") \
 STATCODE(115,E,UNDCLLABEL,"label !SD used but not declared") \
 STATCODE(116,E,UNDCLNAME, "name !SD used but not declared") \
-STATCODE(117,E,INVLIBDCL, "declaration not allowed in library generation")
+STATCODE(117,E,INVLIBDCL, "declaration not allowed in library generation") \
+STATCODE(118,E,INVLIBHDR, "invalid header in library !SZ") \
+STATCODE(119,E,LIBVERMISM,"compiler version mismatch for library !SZ") \
+STATCODE(120,E,LIBHSTMISM,"host mismatch for library !SZ") \
+STATCODE(121,E,LIBTRGMISM,"target mismatch for library !SZ") \
+STATCODE(122,E,LIBRDERR,  "error reading library file !SZ")
 
 #define STATCODE(msg,typ,nam,txt) STC__##nam =  STC_CODE_##typ(msg),
 typedef enum {

@@ -74,6 +74,7 @@ static namedef_t decl_names[] = {
     NAMEDEF("BUILTIN", LEXTYPE_DCL_BUILTIN, NAME_M_RESERVED),
     NAMEDEF("UNDECLARE", LEXTYPE_DCL_UNDECLARE, NAME_M_RESERVED),
     NAMEDEF("REQUIRE", LEXTYPE_DCL_REQUIRE, NAME_M_RESERVED),
+    NAMEDEF("LIBRARY", LEXTYPE_DCL_LIBRARY, NAME_M_RESERVED),
     NAMEDEF("SWITCHES", LEXTYPE_DCL_SWITCHES, NAME_M_RESERVED),
     NAMEDEF("SIGNED", LEXTYPE_ATTR_SIGNED, NAME_M_RESERVED),
     NAMEDEF("UNSIGNED", LEXTYPE_ATTR_UNSIGNED, NAME_M_RESERVED),
@@ -1560,6 +1561,27 @@ declare_require (parse_ctx_t pctx)
 } /* declare_require */
 
 /*
+ * declare_library
+ *
+ * Handles LIBRARY "declarations".
+ */
+static int
+declare_library (parse_ctx_t pctx)
+{
+    lexeme_t *lex;
+
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_STRING, &lex, 1)) {
+        log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__STRINGEXP);
+    }
+    if (!parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1)) {
+        log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__DELIMEXP, ";");
+    }
+    parser_lib_process(pctx, lexeme_text(lex));
+    return 1;
+
+} /* declare_library */
+
+/*
  * undeclare
  *
  * Handles UNDECLAREs.
@@ -1796,6 +1818,9 @@ parse_declaration (expr_ctx_t ctx)
         case LEXTYPE_DCL_REQUIRE:
             status = declare_require(pctx);
             break;
+        case LEXTYPE_DCL_LIBRARY:
+            status = declare_library(pctx);
+            break;
         case LEXTYPE_DCL_UNDECLARE:
             status = undeclare(pctx, scope);
             break;
@@ -2029,6 +2054,9 @@ int
 parse_libgen_declarations (expr_ctx_t ctx)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
+    scopectx_t scope = parser_scope_get(pctx);
+
+    listing_mainscope_set(expr_lstgctx(ctx), scope);
 
     while (!parser_atend(pctx)) {
         parse_declaration(ctx);

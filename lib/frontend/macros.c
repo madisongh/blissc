@@ -347,7 +347,14 @@ macparam_deserialize (void *vctx, name_t *np, void *fh,
                       unsigned int count)
 {
     lexctx_t lctx = expr_lexmemctx(vctx);
-    return lexseq_deserialize(lctx, fh, count, name_extraspace(np));
+    uint32_t seqsize;
+    size_t len;
+
+    if (count != sizeof(seqsize)) return 0;
+    if (file_readbuf(fh, &seqsize, count, &len) <= 0) return 0;
+    if (len != count) return 0;
+    if (seqsize == 0) return 1;
+    return lexseq_deserialize(lctx, fh, seqsize, name_extraspace(np));
 
 } /* macparam_deserialize */
 
@@ -457,9 +464,11 @@ macro_serialize (void *vctx, name_t *np, void *fh)
     buf[2] = (uint16_t)namereflist_length(&m->ilist);
     buf[3] = (uint16_t)lexseq_sersize(&m->body);
     status = name_serialize(np, fh, buf, sizeof(buf));
-    if (status) status = scope_serialize(m->ptable, fh);
-    if (status) status = namereflist_serialize(&m->plist, fh);
-    if (status) status = namereflist_serialize(&m->ilist, fh);
+    if (buf[1] + buf[2] != 0) {
+        if (status) status = scope_serialize(m->ptable, fh, 1);
+        if (status) status = namereflist_serialize(&m->plist, fh);
+        if (status) status = namereflist_serialize(&m->ilist, fh);
+    }
     if (status) status = lexseq_serialize(fh, &m->body);
 
     return status;
@@ -480,13 +489,18 @@ macro_deserialize (void *vctx, name_t *np, void *fh,
     size_t len;
     int status;
 
-    if (file_readbuf(fh, buf, sizeof(buf), &len) != sizeof(buf)) {
-        return 0;
-    }
+    if (file_readbuf(fh, buf, sizeof(buf), &len) <= 0) return 0;
+    if (len != sizeof(buf)) return 0;
+
     m->type = buf[0];
-    status = scope_deserialize(m->ptable, fh);
-    if (status) status = namereflist_deserialize(m->ptable, fh, &m->plist, buf[1]);
-    if (status) status = namereflist_deserialize(m->ptable, fh, &m->ilist, buf[2]);
+    if (buf[1] + buf[2] != 0) {
+        m->ptable = scope_begin(expr_namectx(ctx), 0);
+        status = scope_deserialize(m->ptable, fh, 1);
+        if (status) status = namereflist_deserialize(m->ptable, fh, &m->plist, buf[1]);
+        if (status) status = namereflist_deserialize(m->ptable, fh, &m->ilist, buf[2]);
+    } else {
+        status = 1;
+    }
     if (status) status = lexseq_deserialize(lctx, fh, buf[3], &m->body);
     return status;
     

@@ -208,16 +208,17 @@ static int
 structure_serialize (void *vctx, name_t *np, void *fh)
 {
     strudef_t *s = name_extraspace(np);
-    uint16_t buf[4];
+    uint16_t buf[5];
     int status;
 
     buf[0] = (uint16_t)namereflist_length(&s->accformals);
     buf[1] = (uint16_t)namereflist_length(&s->alloformals);
     buf[2] = (uint16_t)lexseq_sersize(&s->accbody);
     buf[3] = (uint16_t)lexseq_sersize(&s->allobody);
+    buf[4] = ((s->acctbl == 0) ? 0 : 1) | ((s->allotbl == 0) ? 0 : 2);
     status = name_serialize(np, fh, buf, sizeof(buf));
-    if (status) status = scope_serialize(s->acctbl, fh);
-    if (status) status = scope_serialize(s->allotbl, fh);
+    if (status) status = scope_serialize(s->acctbl, fh, 1);
+    if (status) status = scope_serialize(s->allotbl, fh, 1);
     if (status) status = namereflist_serialize(&s->accformals, fh);
     if (status) status = namereflist_serialize(&s->alloformals, fh);
     if (status) status = lexseq_serialize(fh, &s->accbody);
@@ -225,6 +226,44 @@ structure_serialize (void *vctx, name_t *np, void *fh)
     return status;
 
 } /* structure_serialize */
+
+static int
+structure_deserialize (void *vctx, name_t *np, void *fh,
+                       unsigned int count)
+{
+    expr_ctx_t ctx = vctx;
+    lexctx_t lctx = expr_lexmemctx(ctx);
+    strudef_t *s = name_extraspace(np);
+    uint16_t buf[5];
+    size_t len;
+
+    if (count != sizeof(buf) ||
+        file_readbuf(fh, buf, sizeof(buf), &len) <= 0) return 0;
+    if (len != count) return 0;
+    if ((buf[4] & 1) != 0) {
+        s->acctbl = scope_begin(expr_namectx(ctx), 0);
+        if (!scope_deserialize(s->acctbl, fh, 1)) return 0;
+    }
+    if ((buf[4] & 2) != 0) {
+        s->allotbl = scope_begin(expr_namectx(ctx), 0);
+        if (!scope_deserialize(s->allotbl, fh, 1)) return 0;
+    }
+    if (buf[0] != 0) {
+        if (!namereflist_deserialize(s->acctbl, fh, &s->accformals, buf[0])) return 0;
+    }
+    if (buf[1] != 0) {
+        if (!namereflist_deserialize(s->allotbl, fh, &s->alloformals, buf[1])) return 0;
+    }
+    if (buf[2] != 0) {
+        if (!lexseq_deserialize(lctx, fh, buf[2], &s->accbody)) return 0;
+    }
+    if (buf[3] != 0) {
+        if (!lexseq_deserialize(lctx, fh, buf[3], &s->allobody)) return 0;
+    }
+
+    return 1;
+    
+} /* structure_deserialize */
 
 /*
  * field_init
@@ -285,6 +324,22 @@ field_serialize (void *vctx, name_t *np, void *fh)
     return 0;
 
 } /* field_serialize */
+
+static int
+field_deserialize (void *vctx, name_t *np, void *fh,
+                   unsigned int count)
+{
+    lexctx_t lctx = expr_lexmemctx(vctx);
+    uint16_t n;
+    size_t len;
+
+    if (count != sizeof(n)) return 0;
+    if (file_readbuf(fh, &n, count, &len) <= 0) return 0;
+    if (count != len) return 0;
+
+    return lexseq_deserialize(lctx, fh, n, name_extraspace(np));
+
+} /* field_deserialize */
 
 /*
  * field_lexseq
@@ -387,14 +442,51 @@ fieldset_serialize (void *vctx, name_t *np, void *fh)
 {
     namereflist_t *frefs = name_extraspace(np);
     uint16_t n = (uint16_t)namereflist_length(frefs);
+    nameref_t *fld;
 
     if (name_serialize(np, fh, &n, sizeof(n))) {
-        return namereflist_serialize(frefs, fh);
+        for (fld = namereflist_head(frefs); fld != 0; fld = fld->tq_next) {
+            if (field_serialize(vctx, fld->np, fh) == 0) return 0;
+        }
     }
 
-    return 0;
+    return 1;
 
 } /* fieldset_serialize */
+
+static int
+fieldset_deserialize (void *vctx, name_t *np, void *fh,
+                      unsigned int count)
+{
+    scopectx_t scope = parser_scope_get(expr_parse_ctx(vctx));
+    namectx_t namectx = scope_namectx(scope);
+    namereflist_t *frefs = name_extraspace(np);
+    uint16_t n;
+    size_t len;
+    namedef_t ndef;
+    char namebuf[NAME_SIZE];
+
+    if (count != sizeof(n)) return 0;
+    if (file_readbuf(fh, &n, count, &len) <= 0) return 0;
+    if (len != count) return 0;
+    if (n == 0) return 1;
+    memset(&ndef, 0, sizeof(ndef));
+    ndef.name = namebuf;
+    while (n > 0) {
+        name_t *fnp;
+        unsigned int fcnt;
+        if (!name_deserialize(fh, namebuf, &len, &ndef.lt, &ndef.flags, &fcnt)) return 0;
+        if (ndef.lt != LEXTYPE_NAME_FIELD) return 0;
+        ndef.namelen = len;
+        fnp = name_declare(scope, &ndef, 0, 0, 0, 0);
+        if (fnp == 0) return 0;
+        if (!field_deserialize(vctx, fnp, fh, fcnt)) return 0;
+        namereflist_instail(frefs, nameref_alloc(namectx, fnp));
+        n -= 1;
+    }
+    return 1;
+
+} /* fieldset_deserialize */
 
 /*
  * fieldset_reflist
@@ -462,18 +554,21 @@ structures_init (expr_ctx_t ctx, scopectx_t kwdscope)
     vec.typefree = structure_free;
     vec.typecopy = structure_copy;
     vec.typeser  = structure_serialize;
+    vec.typedes  = structure_deserialize;
     nametype_dataop_register(namectx, LEXTYPE_NAME_STRUCTURE, &vec, ctx);
     vec.typesize = sizeof(lexseq_t);
     vec.typeinit = field_init;
     vec.typefree = field_free;
     vec.typecopy = field_copy;
     vec.typeser  = field_serialize;
+    vec.typedes  = field_deserialize;
     nametype_dataop_register(namectx, LEXTYPE_NAME_FIELD, &vec, ctx);
     vec.typesize = sizeof(namereflist_t);
     vec.typeinit = fieldset_init;
     vec.typefree = fieldset_free;
     vec.typecopy = fieldset_copy;
     vec.typeser  = fieldset_serialize;
+    vec.typedes  = fieldset_deserialize;
     nametype_dataop_register(namectx, LEXTYPE_NAME_FIELDSET, &vec, ctx);
 
     pdinfo.current = 0;
@@ -907,7 +1002,7 @@ structure_reference (expr_ctx_t ctx, name_t *struname, int ctce_accessors,
     if (fldscope != 0) {
         parser_scope_push(pctx, fldscope);
     }
-        for (ref = namereflist_head(&stru->accformals); ref != 0; ref = ref->tq_next) {
+    for (ref = namereflist_head(&stru->accformals); ref != 0; ref = ref->tq_next) {
         if (ref->np != 0) {
             strdesc_t *pname = name_string(ref->np);
             lexseq_init(&seq);

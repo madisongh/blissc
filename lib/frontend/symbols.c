@@ -510,6 +510,27 @@ compiletime_serialize (void *vctx, name_t *np, void *fh)
 } /* compiletime_serialize */
 
 /*
+ * compiletime_deserialize
+ */
+static int
+compiletime_deserialize (void *vctx, name_t *np, void *fh,
+                         unsigned int count)
+{
+    long val;
+    size_t len;
+
+    if (count == sizeof(val) &&
+        file_readbuf(fh, &val, count, &len) > 0 &&
+        len == count) {
+        compiletime_assign(np, val);
+        return 1;
+    }
+
+    return 0;
+
+} /* compiletime_deserialize */
+
+/*
  * bind_literal
  *
  * Binds a literal to its value.  Called by the
@@ -561,6 +582,22 @@ litsym_serialize (void *vctx, name_t *np, void *fh)
 } /* litsym_serialize */
 
 /*
+ * litsym_deserialize
+ */
+static int
+litsym_deserialize (void *vctx, name_t *np, void *fh,
+                    unsigned int count)
+{
+    sym_literal_t *lit = name_extraspace(np);
+    size_t len;
+
+    return (count == sizeof(lit->attr) &&
+            file_readbuf(fh, &lit->attr, count, &len) > 0 &&
+            len == count);
+
+}
+
+/*
  * bind_data
  *
  * Binds a data symbol to an expression node. Called
@@ -603,9 +640,10 @@ struct data_serattr_s {
     unsigned int flags;
     unsigned int alignment;
     unsigned int width;
+    unsigned int symscope;
     unsigned long value;
-    unsigned int psectnamelen;
     unsigned int strucnamelen;
+    int has_struscope;
     unsigned int fieldcount;
 };
 
@@ -646,10 +684,8 @@ datasym_serialize (void *vctx, name_t *np, void *fh)
     serattr.flags = attr->flags & (SYM_M_VOLATILE|SYM_M_ALIAS|SYM_M_REF|SYM_M_SIGNEXT|SYM_M_BIND);
     serattr.alignment = attr->alignment;
     serattr.width = attr->width;
-    if (attr->owner != 0) {
-        strdesc_t *str = name_string(attr->owner);
-        serattr.psectnamelen = str->len;
-    }
+    serattr.symscope = (unsigned int) attr->sc;
+    serattr.has_struscope = (attr->struscope != 0);
     if (attr->struc != 0) {
         strdesc_t *str = name_string(attr->struc);
         serattr.strucnamelen = str->len;
@@ -657,15 +693,68 @@ datasym_serialize (void *vctx, name_t *np, void *fh)
     serattr.fieldcount = namereflist_length(&attr->fields);
 
     status = name_serialize(np, fh, &serattr, sizeof(serattr));
-    if (status && serattr.psectnamelen != 0) status = name_serialize(attr->owner, fh, 0, 0);
     if (status && serattr.strucnamelen != 0) {
         status = name_serialize(attr->struc, fh, 0, 0);
-        if (status) status = scope_serialize(attr->struscope, fh);
+        if (status && attr->struscope != 0) {
+            status = scope_serialize(attr->struscope, fh, 1);
+        }
     }
-    if (status && serattr.fieldcount != 0) status = namereflist_serialize(&attr->fields, fh);
+    if (status && serattr.fieldcount != 0) {
+        status = namereflist_serialize(&attr->fields, fh);
+    }
     return status;
 
 } /* datasym_serialize */
+
+static int
+datasym_deserialize (void *vctx, name_t *np, void *fh,
+                     unsigned int count)
+{
+    expr_ctx_t ctx = vctx;
+    sym_data_t *d = name_extraspace(np);
+    data_attr_t *attr = &d->attr;
+    struct data_serattr_s serattr;
+    size_t len;
+
+    if (count != sizeof(serattr)) return 0;
+    if (file_readbuf(fh, &serattr, count, &len) <= 0) return 0;
+    if (len != count) return 0;
+
+    attr->units = serattr.units;
+    attr->flags |= serattr.flags;
+    attr->alignment = serattr.alignment;
+    attr->width = serattr.width;
+    attr->sc = (symscope_t) serattr.symscope;
+    if ((attr->flags & SYM_M_BIND) != 0) {
+        attr->ivlist = initval_scalar_add(expr_symctx(ctx), 0, 1,
+                                          serattr.value, attr->width,
+                                          (attr->flags & SYM_M_SIGNEXT) != 0);
+    }
+    if (serattr.strucnamelen != 0) {
+        char struname[NAME_SIZE];
+        lextype_t lt;
+        if (name_deserialize(fh, struname, &len, &lt, 0, 0) &&
+            lt == LEXTYPE_NAME_STRUCTURE) {
+            scopectx_t scope = parser_scope_get(expr_parse_ctx(ctx));
+            attr->struc = name_search_typed(scope, struname, len, lt, 0);
+            if (serattr.has_struscope) {
+                attr->struscope = scope_begin(expr_namectx(ctx), 0);
+                if (!scope_deserialize(attr->struscope, fh, 1)) return 0;
+            }
+        } else {
+            return 0;
+        }
+    }
+    if (serattr.fieldcount != 0) {
+        scopectx_t scope = parser_scope_get(expr_parse_ctx(ctx));
+        if (!namereflist_deserialize(scope, fh, &attr->fields, serattr.fieldcount)) {
+            return 0;
+        }
+    }
+
+    return 1;
+
+} /* datasym_deserialize */
 
 /*
  * bind_routine
@@ -700,7 +789,7 @@ bind_routine (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 struct rtn_serattr_s {
     unsigned int flags;
     unsigned long value;
-    unsigned int psectnamelen;
+    unsigned int symscope;
     unsigned int incount;
     unsigned int outcount;
 };
@@ -736,21 +825,52 @@ rtnsym_serialize (void *vctx, name_t *np, void *fh)
         }
     }
     serattr.flags = attr->flags & (SYM_M_BIND|SYM_M_NOVALUE|SYM_M_REF);
-    if (attr->owner != 0) {
-        strdesc_t *str = name_string(attr->owner);
-        serattr.psectnamelen = str->len;
-    }
+    serattr.symscope = (unsigned int) attr->sc;
     serattr.incount = namereflist_length(&attr->inargs);
     serattr.outcount = namereflist_length(&attr->outargs);
 
     status = name_serialize(np, fh, &serattr, sizeof(serattr));
-    if (status && serattr.psectnamelen != 0) status = name_serialize(attr->owner, fh, 0, 0);
-    if (status && (serattr.incount + serattr.outcount) != 0) status = scope_serialize(attr->argscope, fh);
+    if (status && (serattr.incount + serattr.outcount) != 0) {
+        status = scope_serialize(attr->argscope, fh, 1);
+    }
     if (status && serattr.incount != 0) status = namereflist_serialize(&attr->inargs, fh);
     if (status && serattr.outcount != 0) status = namereflist_serialize(&attr->outargs, fh);
     return status;
 
 } /* rtnsym_serialize */
+
+static int
+rtnsym_deserialize (void *vctx, name_t *np, void *fh,
+                    unsigned int count)
+{
+    expr_ctx_t ctx = vctx;
+    sym_routine_t *r = name_extraspace(np);
+    routine_attr_t *attr = &r->attr;
+    struct rtn_serattr_s serattr;
+    size_t len;
+
+    if (count != sizeof(serattr) ||
+        file_readbuf(fh, &serattr, count, &len) <= 0) return 0;
+    if (len != count) return 0;
+    attr->flags |= serattr.flags;
+    attr->sc = (symscope_t) serattr.symscope;
+    if (serattr.incount + serattr.outcount != 0) {
+        attr->argscope = scope_begin(expr_namectx(ctx), 0);
+        if (!scope_deserialize(attr->argscope, fh, 1)) return 0;
+    }
+    if (serattr.incount != 0) {
+        if (!namereflist_deserialize(attr->argscope, fh, &attr->inargs, serattr.incount)) {
+            return 0;
+        }
+    }
+    if (serattr.outcount != 0) {
+        if (!namereflist_deserialize(attr->argscope, fh, &attr->outargs, serattr.outcount)) {
+            return 0;
+        }
+    }
+    return 1;
+
+} /* rtnsym_deserialize */
 
 /*
  * symbols_init
@@ -769,7 +889,7 @@ symbols_init (expr_ctx_t ctx)
     lexctx_t lctx = expr_lexmemctx(ctx);
     machinedef_t *mach = expr_machinedef(ctx);
     static nametype_vectors_t compiletime_vec = { 0, 0, 0, 0,
-            compiletime_serialize };
+            compiletime_serialize, compiletime_deserialize };
 
     memset(symctx, 0, sizeof(struct symctx_s));
     symctx->logctx = expr_logctx(ctx);
@@ -839,9 +959,11 @@ symbols_connect_hooks (symctx_t symctx)
 
     static nametype_vectors_t symvec[6] = {
         { sizeof(sym_literal_t), passthru_init, passthru_free, passthru_copy,
-            litsym_serialize },
-        { sizeof(sym_data_t), passthru_init, data_free, data_copy, datasym_serialize },
-        { sizeof(sym_routine_t), passthru_init, passthru_free, passthru_copy, rtnsym_serialize },
+            litsym_serialize, litsym_deserialize },
+        { sizeof(sym_data_t), passthru_init, data_free, data_copy,
+            datasym_serialize, datasym_deserialize },
+        { sizeof(sym_routine_t), passthru_init, passthru_free, passthru_copy,
+            rtnsym_serialize, rtnsym_deserialize },
         { sizeof(sym_module_t), passthru_init, module_free, module_copy },
         { sizeof(sym_label_t), passthru_init, passthru_free, passthru_copy },
         { sizeof(sym_psect_t), passthru_init, psect_free, psect_copy }

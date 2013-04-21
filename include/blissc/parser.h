@@ -15,6 +15,7 @@
 #include "listings.h"
 #include "machinedef.h"
 #include "support/logging.h"
+#include "support/utils.h"
 
 typedef enum {
     PUNCT_COMMASEP_NOGROUP,
@@ -38,6 +39,7 @@ int parser_fopen_main(parse_ctx_t pctx, const char *fname, size_t fnlen,
 int parser_fopen(parse_ctx_t pctx, const char *fname, size_t fnlen,
                  char **actnamep);
 int parser_popen(parse_ctx_t pctx, void *infn, void *fnctx);
+int parser_lib_process(parse_ctx_t pctx, strdesc_t *libname);
 void parser_finish(parse_ctx_t pctx);
 lexctx_t parser_lexmemctx(parse_ctx_t pctx);
 logctx_t parser_logctx(parse_ctx_t pctx);
@@ -76,4 +78,5 @@ lexeme_t *parser_punct_separator(parse_ctx_t pctx);
 lexeme_t *parse_string_params(parse_ctx_t pctx, int openparenparsed);
 void parser_variant_set(parse_ctx_t pctx, unsigned int val);
 int parser_atend(parse_ctx_t pctx);
+void parser_compilerinfo_set(parse_ctx_t pctx, compilerinfo_t *ci);
 #endif /* parser_h__ */

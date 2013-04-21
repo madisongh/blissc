@@ -239,10 +239,18 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
     int status;
     size_t len = (fnlen < 0 ? strlen(fname) : fnlen);
     fio_pathparts_t srcparts, objparts, lstparts;
+    compilerinfo_t compilerinfo;
 
     if (!file_splitname(ctx->fioctx, fname, fnlen, 1, &srcparts)) {
         return 0;
     }
+
+    memset(&compilerinfo, 0, sizeof(compilerinfo));
+    compilerinfo.ver_major = BLISSC_VERSION_MAJOR;
+    compilerinfo.ver_minor = BLISSC_VERSION_MINOR;
+    compilerinfo.host_triple = BLISSC_HOST_TRIPLE;
+    parser_compilerinfo_set(ctx->pctx, &compilerinfo);
+
     if (ctx->variant != 0) parser_variant_set(ctx->pctx, ctx->variant);
     if (ctx->outfn == 0) {
         file_splitname(ctx->fioctx, srcparts.path_fullname,
@@ -268,11 +276,6 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
     }
     free(srcparts.path_fullname);
     if (ctx->outtype == BLISS_K_OUTPUT_LIBRARY) {
-        libgen_compilerinfo_t compilerinfo;
-        memset(&compilerinfo, 0, sizeof(compilerinfo));
-        compilerinfo.ver_major = BLISSC_VERSION_MAJOR;
-        compilerinfo.ver_minor = BLISSC_VERSION_MINOR;
-        compilerinfo.host_triple = BLISSC_HOST_TRIPLE;
         ctx->lgctx = libgen_init(ctx->fioctx, ctx->outfn, ctx->outfnlen,
                                  &compilerinfo);
     } else {

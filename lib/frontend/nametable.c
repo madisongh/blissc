@@ -745,9 +745,10 @@ scope_nextname (scopectx_t scope, void **ctxp)
  *
  * Walks through a scope and serializes declared names.
  * Used to generate library files.
+ * Set 'allnames' to ignore the DECLARED bit (e.g., for parameter lists).
  */
 int
-scope_serialize (scopectx_t scope, void *fh)
+scope_serialize (scopectx_t scope, void *fh, int allnames)
 {
     uint16_t buf[3];
     int status = 1;
@@ -759,9 +760,8 @@ scope_serialize (scopectx_t scope, void *fh)
         for (np = namelist_head(&scope->names); np != 0; np = np->tq_next) {
             int i;
             name_serialize_fn serfn;
-            if ((np->nameflags & (NAME_M_DECLARED|NAME_M_FROMLIB)) != NAME_M_DECLARED) {
-                continue;
-            }
+            if ((np->nameflags & NAME_M_FROMLIB) != 0) continue;
+            if (!allnames && (np->nameflags & NAME_M_DECLARED) == 0) continue;
             if ((np->nameflags & NAME_M_DCLBUILTIN) != 0) {
                 if (!name_serialize(np, fh, 0, 0)) {
                     status = 0;
@@ -797,45 +797,39 @@ scope_serialize (scopectx_t scope, void *fh)
  *
  * Reconstitutes declarations that have been written to
  * a library file.
+ *
+ * The 'allnames' argument indicates a special scope table
+ * that doesn't need to set the FROMLIB and DECLARED flags.
  */
 int
-scope_deserialize (scopectx_t scope, void *fh)
+scope_deserialize (scopectx_t scope, void *fh, int allnames)
 {
     namectx_t ctx = scope_namectx(scope);
-    uint16_t buf[3];
     lextype_t lt;
     name_t *np;
     char namebuf[NAME_SIZE];
-    size_t len, namelen;
+    size_t namelen;
+    unsigned int flags, count;
     int status = 0;
 
-    while (1) {
-        if (file_readbuf(fh, buf, sizeof(buf), &len) != sizeof(buf)) {
-            break;
-        }
-        if (buf[0] == 0xFFFF && buf[1] == 0xFFFF && buf[2] == 0xFFFF) {
+    while (name_deserialize(fh, namebuf, &namelen, &lt, &flags, &count)) {
+        if (lt == LEXTYPE_END) {
             status = 1;
-            break;
-        }
-        lt = (lextype_t)buf[0];
-        namelen = buf[1] & 0xFF;
-        if (file_readbuf(fh, namebuf, namelen, &len) != namelen) {
             break;
         }
         np = name_alloc(ctx, lt, namebuf, namelen);
         if (np == 0) break;
-        np->nameflags |= NAME_M_FROMLIB|NAME_M_DECLARED;
-        if ((buf[1] & 0xFF00) == 0) {
+        np->nameflags |= flags;
+        if (!allnames) np->nameflags |= NAME_M_FROMLIB|NAME_M_DECLARED;
+        if (flags == 0) {
             name_deserialize_fn deserfn;
             int i = typeidx(lt);
             deserfn = ctx->typevec[i].typedes;
             if (deserfn != 0) {
-                if (!deserfn(ctx->typectx[i], np, fh, buf[2])) break;
+                if (!deserfn(ctx->typectx[i], np, fh, count)) break;
             }
-        } else {
-            np->nameflags |= NAME_M_DCLBUILTIN;
-            name_insert(scope, np);
         }
+        name_insert(scope, np);
     }
 
     return status;
@@ -1289,6 +1283,39 @@ name_serialize (name_t *np, void *fh, void *extra, unsigned int extrasize)
 } /* name_serialize */
 
 /*
+ * name_deserialize
+ *
+ * Deserializes a name (just the name string and type).
+ */
+int
+name_deserialize (void *fh, char namebuf[NAME_SIZE], size_t *namelen,
+                  lextype_t *nametype, unsigned int *flags, unsigned int *count)
+{
+    uint16_t buf[3];
+    size_t len;
+
+    if (file_readbuf(fh, buf, sizeof(buf), &len) <= 0) return 0;
+    if (len != sizeof(buf)) return 0;
+
+    if (buf[0] == 0xFFFF && buf[1] == 0xFFFF && buf[2] == 0xFFFF) {
+        *nametype = LEXTYPE_END;
+        *flags = 0;
+        *namelen = 0;
+        return 1;
+    }
+    *nametype = (lextype_t)buf[0];
+    *namelen = buf[1] & 0xFF;
+    if (flags != 0) {
+        *flags = (buf[1] & 0xFF00) == 0 ? 0 : NAME_M_DCLBUILTIN;
+    }
+    if (count != 0) *count = buf[2];
+    if (file_readbuf(fh, namebuf, *namelen, &len) <= 0) return 0;
+    return (len == *namelen);
+
+} /* name_deserialize */
+
+
+/*
  * namereflist_serialize
  *
  * Serializes a namereflist_t.  Writes out names only; no count,
@@ -1315,17 +1342,16 @@ namereflist_deserialize (scopectx_t scope, void *fh, namereflist_t *lst,
                          unsigned int count)
 {
     namectx_t ctx = scope_namectx(scope);
-    uint16_t buf[3];
     name_t *np;
     nameref_t *nr;
+    lextype_t lt;
     char namebuf[NAME_SIZE];
     size_t len;
 
     while (count > 0) {
-        if (file_readbuf(fh, buf, sizeof(buf), &len) != sizeof(buf)) return 0;
-        if (file_readbuf(fh, namebuf, buf[1] & 0xFF, &len) != (buf[1] & 0xFF)) return 0;
+        if (!name_deserialize(fh, namebuf, &len, &lt, 0, 0)) return 0;
         np = name_search_internal(scope, namebuf, len, 0, 0, 0);
-        if (np == 0 || np->nametype != (lextype_t)(buf[0])) return 0;
+        if (np == 0 || np->nametype != lt) return 0;
         nr = nameref_alloc(ctx, np);
         if (nr == 0) return 0;
         namereflist_instail(lst, nr);
