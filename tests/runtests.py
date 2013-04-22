@@ -53,7 +53,8 @@ def process_test(testfile, blissc, cc, testharness, quiet=False, prefix='!!'):
     f.close()
 
     barename = os.path.splitext(os.path.basename(testfile))[0]
-    docompile = subprocess.Popen([blissc, '-o', barename + '.o', testfile],
+    docompile = subprocess.Popen([blissc, '-o', barename + '.o',
+                                  '-I', '.', testfile],
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                  universal_newlines=True)
     (oraw, eraw) = docompile.communicate()
