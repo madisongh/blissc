@@ -241,7 +241,7 @@ blissc_searchpath_add (blissc_driverctx_t ctx, const char *path, int pathlen)
     p = malloc(len+1);
     memcpy(p, path, len);
     p[len] = '\0';
-    ctx->paths[ctx->pathcount] = p;
+    ctx->paths[ctx->pathcount++] = p;
     return 1;
 
 } /* blissc_searchpath_add */
