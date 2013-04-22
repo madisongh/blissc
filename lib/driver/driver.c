@@ -35,6 +35,8 @@
 static char const package_name[] = PACKAGE_NAME;
 static char const package_version[] = PACKAGE_VERSION;
 
+#define MAXPATHS 32
+
 struct blissc_driverctx_s {
     strctx_t        strctx;
     logctx_t        logctx;
@@ -58,6 +60,8 @@ struct blissc_driverctx_s {
     char            *irfn;
     unsigned int    irfnlen;
     int             free_irfn;
+    unsigned int    pathcount;
+    char            *paths[MAXPATHS];
 };
 
 /*
@@ -225,6 +229,24 @@ blissc_optlevel_set (blissc_driverctx_t ctx, unsigned int val)
 } /* blissc_optlevel_set */
 
 /*
+ * blissc_searchpath_add
+ */
+int
+blissc_searchpath_add (blissc_driverctx_t ctx, const char *path, int pathlen)
+{
+    size_t len = (pathlen < 0 ? strlen(path) : pathlen);
+    char *p;
+
+    if (ctx->pathcount >= MAXPATHS) return 0;
+    p = malloc(len+1);
+    memcpy(p, path, len);
+    p[len] = '\0';
+    ctx->paths[ctx->pathcount] = p;
+    return 1;
+
+} /* blissc_searchpath_add */
+
+/*
  * blissc_compile
  *
  * Begins a compilation.  This should be called only
@@ -240,6 +262,7 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
     size_t len = (fnlen < 0 ? strlen(fname) : fnlen);
     fio_pathparts_t srcparts, objparts, lstparts;
     compilerinfo_t compilerinfo;
+    unsigned int i;
 
     if (!file_splitname(ctx->fioctx, fname, fnlen, 1, &srcparts)) {
         return 0;
@@ -250,6 +273,12 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
     compilerinfo.ver_minor = BLISSC_VERSION_MINOR;
     compilerinfo.host_triple = BLISSC_HOST_TRIPLE;
     parser_compilerinfo_set(ctx->pctx, &compilerinfo);
+
+    for (i = 0; i < ctx->pathcount; i++) {
+        strdesc_t dsc;
+        strdesc_init(&dsc, ctx->paths[i], strlen(ctx->paths[i]));
+        if (!parser_searchpath_add(ctx->pctx, &dsc)) return 0;
+    }
 
     if (ctx->variant != 0) parser_variant_set(ctx->pctx, ctx->variant);
     if (ctx->outfn == 0) {

@@ -79,4 +79,7 @@ lexeme_t *parse_string_params(parse_ctx_t pctx, int openparenparsed);
 void parser_variant_set(parse_ctx_t pctx, unsigned int val);
 int parser_atend(parse_ctx_t pctx);
 void parser_compilerinfo_set(parse_ctx_t pctx, compilerinfo_t *ci);
+int parser_searchpath_add(parse_ctx_t pctx, strdesc_t *path);
+unsigned int parser_searchpathcount_get(parse_ctx_t pctx);
+strdesc_t *parser_searchpath_get(parse_ctx_t pctx, unsigned int i);
 #endif /* parser_h__ */

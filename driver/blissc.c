@@ -34,6 +34,7 @@ static struct option options[] = {
     { "help",           no_argument,        0,  'h' },
     { "version",        no_argument,        0,  0   },
     { "library",        no_argument,        0,  0   },
+    { "include",        required_argument,  0,  'I' },
     { 0,                0,                  0,  0   }
 };
 static char *optarghelp[] = {
@@ -46,7 +47,8 @@ static char *optarghelp[] = {
     "--dump-ir[=filename]    ",
     "--help                  ",
     "--version               ",
-    "--library               "
+    "--library               ",
+    "--include               "
 };
 static char *opthelp[] = {
     "output file name (default is src name +'.o' or '.s' suffix)",
@@ -58,7 +60,8 @@ static char *opthelp[] = {
     "dumps the LLVM IR code (default name is outfile + '.ll' suffix)",
     "displays usage information and exits",
     "displays version information and exits",
-    "generate a LIBRARY file"
+    "generate a LIBRARY file",
+    "directory for locationg REQUIRE and LIBRARY files"
 };
 static char *listopts [] = {
     "source","require","expand","trace",
@@ -116,7 +119,7 @@ print_usage (void)
 } /* print_usage */
 
 static void
-parse_args (int argc, char * const argv[])
+parse_args (blissc_driverctx_t cctx, int argc, char * const argv[])
 {
     int c, which, err;
     char *showopts;
@@ -174,6 +177,19 @@ parse_args (int argc, char * const argv[])
                 print_usage();
                 err = 999;
                 break;
+            case 'I':
+                if (optarg == 0) {
+                    fprintf(stderr, "missing argument for -I");
+                    err = 1;
+                    break;
+                }
+                if (!blissc_searchpath_add(cctx, optarg, -1)) {
+                    fprintf(stderr, "error adding search path");
+                    err = 1;
+                    break;
+                }
+                break;
+
             case 'O':
                 if (optarg == 0) {
                     fprintf(stderr, "error in options processing");
@@ -233,13 +249,13 @@ main (int argc, char * const argv[])
     blissc_driverctx_t cctx = 0;
     int status = 0;
 
-    parse_args(argc, argv);
-
     if (setjmp(retenv)) {
         status = 1;
         goto finish;
     }
     cctx = blissc_init(retenv);
+    parse_args(cctx, argc, argv);
+
     if (!blissc_target_set(cctx, 0)) {
         fprintf(stderr, "error setting target\n");
         status = 999;

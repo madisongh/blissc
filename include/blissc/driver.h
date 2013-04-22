@@ -47,5 +47,6 @@ int blissc_compile(blissc_driverctx_t ctx, const char *fname, int fnlen);
 void blissc_finish(blissc_driverctx_t ctx);
 const char *blissc_package_name(void);
 const char *blissc_package_version(void);
+int blissc_searchpath_add(blissc_driverctx_t ctx, const char *path, int pathlen);
 
 #endif /* blissc_driver_h__ */

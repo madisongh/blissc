@@ -29,6 +29,7 @@
 #include "blissc/support/utils.h"
 #include "scanner.h"
 
+#define MAX_SEARCH_PATHS    32
 // Parser context structure
 struct parse_ctx_s {
     lstgctx_t       lstgctx;
@@ -53,6 +54,8 @@ struct parse_ctx_s {
     char           *main_filename;
     unsigned int    variant;
     compilerinfo_t  compilerinfo;
+    strdesc_t      *searchpaths[MAX_SEARCH_PATHS];
+    unsigned int    searchpathcount;
     lexfunc_t       lexfuncs[LEXTYPE_LXF_MAX-LEXTYPE_LXF_MIN+1];
     void           *lxfctx[LEXTYPE_LXF_MAX-LEXTYPE_LXF_MIN+1];
 };
@@ -398,12 +401,16 @@ parser_init (strctx_t strctx, namectx_t namectx, machinedef_t *mach,
 void
 parser_finish (parse_ctx_t pctx)
 {
+    unsigned int i;
     scope_end(pctx->curscope);
     scope_end(pctx->kwdscope);
     nametables_finish(pctx->namectx);
     listings_finish(pctx->lstgctx);
     if (pctx->lexctx != 0) {
         lexer_finish(pctx->lexctx);
+    }
+    for (i = 0; i < pctx->searchpathcount; i++) {
+        string_free(pctx->strctx, pctx->searchpaths[i]);
     }
     free(pctx);
 
@@ -428,7 +435,22 @@ scopectx_t parser_kwdscope (parse_ctx_t pctx) { return pctx->kwdscope; }
 lstgctx_t parser_lstgctx (parse_ctx_t pctx) { return pctx->lstgctx; }
 void parser_variant_set (parse_ctx_t pctx, unsigned int val) { pctx->variant = val; }
 condstate_t parser_condstate_get (parse_ctx_t pctx) { return pctx->condstate[pctx->condlevel]; }
+unsigned int parser_searchpathcount_get (parse_ctx_t pctx) { return pctx->searchpathcount; }
+strdesc_t *parser_searchpath_get (parse_ctx_t pctx, unsigned int i) {
+    return (i < pctx->searchpathcount ? pctx->searchpaths[i] : 0);
+}
 
+/*
+ * parser_searchpath_add
+ */
+int
+parser_searchpath_add (parse_ctx_t pctx, strdesc_t *path)
+{
+    if (pctx->searchpathcount >= MAX_SEARCH_PATHS) return 0;
+    pctx->searchpaths[pctx->searchpathcount++] = string_copy(pctx->strctx, 0, path);
+    return 1;
+
+} /* parser_searchpath_add */
 
 /*
  * parser_compilerinfo_set
@@ -487,7 +509,10 @@ parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen, char **actnamep
 {
     fio_pathparts_t pp, mainpp;
     char dirnamebuf[1024];
-    int status;
+    int do_search, status;
+    unsigned int i;
+    size_t orig_dirnamelen;
+    char *orig_dirname;
 
     memset(&pp, 0, sizeof(pp));
     memset(&mainpp, 0, sizeof(mainpp));
@@ -499,28 +524,48 @@ parser_fopen (parse_ctx_t pctx, const char *fname, size_t fnlen, char **actnamep
         pp.path_suffix = ".req";
         pp.path_suffixlen = 4;
     }
-    // XXX - should provide the equivalent of '-I' paths
-    if (!pp.path_absolute) {
-        if (file_splitname(pctx->fioctx, pctx->main_filename, -1, 1, &mainpp)) {
-            if (pp.path_dirnamelen > 0 &&
-                pp.path_dirnamelen + mainpp.path_dirnamelen < sizeof(dirnamebuf)) {
-                memcpy(dirnamebuf, mainpp.path_dirname, mainpp.path_dirnamelen);
-                memcpy(dirnamebuf+mainpp.path_dirnamelen, pp.path_dirname,
-                       pp.path_dirnamelen);
+    orig_dirnamelen = pp.path_dirnamelen;
+    orig_dirname = pp.path_dirname;
+    do_search = !pp.path_absolute;
+    i = 0;
+    do {
+        if (i == 0) {
+            if (file_splitname(pctx->fioctx, pctx->main_filename, -1, 1, &mainpp)) {
+                if (orig_dirnamelen > 0 &&
+                    orig_dirnamelen + mainpp.path_dirnamelen < sizeof(dirnamebuf)) {
+                    memcpy(dirnamebuf, mainpp.path_dirname, mainpp.path_dirnamelen);
+                    memcpy(dirnamebuf+mainpp.path_dirnamelen, orig_dirname,
+                           orig_dirnamelen);
+                    pp.path_dirname = dirnamebuf;
+                    pp.path_dirnamelen = orig_dirnamelen + mainpp.path_dirnamelen;
+                } else {
+                    pp.path_dirname = mainpp.path_dirname;
+                    pp.path_dirnamelen = mainpp.path_dirnamelen;
+                }
+            }
+        } else {
+            strdesc_t *spth = pctx->searchpaths[i-1];
+            if (orig_dirnamelen > 0 &&
+                orig_dirnamelen + spth->len < sizeof(dirnamebuf)) {
+                memcpy(dirnamebuf, spth->ptr, spth->len);
+                memcpy(dirnamebuf+spth->len, orig_dirname, orig_dirnamelen);
                 pp.path_dirname = dirnamebuf;
-                pp.path_dirnamelen += mainpp.path_dirnamelen;
+                pp.path_dirnamelen = spth->len + orig_dirnamelen;
             } else {
-                pp.path_dirname = mainpp.path_dirname;
-                pp.path_dirnamelen = mainpp.path_dirnamelen;
+                pp.path_dirname = spth->ptr;
+                pp.path_dirnamelen = spth->len;
             }
         }
-    }
-    if (file_combinename(pctx->fioctx, &pp) == 0) {
-        file_freeparts(pctx->fioctx, &pp);
-        file_freeparts(pctx->fioctx, &mainpp);
-        return 0;
-    }
-    status = lexer_fopen(pctx->lexctx, pp.path_fullname, pp.path_fullnamelen, actnamep);
+        if (file_combinename(pctx->fioctx, &pp) == 0) {
+            file_freeparts(pctx->fioctx, &pp);
+            file_freeparts(pctx->fioctx, &mainpp);
+            return 0;
+        }
+        status = lexer_fopen(pctx->lexctx, pp.path_fullname, pp.path_fullnamelen, actnamep);
+        if (status) break;
+
+    } while (do_search && i <= pctx->searchpathcount);
+
     file_freeparts(pctx->fioctx, &pp);
     file_freeparts(pctx->fioctx, &mainpp);
     return status;
@@ -539,7 +584,10 @@ parser_lib_process (parse_ctx_t pctx, strdesc_t *libname)
     fio_pathparts_t pp, mainpp;
     filectx_t fh;
     char dirnamebuf[1024];
-    int status;
+    int do_search, status;
+    unsigned int i;
+    size_t orig_dirnamelen;
+    char *orig_dirname;
 
     memset(&pp, 0, sizeof(pp));
     memset(&mainpp, 0, sizeof(mainpp));
@@ -551,28 +599,48 @@ parser_lib_process (parse_ctx_t pctx, strdesc_t *libname)
         pp.path_suffix = ".lib";
         pp.path_suffixlen = 4;
     }
-    // XXX - should provide the equivalent of '-I' paths
-    if (!pp.path_absolute) {
-        if (file_splitname(pctx->fioctx, pctx->main_filename, -1, 1, &mainpp)) {
-            if (pp.path_dirnamelen > 0 &&
-                pp.path_dirnamelen + mainpp.path_dirnamelen < sizeof(dirnamebuf)) {
-                memcpy(dirnamebuf, mainpp.path_dirname, mainpp.path_dirnamelen);
-                memcpy(dirnamebuf+mainpp.path_dirnamelen, pp.path_dirname,
-                       pp.path_dirnamelen);
+    orig_dirnamelen = pp.path_dirnamelen;
+    orig_dirname = pp.path_dirname;
+    do_search = !pp.path_absolute;
+    i = 0;
+    do {
+        if (i == 0) {
+            if (file_splitname(pctx->fioctx, pctx->main_filename, -1, 1, &mainpp)) {
+                if (orig_dirnamelen > 0 &&
+                    orig_dirnamelen + mainpp.path_dirnamelen < sizeof(dirnamebuf)) {
+                    memcpy(dirnamebuf, mainpp.path_dirname, mainpp.path_dirnamelen);
+                    memcpy(dirnamebuf+mainpp.path_dirnamelen, orig_dirname,
+                           orig_dirnamelen);
+                    pp.path_dirname = dirnamebuf;
+                    pp.path_dirnamelen = orig_dirnamelen + mainpp.path_dirnamelen;
+                } else {
+                    pp.path_dirname = mainpp.path_dirname;
+                    pp.path_dirnamelen = mainpp.path_dirnamelen;
+                }
+            }
+        } else {
+            strdesc_t *spth = pctx->searchpaths[i-1];
+            if (orig_dirnamelen > 0 &&
+                orig_dirnamelen + spth->len < sizeof(dirnamebuf)) {
+                memcpy(dirnamebuf, spth->ptr, spth->len);
+                memcpy(dirnamebuf+spth->len, orig_dirname, orig_dirnamelen);
                 pp.path_dirname = dirnamebuf;
-                pp.path_dirnamelen += mainpp.path_dirnamelen;
+                pp.path_dirnamelen = spth->len + orig_dirnamelen;
             } else {
-                pp.path_dirname = mainpp.path_dirname;
-                pp.path_dirnamelen = mainpp.path_dirnamelen;
+                pp.path_dirname = spth->ptr;
+                pp.path_dirnamelen = spth->len;
             }
         }
-    }
-    if (file_combinename(pctx->fioctx, &pp) == 0) {
-        file_freeparts(pctx->fioctx, &pp);
-        file_freeparts(pctx->fioctx, &mainpp);
-        return 0;
-    }
-    fh = file_open_input(pctx->fioctx, pp.path_fullname, pp.path_fullnamelen);
+        if (file_combinename(pctx->fioctx, &pp) == 0) {
+            file_freeparts(pctx->fioctx, &pp);
+            file_freeparts(pctx->fioctx, &mainpp);
+            return 0;
+        }
+        fh = file_open_input(pctx->fioctx, pp.path_fullname, pp.path_fullnamelen);
+        if (fh != 0) break;
+
+    } while (do_search && i <= pctx->searchpathcount);
+
     file_freeparts(pctx->fioctx, &pp);
     file_freeparts(pctx->fioctx, &mainpp);
     if (fh == 0) return 0;
