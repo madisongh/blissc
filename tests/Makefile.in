@@ -13,8 +13,11 @@ PYTHON = python
 
 .PHONY: check all install distdir dist
 
-check:
+check: testharness.lib
 	$(PYTHON) "$(TESTDIR)/runtests.py" --blissc="$(BLISSC)" --cc="$(CC)" "$(TESTDIR)"
+
+testharness.lib: $(TESTDIR)/testharness.req
+	$(BLISSC) --library -o $@ $<
 
 clean:
 	@files=`find $(TESTDIR) -name '*.bli' -print`; \

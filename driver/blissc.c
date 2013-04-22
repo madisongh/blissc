@@ -126,7 +126,7 @@ parse_args (blissc_driverctx_t cctx, int argc, char * const argv[])
 
     err = 0;
     while (!err) {
-        c = getopt_long_only(argc, argv, "hsl::o:O:V::", options, &which);
+        c = getopt_long_only(argc, argv, "hsl::o:O:V::I:", options, &which);
         if (c == -1) {
             break;
         }

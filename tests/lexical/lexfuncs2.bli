@@ -1,7 +1,7 @@
 MODULE test =
 BEGIN
 
-REQUIRE '../testharness.req';
+LIBRARY 'testharness.lib';
 
 LITERAL
     z = 3 + 4,
