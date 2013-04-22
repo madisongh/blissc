@@ -235,11 +235,13 @@ int
 blissc_searchpath_add (blissc_driverctx_t ctx, const char *path, int pathlen)
 {
     size_t len = (pathlen < 0 ? strlen(path) : pathlen);
+    int needsterm = (path[len-1] != '/');
     char *p;
 
     if (ctx->pathcount >= MAXPATHS) return 0;
-    p = malloc(len+1);
+    p = malloc(len+needsterm+1);
     memcpy(p, path, len);
+    if (needsterm) p[len++] = '/';
     p[len] = '\0';
     ctx->paths[ctx->pathcount++] = p;
     return 1;
