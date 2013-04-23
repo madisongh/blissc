@@ -230,6 +230,12 @@ blissc_optlevel_set (blissc_driverctx_t ctx, unsigned int val)
 
 /*
  * blissc_searchpath_add
+ *
+ * Adds a search path for REQUIRE/LIBARARY file lookups.  The
+ * compiler needs this to be formatted as a directory name, so
+ * we make sure that it ends with the requisite '/'.
+ *
+ * XXX - should we check for the path's existence here?
  */
 int
 blissc_searchpath_add (blissc_driverctx_t ctx, const char *path, int pathlen)
@@ -387,6 +393,10 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
 void
 blissc_finish (blissc_driverctx_t ctx)
 {
+    unsigned int i;
+    for (i = 0; i < ctx->pathcount; i++) {
+        free(ctx->paths[i]);
+    }
     if (ctx->lgctx != 0) libgen_finish(ctx->lgctx);
     if (ctx->ectx != 0) expr_finish(ctx->ectx); // which also calls parser_finish()
     if (ctx->mach) machine_finish(ctx->mach);

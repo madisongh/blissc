@@ -2,6 +2,23 @@
  *++
  * libgen.c - Library generation
  *
+ * This module handles library file creation and
+ * the reading of a library file's header.  Serialization
+ * and deserialization of declared names are handled in
+ * in the nametables module.
+ *
+ * Section 16.6 of the LRM describes BLISS libraries, including
+ * the types of declarations that may be present in a library
+ * source file.
+ *
+ * XXX
+ * In the current implementation, the compiler version, host
+ * triple, and target triple must match exactly between the
+ * compiler generating a library and the one reading it.
+ * Some versioning and backward compatibility mechanism would
+ * be nice to have, as would allowing libraries generated on
+ * one host to be readable by another (for the same target).
+ * XXX
  *
  * Copyright © 2013, Matthew Madison.
  * All rights reserved.
@@ -29,6 +46,13 @@ struct libgen_ctx_s {
 
 #define LIB_HEADER_VERSION  1
 
+/*
+ * write_header
+ *
+ * Writes a library header.  The header is written such that
+ * it can be read on a different type of host (e.g., big vs.
+ * little endian).
+ */
 static int
 write_header (libgen_ctx_t lgctx, const char *target_triple)
 {
@@ -148,7 +172,8 @@ libgen_init (fioctx_t fioctx, const char *libname, int lnlen,
 /*
  * libgen_parse
  *
- * Parse declarations and generate a library.
+ * Parse declarations and call scope_serialize() to generate
+ * the library.
  */
 int
 libgen_parse (libgen_ctx_t lgctx, void *vctx)

@@ -204,6 +204,11 @@ structure_copy (void *vctx, name_t *dst, void *dp,
 
 } /* structure_copy */
 
+/*
+ * structure_serialize
+ *
+ * Writes a STRUCTURE declaration to a library.
+ */
 static int
 structure_serialize (void *vctx, name_t *np, void *fh)
 {
@@ -227,6 +232,11 @@ structure_serialize (void *vctx, name_t *np, void *fh)
 
 } /* structure_serialize */
 
+/*
+ * structure_deserialize
+ *
+ * Reconstitutes a STRUCTURE declaration from a library.
+ */
 static int
 structure_deserialize (void *vctx, name_t *np, void *fh,
                        unsigned int count)
@@ -311,6 +321,11 @@ field_copy (void *vctx, name_t *dst, void *dp,
 
 } /* field_copy */
 
+/*
+ * field_serialize
+ *
+ * Serializes a single FIELD declaration.
+ */
 static int
 field_serialize (void *vctx, name_t *np, void *fh)
 {
@@ -325,6 +340,11 @@ field_serialize (void *vctx, name_t *np, void *fh)
 
 } /* field_serialize */
 
+/*
+ * field_deserialize
+ *
+ * Reconstitutes a FIELD declaration from a library.
+ */
 static int
 field_deserialize (void *vctx, name_t *np, void *fh,
                    unsigned int count)
@@ -437,6 +457,14 @@ fieldset_copy (void *vctx, name_t *dst, void *dp,
 
 } /* fieldset_copy */
 
+/*
+ * fieldset_serialize
+ *
+ * Serializes a field-set.  Field-sets are namereflists that
+ * point to the equivalent of individual field declarations,
+ * so those individual fields must be serialized as part of
+ * saving the set.
+ */
 static int
 fieldset_serialize (void *vctx, name_t *np, void *fh)
 {
@@ -454,6 +482,11 @@ fieldset_serialize (void *vctx, name_t *np, void *fh)
 
 } /* fieldset_serialize */
 
+/*
+ * fieldset_deserialize
+ *
+ * Reconstitutes a field-set from a library.
+ */
 static int
 fieldset_deserialize (void *vctx, name_t *np, void *fh,
                       unsigned int count)

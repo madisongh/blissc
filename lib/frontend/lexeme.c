@@ -412,7 +412,7 @@ lexseq_deserialize (lexctx_t lctx, filectx_t fh, unsigned int sersize, lexseq_t 
         }
         if (file_readbuf(fh, b, hdr[2], &len) <= 0
             || len != hdr[2]) {
-            free(b);
+            if (b != buf) free(b);
             return 0;
         }
         lex = lexeme_alloc(lctx, hdr[0], b, len);

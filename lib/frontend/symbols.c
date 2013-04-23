@@ -633,7 +633,7 @@ bind_data (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 } /* bind_data */
 
 /*
- * datasym_serialize
+ * Structure for serializing data attributes.
  */
 struct data_serattr_s {
     unsigned int units;
@@ -647,6 +647,13 @@ struct data_serattr_s {
     unsigned int fieldcount;
 };
 
+/*
+ * datasym_serialize
+ *
+ * Saves a data symbol to a library file, if it
+ * qualifies.  Only EXTERNALs and BINDS to CTCEs
+ * qualify.
+ */
 static int
 datasym_serialize (void *vctx, name_t *np, void *fh)
 {
@@ -706,6 +713,11 @@ datasym_serialize (void *vctx, name_t *np, void *fh)
 
 } /* datasym_serialize */
 
+/*
+ * datasym_deserialize
+ *
+ * Reads in a serialized data symbol.
+ */
 static int
 datasym_deserialize (void *vctx, name_t *np, void *fh,
                      unsigned int count)
@@ -786,6 +798,10 @@ bind_routine (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
 
 } /* bind_routine */
 
+
+/*
+ * Structure for serializing routine attributes.
+ */
 struct rtn_serattr_s {
     unsigned int flags;
     unsigned long value;
@@ -794,6 +810,13 @@ struct rtn_serattr_s {
     unsigned int outcount;
 };
 
+/*
+ * rtnsym_serialize
+ *
+ * Writes qualifying ROUTINE declarations to a library.
+ * Only EXTERNAL ROUTINEs and BIND ROUTINEs bound to
+ * CTCEs qualify for serialization.
+ */
 static int
 rtnsym_serialize (void *vctx, name_t *np, void *fh)
 {
@@ -839,6 +862,11 @@ rtnsym_serialize (void *vctx, name_t *np, void *fh)
 
 } /* rtnsym_serialize */
 
+/*
+ * rtnsym_deserialize
+ *
+ * Reconstitutes a ROUTINE declaration from a library.
+ */
 static int
 rtnsym_deserialize (void *vctx, name_t *np, void *fh,
                     unsigned int count)
@@ -914,6 +942,11 @@ symbols_init (expr_ctx_t ctx)
 
 } /* symbols_init */
 
+/*
+ * symbols_finish
+ *
+ * Module cleanup.
+ */
 void
 symbols_finish (symctx_t ctx)
 {

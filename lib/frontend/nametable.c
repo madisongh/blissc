@@ -12,17 +12,25 @@
  * Names are always defined in a name table, called a 'scope'.
  * Scopes are chained together in a parent-child relationship,
  * representing lexical scoping rules for names.  Keywords and
- * other pre-declared name are always declared in the primary,
+ * other pre-declared names are always declared in the primary,
  * outermost scope.  Name searches always extend from the current
  * scope, through the parent scopes, until the end of the chain
- * is reached or the name is found.
+ * is reached or the name is found.  Modules needing only local
+ * name lookups (e.g., for parameter lists) can NULLify the
+ * parent link to prevent the default search behavior.
  *
  * Extension data can be stored with a name; this module provides
  * some space for all names for simple value storage.  For
  * names with types in the range LEXTYPE_NAME_MIN through
  * LEXTYPE_NAME_MAX, additional extensions can be added by
- * the modules handling those name types.
+ * the modules handling those name types.  Dispatch function
+ * pointers for construction, disposal, and copying of the
+ * extension data are provided on a per-type basis by modules
+ * needing them.
  *
+ * Serialization to, and deserialization from, LIBARARY files
+ * are also handled through dispatch function pointers on
+ * a per-type basis.
  *
  * Copyright © 2012-2013, Matthew Madison.
  * All rights reserved.
@@ -744,8 +752,16 @@ scope_nextname (scopectx_t scope, void **ctxp)
  * scope_serialize
  *
  * Walks through a scope and serializes declared names.
- * Used to generate library files.
+ * Used to generate library files.  With the exception of
+ * BUILTIN declarations, which are handled in this module and
+ * identified with the DCLBUILTIN flag, only those names whose
+ * types have a serialization vector defined are eligible for
+ * writing to a library.
+ *
  * Set 'allnames' to ignore the DECLARED bit (e.g., for parameter lists).
+ * For normal scopes, only those names declared (and not UNDECLAREd)
+ * in the library source qualify for serialization -- declarations
+ * obtained through a LIBRARY reference do not.
  */
 int
 scope_serialize (scopectx_t scope, void *fh, int allnames)
@@ -795,8 +811,7 @@ scope_serialize (scopectx_t scope, void *fh, int allnames)
 /*
  * scope_deserialize
  *
- * Reconstitutes declarations that have been written to
- * a library file.
+ * Reconstitutes declarations from a library file.
  *
  * The 'allnames' argument indicates a special scope table
  * that doesn't need to set the FROMLIB and DECLARED flags.
@@ -827,6 +842,9 @@ scope_deserialize (scopectx_t scope, void *fh, int allnames)
             deserfn = ctx->typevec[i].typedes;
             if (deserfn != 0) {
                 if (!deserfn(ctx->typectx[i], np, fh, count)) break;
+            } else {
+                // Should never happen
+                log_signal(ctx->logctx, 0, STC__INTCMPERR, "scope_deserialize");
             }
         }
         name_insert(scope, np);
@@ -1252,7 +1270,17 @@ name_declare_builtin (scopectx_t scope, strdesc_t *namestr, textpos_t pos)
 /*
  * name_serialize
  *
- * Serializes a name_t.
+ * Serializes a name_t, writing the name and type.  If the
+ * caller needs extra data to be written with the name (usually
+ * a header for some type-specific extension data), that, too,
+ * is written.
+ *
+ * Format:
+ * [16 bits]  name type
+ * [ 8 bits]  BUILTIN flag
+ * [ 8 bits]  name length (which cannot exceed 31)
+ * [16 bits]  size of extra data
+ * [<n> bytes] name text
  */
 int
 name_serialize (name_t *np, void *fh, void *extra, unsigned int extrasize)
@@ -1285,7 +1313,10 @@ name_serialize (name_t *np, void *fh, void *extra, unsigned int extrasize)
 /*
  * name_deserialize
  *
- * Deserializes a name (just the name string and type).
+ * Reads in a serialized name_t.  The caller is responsible for
+ * the conversion into an actual name_t structure; this routine
+ * just understands the format used by name_serialize() above
+ * for the saved fields.
  */
 int
 name_deserialize (void *fh, char namebuf[NAME_SIZE], size_t *namelen,
@@ -1299,7 +1330,7 @@ name_deserialize (void *fh, char namebuf[NAME_SIZE], size_t *namelen,
 
     if (buf[0] == 0xFFFF && buf[1] == 0xFFFF && buf[2] == 0xFFFF) {
         *nametype = LEXTYPE_END;
-        *flags = 0;
+        if (flags != 0) *flags = 0;
         *namelen = 0;
         return 1;
     }
@@ -1318,8 +1349,10 @@ name_deserialize (void *fh, char namebuf[NAME_SIZE], size_t *namelen,
 /*
  * namereflist_serialize
  *
- * Serializes a namereflist_t.  Writes out names only; no count,
- * no per-name extras.
+ * Serializes a namereflist_t by writing out the referenced names.
+ * Note that the caller is expected to save the length of the list
+ * elsewhere, as this routine just walks the list and writes out
+ * the text of the referenced names.
  */
 int
 namereflist_serialize (namereflist_t *lst, void *fh)
@@ -1335,7 +1368,10 @@ namereflist_serialize (namereflist_t *lst, void *fh)
 /*
  * namereflist_deserialize
  *
- * Deserialize a namreflist.
+ * Deserialize a namreflist.  The 'scope' provided must already
+ * be populated with the names to be referenced, so they can be
+ * looked up and the name_t pointers used in the list.  The caller
+ * must provide the count of names in the list as well.
  */
 int
 namereflist_deserialize (scopectx_t scope, void *fh, namereflist_t *lst,

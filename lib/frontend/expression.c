@@ -1562,6 +1562,9 @@ parse_op_expr (expr_ctx_t ctx, optype_t curop, expr_node_t *lhs, expr_node_t *rh
 
     if (expr_is_noop(rhs) || expr_is_ctrl(rhs)) {
         expr_signal(ctx, STC__EXPRVALRQ);
+        expr_node_free(ctx, rhs);
+        rhs = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(ctx->pctx));
+        expr_has_value_set(rhs, 1);
     }
 
     // OK, the operands are valid.  If they are operator expressions,

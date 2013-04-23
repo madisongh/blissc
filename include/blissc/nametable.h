@@ -4,7 +4,7 @@
  *++
  * nametable.h - Name table definitions.
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012-2013, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -74,6 +74,7 @@ DEFINE_TQ_FUNCS(namereflist, namereflist_t, nameref_t)
 typedef int (*name_datainit_fn)(void *ctx, name_t *np, void *p);
 typedef void (*name_datafree_fn)(void *ctx, name_t *np, void *p);
 typedef int (*name_datacopy_fn)(void *ctx, name_t *dst, void *dp, name_t *src, void *sp);
+// Function pointers for name types that get saved to, and read from, LIBARARY files.
 typedef int (*name_serialize_fn)(void *ctx, name_t *np, void *fh);
 typedef int (*name_deserialize_fn)(void *ctx, name_t *np, void *fh, unsigned int count);
 
