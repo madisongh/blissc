@@ -1275,19 +1275,16 @@ parse_numeric_literal (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t c
     lexeme_t *lex;
     lextype_t lt = parser_next(pctx, QL_NORMAL, &lex);
     strdesc_t *str;
-    long val;
+    long val = 0;
     int base[] = { 2, 8, 10, 16 };
 
     if (lt != LEXTYPE_STRING) {
         log_signal(pctx->logctx, pctx->curpos, STC__INVSTRLIT);
-        lexeme_free(pctx->lmemctx, lex);
-        return 1;
-    }
-    str = lexeme_text(lex);
-    if (!string_numval(str, base[curlt-LEXTYPE_LXF_B], &val)) {
-        log_signal(pctx->logctx, pctx->curpos, STC__NUMCNVERR, str->ptr, str->len);
-        lexeme_free(pctx->lmemctx, lex);
-        return 1;
+    } else {
+        str = lexeme_text(lex);
+        if (!string_numval(str, base[curlt-LEXTYPE_LXF_B], &val)) {
+            log_signal(pctx->logctx, pctx->curpos, STC__NUMCNVERR, str->ptr, str->len);
+        }
     }
     str = string_printf(pctx->strctx, 0, "%ld", val);
     parser_lexeme_add(pctx, LEXTYPE_NUMERIC, str);
@@ -1311,6 +1308,7 @@ parse_C (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt) {
     strdesc_t *str = lexeme_text(lex);
     if (lt != LEXTYPE_STRING || str->len != 1) {
         log_signal(pctx->logctx, pctx->curpos, STC__INVSTRLIT);
+        parser_lexeme_add(pctx, LEXTYPE_NUMERIC, &zero);
     } else {
         char buf[8];
         int len = snprintf(buf, sizeof(buf), "%ld", (long)(*str->ptr & 0x7f));
@@ -1318,7 +1316,6 @@ parse_C (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt) {
         strdesc_init(&dsc, buf, len);
         parser_lexeme_add(pctx, LEXTYPE_NUMERIC, &dsc);
     }
-    string_free(pctx->strctx, str);
     lexeme_free(pctx->lmemctx, lex);
 
     return 1;
