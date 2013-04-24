@@ -982,7 +982,7 @@ name_search_typed (scopectx_t curscope, const char *id,
     lextype_t acttype;
     name_t *np;
     np = name_search_internal(curscope, id, len, &acttype, 0, 0);
-    if (acttype != ntype) return 0;
+    if (np == 0 || acttype != ntype) return 0;
     if (datapp != 0) *(void **)datapp = np->nameextra;
     return np;
 
