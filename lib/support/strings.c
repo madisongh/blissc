@@ -32,7 +32,7 @@
  * between heap usage/fragmentation and speed.
  *
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012-2013, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -465,7 +465,7 @@ string_numval (strdesc_t *str, int base, long *valp)
     memcpy(buf, str->ptr, str->len);
     buf[str->len] = '\0';
     errno = 0;
-    numval = strtol(buf, &cp, base);
+    numval = strtoul(buf, &cp, base);
     if (errno != 0 || (cp-buf) != str->len) {
         return 0;
     }
