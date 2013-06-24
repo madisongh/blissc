@@ -27,7 +27,9 @@
 #include "llvm/Target/TargetMachine.h"
 #pragma clang diagnostic pop
 #include "llvm_helper.h"
+#if LLVM_VERSION_MAJOR > 3 || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >=  3)
 #include "llvm/IR/Instructions.h"
+#endif
 #include "llvm/Support/Host.h"
 #include "llvm/Support/TargetRegistry.h"
 #include <cstdio>
