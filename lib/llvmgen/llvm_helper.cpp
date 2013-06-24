@@ -27,6 +27,7 @@
 #include "llvm/Target/TargetMachine.h"
 #pragma clang diagnostic pop
 #include "llvm_helper.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/TargetRegistry.h"
 #include <cstdio>
@@ -35,7 +36,7 @@
 using namespace llvm;
 
 void HelperSetAllocaAlignment(LLVMValueRef Inst, unsigned int Bytes) {
-    unwrap<AllocaInst>(Inst)->setAlignment(Bytes);
+    reinterpret_cast<AllocaInst*>(Inst)->setAlignment(Bytes);
 }
 
 char *HelperGetDefaultTriple(void) {
@@ -46,9 +47,9 @@ LLVMTargetRef HelperLookupTarget(const char *triple, char **err) {
     std::string error;
     const Target* target = TargetRegistry::lookupTarget(triple, error);
     if (!error.empty()) *err = strdup(error.c_str());
-    return wrap(target);
+    return reinterpret_cast<LLVMTargetRef>(const_cast<Target*>(target));
 }
 
 void HelperSetAsmVerbosity(LLVMTargetMachineRef tm, LLVMBool v) {
-    unwrap(tm)->setAsmVerbosityDefault(v);
+    reinterpret_cast<TargetMachine*>(tm)->setAsmVerbosityDefault(v);
 }
