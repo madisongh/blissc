@@ -47,7 +47,7 @@ libsupport_a_SOURCES = \
 
 bin_PROGRAMS = blissc
 blissc_SOURCES = driver/blissc.c
-blissc_LDADD = $(noinst_LIBRARIES) $(LLVM_LIBS) -lstdc++ -lpthread -ldl
+blissc_LDADD = $(noinst_LIBRARIES) $(LLVM_LIBS) -lstdc++ -lpthread -ldl -lm
 blissc_LDFLAGS = -L$(LLVM_LIBDIR)
 
 SUBDIRS = tests
