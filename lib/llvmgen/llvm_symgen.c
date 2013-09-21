@@ -325,12 +325,16 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
         unsigned int o, p, s, e;
         LLVMValueRef val;
     } pcells[LLVMGEN_K_MAXPRESETS];
-    struct preset_s *parr[LLVMGEN_K_MAXPRESETS];
+    struct preset_s *parr[LLVMGEN_K_MAXPRESETS] = { 0 };
     unsigned int curoff, curbitpos, arrsize;
     int pcount, i;
     initval_t *iv;
     LLVMValueRef *varr, *valp, oneval, initconst;
 
+    if (bpunit == 0 || bpaddr == 0) {
+        expr_signal(gctx->ectx, STC__INTCMPERR, "llvmgen_presetter[0]");
+        return 0;
+    }
     pcount = 0;
     for (iv = ivlist; iv != 0 && pcount < LLVMGEN_K_MAXPRESETS; iv = iv->next) {
         expr_node_t *exp = iv->preset_expr;

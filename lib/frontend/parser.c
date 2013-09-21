@@ -825,7 +825,7 @@ parser_punct_separator (parse_ctx_t pctx)
 lextype_t
 parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
 {
-    lexeme_t *lex;
+    lexeme_t *lex = 0;
     lexseq_t result;
     lextype_t lt;
     int status;
@@ -988,7 +988,7 @@ parser_expect_oneof (parse_ctx_t pctx, quotelevel_t ql, lextype_t expected_lts[]
                      int numlts, lexeme_t **lexp, int putbackonerr)
 {
     lextype_t lt;
-    lexeme_t *lex;
+    lexeme_t *lex = 0;
     int i;
 
     lt = parser_next(pctx, ql, &lex);
@@ -1897,7 +1897,7 @@ parse_variant (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
 int
 parse_BLISS (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt)
 {
-    lexeme_t *lex;
+    lexeme_t *lex = 0;
     lextype_t lt;
     strdesc_t *str;
     long test;
