@@ -1,6 +1,6 @@
 # Makefile for blissc
 #
-# Copyright (c) 2013, Matthew Madison.
+# Copyright (c) 2013, 2014, Matthew Madison.
 # All rights reserved.
 # Distributed under license.  See LICENSE.TXT for details.
 #
@@ -47,7 +47,7 @@ libsupport_a_SOURCES = \
 
 bin_PROGRAMS = blissc
 blissc_SOURCES = driver/blissc.c
-blissc_LDADD = $(noinst_LIBRARIES) $(LLVM_LIBS) -lstdc++ -lpthread -ldl -lm
+blissc_LDADD = $(noinst_LIBRARIES) $(LLVM_LIBS) -lstdc++ $(LLVM_LDFLAGS)
 blissc_LDFLAGS = -L$(LLVM_LIBDIR)
 
 SUBDIRS = tests

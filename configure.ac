@@ -1,7 +1,7 @@
 dnl ++
 dnl  configure.ac - autoconf script for blissc
 dnl
-dnl  Copyright (c) 2013, Matthew Madison.
+dnl  Copyright (c) 2013, 2014, Matthew Madison.
 dnl  All rights reserved.
 dnl
 dnl  Distributed under license.  See LICENSE.TXT for details.
@@ -30,11 +30,13 @@ AC_ARG_WITH([llvm-config],
 AS_IF([test -e "$ac_llvm_config"],[
           export ac_llvm_includedir=`$ac_llvm_config --includedir`
           export ac_llvm_libdir=`$ac_llvm_config --libdir`
+          export ac_llvm_ldflags=`$ac_llvm_config --ldflags`
           export ac_llvm_libs=`$ac_llvm_config --libs`],
           AC_MSG_ERROR([[could not find working llvm-config]]))
 AC_SUBST(LLVM_INCLUDEDIR,[$ac_llvm_includedir])
 AC_SUBST(LLVM_LIBDIR,[$ac_llvm_libdir])
 AC_SUBST(LLVM_LIBS,[$ac_llvm_libs])
+AC_SUBST(LLVM_LDFLAGS,[$ac_llvm_ldflags])
 
 AC_PROG_CXX
 AC_PROG_CC
