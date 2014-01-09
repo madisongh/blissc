@@ -17,20 +17,16 @@ of machine-specific support.
 Prerequisites
 -------------
 
-Known to build on Mac OS X 10.8 (using Xcode 4.6) and Ubuntu 12.04
-and 12.10 (32- or 64-bit).
+Known to build on Mac OS X 10.8 and 10.9 (using Xcode 4.6 and later)
+and Ubuntu 12.04 and later (32- or 64-bit).
 
-The LLVM-based code generator was developed against LLVM 3.2, which
-can be obtained [here](http://llvm.org/releases/download.html#3.2).
-On a Mac, you can use the MacPorts 'llvm-3.2' package, but debugging
-code generation issues is easier if you download the sources and
-create a debug build yourself.  You should install it somewhere
-and either include that location in your PATH, or specify the
-full path to the `llvm-config` script that LLVM installs when
-configuring the BLISS-M build.
+The code generator uses LLVM 3.2, 3.3, or 3.4, which you can download
+directly from llvm.org.  On Mac OS, you can use the MacPorts llvm-3.x
+packages, although debugging is easier if you build against a copy of
+LLVM you have built yourself from source.
 
 The build system uses Autoconf and Automake.  On Mac OS X, you'll
-need to install those (e.g., through MacPorts).
+need to install these packages (e.g., through MacPorts).
 
 Building the compiler
 ---------------------
