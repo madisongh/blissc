@@ -127,15 +127,36 @@ static const lextype_t symtype[6] = {
 /*
  * uint_log2
  *
- * Table for logarithm of powers of 2, used below
- * for computing alignments.
+ * Compute log base 2 of an unsigned integer.
+ * Returns true (1) if n is an integral power of 2, 
+ * false (0) otherwise (and logval will be rounded
+ * up to the next power of 2).
  */
 static int
-uint_log2 (unsigned int n) {
-    static int table[] = { -1, 0, 1, -1, 2, -1, -1, -1, 3 };
-    if (n >= sizeof(table) || table[n] < 0) return 0;
-    return table[n];
+uint_log2 (unsigned int n, unsigned int *logvalp) {
+    unsigned int val, logval;
+    if (n == 0) {
+        if (logvalp != 0) *logvalp = 0;
+        return 0;
+    }
+    for (val = n-1, logval = 0; val != 0; val = val >> 1, logval += 1);
+    if (logvalp != 0) *logvalp = logval;
+    return n == (1 << logval);
 } /* uint_log2 */
+
+/*
+ * calc_alignment
+ *
+ * Compute a power-of-2 alignment for a segment.
+ * If the segment width is not an integral power of 2,
+ * just use byte alignment (return 0).
+ */
+static unsigned int
+calc_alignment (unsigned int u) {
+    unsigned int alignval;
+    if (!uint_log2(u, &alignval)) return 0;
+    return alignval;
+} /* calc_alignment */
 
 /*
  * calc_width
@@ -146,9 +167,10 @@ uint_log2 (unsigned int n) {
 static unsigned int
 calc_width (unsigned int u, machinedef_t *mach) {
     unsigned int upval = machine_scalar_units(mach);
+    unsigned int logval;
     if (u == 0 || u >= upval) return machine_scalar_bits(mach);
-    while (uint_log2(u) < 0) u += 1;
-    return machine_unit_bits(mach) * u;
+    uint_log2(u, &logval);
+    return machine_unit_bits(mach) * (1U << logval);
 } /* calc_width */
 
 /*
@@ -930,7 +952,7 @@ symbols_init (expr_ctx_t ctx)
     symctx->data_defaults.units = machine_scalar_units(mach);
     symctx->data_defaults.width = machine_scalar_bits(mach);
     symctx->literal_defaults.width = machine_scalar_bits(mach);
-    symctx->data_defaults.alignment = uint_log2(symctx->data_defaults.units);
+    symctx->data_defaults.alignment = calc_alignment(symctx->data_defaults.units);
     nametables_symctx_set(namectx, symctx);
     lextype_register(lctx, ctx, LEXTYPE_NAME_COMPILETIME, bind_compiletime);
     lextype_register(lctx, ctx, LEXTYPE_NAME_LITERAL, bind_literal);
@@ -1095,10 +1117,10 @@ datasym_declare (scopectx_t scope, strdesc_t *dsc, data_attr_t *attrp, textpos_t
     } else if (attrp->units != 0) {
         if (attrp->alignment == 0) {
             if (attrp->units <= machine_scalar_units(symctx->mach)) {
-                attrp->alignment = uint_log2(attrp->units);
+                attrp->alignment = calc_alignment(attrp->units);
             } else {
                 // XXX should this be another machine setting?
-                attrp->alignment = uint_log2(machine_scalar_units(symctx->mach));
+                attrp->alignment = calc_alignment(machine_scalar_units(symctx->mach));
             }
         }
         if (attrp->width == 0) {
