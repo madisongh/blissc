@@ -9,7 +9,7 @@ AUTOMAKE_OPTIONS = subdir-objects foreign
 AM_CPPFLAGS = -Iinclude -I$(srcdir)/include -I$(LLVM_INCLUDEDIR)
 AM_CFLAGS = -Wall 
 
-noinst_LIBRARIES = libdriver.a libfrontend.a libsupport.a libllvmgen.a
+noinst_LIBRARIES = libdriver.a libfrontend.a libsupport.a libllvmgen.a libir.a
 libdriver_a_SOURCES = lib/driver/driver.c
 libfrontend_a_SOURCES = \
 	lib/frontend/charfuncs.c \
@@ -44,6 +44,8 @@ libsupport_a_SOURCES = \
 	lib/support/statcodes.c \
 	lib/support/strings.c \
 	lib/support/utils.c
+libir_a_SOURCES = \
+	lib/ir/blissir.c
 
 bin_PROGRAMS = blissc
 blissc_SOURCES = driver/blissc.c
@@ -71,6 +73,8 @@ EXTRA_DIST = \
 	include/blissc/structures.h \
 	include/blissc/switches.h \
 	include/blissc/symbols.h \
+	include/blissc/ir/blissir.h \
+	include/blissc/ir/instructions.h \
 	include/blissc/support/fileio.h \
 	include/blissc/support/logging.h \
 	include/blissc/support/statcodes.h \
