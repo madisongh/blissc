@@ -138,20 +138,20 @@ strdesc_t *blissir_inst_getlabel(blissir_instref_t instr);
 blissir_instref_t blissir_inst_branch(blissir_builderref_t builder,
                                       blissir_basicblockref_t dest,
                                       strdesc_t *label);
-blissir_valref_t  blissir_inst_uniop(blissir_builderref_t builder,
-                                     blissir_unioptype_t op,
-                                     blissir_valueref_t value,
-                                     strdesc_t *label);
-blissir_valref_t blissir_inst_binop(blissir_builderref_t builder,
-                                    blissir_binoptype_t op,
-                                    blissir_valueref_t lhs,
-                                    blissir_valueref_t rhs,
-                                    strdesc_t *label);
+blissir_valueref_t  blissir_inst_uniop(blissir_builderref_t builder,
+                                       blissir_unioptype_t op,
+                                       blissir_valueref_t value,
+                                       strdesc_t *label);
+blissir_valueref_t blissir_inst_binop(blissir_builderref_t builder,
+                                      blissir_binoptype_t op,
+                                      blissir_valueref_t lhs,
+                                      blissir_valueref_t rhs,
+                                      strdesc_t *label);
 blissir_instref_t blissir_inst_noop(blissir_builderref_t builder, strdesc_t *label);
-blissir_valref_t blissir_inst_call(blissir_builderref_t builder,
-                                   blissir_routineref_t callee,
-                                   blissir_valref_seq_t *arglist,
-                                   strdesc_t *label);
+blissir_valueref_t blissir_inst_call(blissir_builderref_t builder,
+                                     blissir_routineref_t callee,
+                                     blissir_valref_seq_t *arglist,
+                                     strdesc_t *label);
 blissir_instref_t blissir_inst_ret(blissir_builderref_t builder,
                                    blissir_valueref_t retval,
                                    strdesc_t *label);
