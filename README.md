@@ -20,7 +20,7 @@ Prerequisites
 Known to build on Mac OS X 10.8 and 10.9 (using Xcode 4.6 and later)
 and Ubuntu 12.04 and later (32- or 64-bit).
 
-The code generator uses LLVM 3.2, 3.3, or 3.4, which you can download
+The code generator uses LLVM 3.3, 3.4, or 3.5, which you can download
 directly from llvm.org.  On Mac OS, you can use the MacPorts llvm-3.x
 packages, although debugging is easier if you build against a copy of
 LLVM you have built yourself from source.

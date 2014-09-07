@@ -7,7 +7,7 @@
 
 AUTOMAKE_OPTIONS = subdir-objects foreign
 AM_CPPFLAGS = -Iinclude -I$(srcdir)/include -I$(LLVM_INCLUDEDIR)
-AM_CFLAGS = -Wall 
+AM_CFLAGS = -Wall
 
 noinst_LIBRARIES = libdriver.a libfrontend.a libsupport.a libllvmgen.a libir.a
 libdriver_a_SOURCES = lib/driver/driver.c
@@ -38,6 +38,10 @@ libllvmgen_a_SOURCES = \
 	lib/llvmgen/llvm_symgen.c \
 	lib/llvmgen/llvm_builtins_x86.c \
 	lib/llvmgen/llvm_helper.cpp
+
+libllvmgen_a_CFLAGS = $(LLVM_CFLAGS)
+libllvmgen_a_CXXFLAGS = $(LLVM_CXXFLAGS)
+
 libsupport_a_SOURCES = \
 	lib/support/fileio.c \
 	lib/support/logging.c \
@@ -49,7 +53,7 @@ libir_a_SOURCES = \
 
 bin_PROGRAMS = blissc
 blissc_SOURCES = driver/blissc.c
-blissc_LDADD = $(noinst_LIBRARIES) $(LLVM_LIBS) -lstdc++ $(LLVM_LDFLAGS)
+blissc_LDADD = $(noinst_LIBRARIES) $(LLVM_LIBS) -lstdc++ $(LLVM_SYSLIBS) $(LLVM_LDFLAGS)
 blissc_LDFLAGS = -L$(LLVM_LIBDIR)
 
 SUBDIRS = tests
