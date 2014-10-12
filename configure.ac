@@ -34,7 +34,7 @@ AS_IF([test -e "$ac_llvm_config"],[
           export ac_llvm_cxxflags=`$ac_llvm_config --cxxflags`
           export ac_llvm_ldflags=`$ac_llvm_config --ldflags`
           export ac_llvm_libs=`$ac_llvm_config --libs`
-          export ac_llvm_syslibs=`$ac_llvm_config --system-libs 2>/dev/null`],
+          export ac_llvm_syslibs=`$ac_llvm_config --system-libs 2>/dev/null | grep -v '^ *$'`],
           AC_MSG_ERROR([[could not find working llvm-config]]))
 AC_SUBST(LLVM_INCLUDEDIR,[$ac_llvm_includedir])
 AC_SUBST(LLVM_LIBDIR,[$ac_llvm_libdir])
