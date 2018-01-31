@@ -298,7 +298,12 @@ optlevel_handler (parse_ctx_t pctx, void *vctx, lextype_t dcltype, lexeme_t *swl
 int
 gencode_module_begin (gencodectx_t gctx, name_t *modnp)
 {
-    char *dl, *triple;
+    char *triple;
+#if LLVM_VERSION_MAJOR > 3 || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR > 6)
+    LLVMTargetDataRef dl;
+#else
+    char *dl;
+#endif
 #if 0 // XXX later
     char module_header[256];
     int headerlen;
@@ -321,9 +326,15 @@ gencode_module_begin (gencodectx_t gctx, name_t *modnp)
     triple = LLVMGetTargetMachineTriple(gctx->mctx->target_machine);
     LLVMSetTarget(gctx->module, triple);
     free(triple);
+#if LLVM_VERSION_MAJOR > 3 || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR > 6)
+    dl = LLVMCreateTargetDataLayout(gctx->mctx->target_machine);
+    LLVMSetModuleDataLayout(gctx->module, dl);
+    LLVMDisposeTargetData(dl);
+#else
     dl = LLVMCopyStringRepOfTargetData(LLVMGetTargetMachineData(gctx->mctx->target_machine));
     LLVMSetDataLayout(gctx->module, dl);
     LLVMDisposeMessage(dl);
+#endif
 
     LLVMAddBasicAliasAnalysisPass(gctx->passmgr);
     if (gctx->optlevel > 0) {
