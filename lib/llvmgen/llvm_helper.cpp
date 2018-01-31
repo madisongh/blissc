@@ -53,5 +53,9 @@ LLVMTargetRef HelperLookupTarget(const char *triple, char **err) {
 }
 
 void HelperSetAsmVerbosity(LLVMTargetMachineRef tm, LLVMBool v) {
+#if LLVM_VERSION_MAJOR > 3 || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 6)
+    reinterpret_cast<TargetMachine*>(tm)->Options.MCOptions.AsmVerbose = v;
+#else
     reinterpret_cast<TargetMachine*>(tm)->setAsmVerbosityDefault(v);
+#endif
 }
