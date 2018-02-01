@@ -40,7 +40,7 @@ libllvmgen_a_SOURCES = \
 	lib/llvmgen/llvm_helper.cpp
 
 libllvmgen_a_CFLAGS = $(LLVM_CFLAGS)
-libllvmgen_a_CXXFLAGS = $(LLVM_CXXFLAGS)
+libllvmgen_a_CXXFLAGS = -Wno-unknown-pragmas $(LLVM_CXXFLAGS)
 
 libsupport_a_SOURCES = \
 	lib/support/fileio.c \
