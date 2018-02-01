@@ -28,16 +28,16 @@
 // on the status code.  The remaining two bits are
 // used to differentiate the levels of OK-ness or
 // or failure.
-#define STC_K_SUCCESS   1  // 001
-#define STC_K_INFO      2  // 010
-#define STC_K_WARN      5  // 101
-#define STC_K_ERROR     6  // 110
-#define STC_K_FATAL     7  // 111
+#define STC_K_SUCCESS   1U  // 001
+#define STC_K_INFO      2U  // 010
+#define STC_K_WARN      5U  // 101
+#define STC_K_ERROR     6U  // 110
+#define STC_K_FATAL     7U  // 111
 
 // Macros to compose status codes by packing the fields into the
 // right bit positions.
 #define STC_MAKECODE(sev_, msgno_) \
-    (((sev_)<<STC_V_SEVERITY)|(((msgno_)&~((-1)<<STC_S_MSGNO))<<STC_V_MSGNO))
+    (((sev_)<<STC_V_SEVERITY)|(((msgno_)&~((~0U)<<STC_S_MSGNO))<<STC_V_MSGNO))
 #define STC_CODE_S(m_) STC_MAKECODE(STC_K_SUCCESS,(m_))
 #define STC_CODE_I(m_) STC_MAKECODE(STC_K_INFO,(m_))
 #define STC_CODE_W(m_) STC_MAKECODE(STC_K_WARN,(m_))
@@ -171,16 +171,19 @@ STATCODE(120,E,LIBHSTMISM,"host mismatch for library !SZ") \
 STATCODE(121,E,LIBTRGMISM,"target mismatch for library !SZ") \
 STATCODE(122,E,LIBRDERR,  "error reading library file !SZ")
 
-#define STATCODE(msg,typ,nam,txt) STC__##nam =  STC_CODE_##typ(msg),
-typedef enum {
+typedef unsigned int statcode_t;
+#ifdef STATCODES_INSTANTIATE
+#define STATCODE(msg__,typ__,nam__,txt__) const statcode_t STC__##nam__ =  STC_CODE_##typ__(msg__);
+#else
+#define STATCODE(msg__,typ__,nam__,txt__) extern const statcode_t __attribute__((unused)) STC__##nam__;
+#endif
 STATCODES
-} statcode_t;
 #undef STATCODE
 
 static inline __attribute__((unused)) unsigned int stc_severity (statcode_t s) {
-    return (s >> STC_V_SEVERITY) & ~((-1) << STC_S_SEVERITY); }
+    return (s >> STC_V_SEVERITY) & ~((~0U) << STC_S_SEVERITY); }
 static inline __attribute__((unused)) unsigned int stc_msgno (statcode_t s) {
-    return (s >> STC_V_MSGNO) & ~((-1) << STC_S_MSGNO); }
+    return (s >> STC_V_MSGNO) & ~((~0U) << STC_S_MSGNO); }
 static inline __attribute__((unused)) int stc_success (statcode_t s) { return (int) s >= 0; }
 static inline __attribute__((unused)) int stc_fail (statcode_t s) { return (int) s < 0; }
 

@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#define STATCODES_INSTANTIATE
 #include "blissc/support/statcodes.h"
 #include "blissc/support/strings.h"
 
