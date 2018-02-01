@@ -28,8 +28,8 @@ typedef struct {
  * Macros for static string descriptor setup
  * at declaration time.
  */
-#define STRDEF(s) { STR_M_STATIC, sizeof(s)-1, s }
-#define STRZDEF(s) { STR_M_STATIC, sizeof(s), s }
+#define STRDEF(s) { STR_M_STATIC, sizeof(s)-1, (char *)s }
+#define STRZDEF(s) { STR_M_STATIC, sizeof(s), (char *)s }
 
 /*
  * Inline routine for initializing a static string
