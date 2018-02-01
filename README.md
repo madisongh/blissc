@@ -18,12 +18,13 @@ Prerequisites
 -------------
 
 Known to build on Mac OS X 10.8 and 10.9 (using Xcode 4.6 and later)
-and Ubuntu 12.04 and later (32- or 64-bit).
+and Ubuntu 16.04 and later (64-bit).
 
-The code generator uses LLVM 3.3, 3.4, or 3.5, which you can download
-directly from llvm.org.  On Mac OS, you can use the MacPorts llvm-3.x
+The code generator uses LLVM 3.9, 4.0 or 5.0, which you can download
+directly from llvm.org.  On Mac OS, you can use the MacPorts llvm
 packages, although debugging is easier if you build against a copy of
-LLVM you have built yourself from source.
+LLVM you have built yourself from source. On Ubuntu systems, you can
+install one of the llvm-dev packages using apt.
 
 The build system uses Autoconf and Automake.  On Mac OS X, you'll
 need to install these packages (e.g., through MacPorts).
@@ -61,7 +62,7 @@ Contributions
 
 There is a lot more yet to do on this project!  If you are interested
 in contributing, contact me (madisongh on GitHub, or by e-mail at
-madison _at_ bliss-m _dot_ org).
+matt _at_ madison _dot_ systems).
 
 License
 -------
