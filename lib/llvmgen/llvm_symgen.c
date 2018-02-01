@@ -203,7 +203,8 @@ initializer_arraysize (initval_t *ivlist)
  * for an initializer.  Used for INITIAL attribute handling.
  */
 static LLVMValueRef
-llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount, LLVMValueRef **arrp)
+llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount,
+		     LLVMValueRef **arrp, unsigned int arrlen)
 {
     unsigned int arrsize;
     unsigned int bpunit = machine_unit_bits(gctx->mach);
@@ -220,16 +221,19 @@ llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount
         } else {
             valarr = &oneval;
         }
+    } else {
+	arrsize = arrlen;
     }
+
     for (iv = ivlist, valp = valarr, lastvalp = 0; iv != 0; iv = iv->next) {
-        int count = iv->repcount;
+        unsigned int count = iv->repcount;
         LLVMValueRef thisval = 0;
         switch (iv->type) {
             case IVTYPE_LIST: {
                 LLVMValueRef *savep = valp;
                 LLVMValueRef *srcp, *dstp;
 
-                llvmgen_initializer(gctx, iv->data.listptr, 0, &valp);
+                llvmgen_initializer(gctx, iv->data.listptr, 0, &valp, arrsize-(valp-valarr));
                 dstp = valp;
                 // Handle (> 1) repeat count by appending copies of the pointer(s) just inserted
                 while (--count > 0) {
@@ -550,7 +554,7 @@ handle_initializer (gencodectx_t gctx, llvm_datasym_t *ld, name_t *np, unsigned 
         }
     }
     if (attr->ivlist->preset_expr == 0) {
-        initval = llvmgen_initializer(gctx, attr->ivlist, padding, 0);
+        initval = llvmgen_initializer(gctx, attr->ivlist, padding, 0, 0);
     } else {
         initval_t *iv;
         for (iv = attr->ivlist; iv != 0; iv = iv->next) {

@@ -86,7 +86,7 @@ typedef LLVMValueRef (*llvmgen_execfunc_fn)(gencodectx_t, void *, expr_node_t *,
 
 // Executable function structure.  Used in multiple modules.
 struct llvm_execfuncgen_s {
-    char * const            name;
+    const char *            name;
     llvmgen_execfunc_fn     func;
     void                   *fctx;
 };

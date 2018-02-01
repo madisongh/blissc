@@ -102,7 +102,7 @@ llvmgen_execfuncgen_init (gencodectx_t gctx)
 {
     scopectx_t kwdscope = parser_kwdscope(expr_parse_ctx(gctx->ectx));
     int addr_signed = machine_addr_signed(gctx->mach);
-    int i;
+    unsigned int i;
 
     for (i = 0; i < sizeof(gentable)/sizeof(gentable[0]); i++) {
         funcdef_t *fd;

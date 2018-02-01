@@ -28,12 +28,12 @@
 // which includes the 'X' extra arguments.
 //
 struct asminfo_s {
-    char * const        name;
-    char * const        instr;
-    char * const        reguse;
+    const char *        name;
+    const char *        instr;
+    const char *        reguse;
     unsigned int        argcount;
     unsigned int        actcount;
-    char * const        arginfo;
+    const char *        arginfo;
     unsigned int        flags;
 };
 

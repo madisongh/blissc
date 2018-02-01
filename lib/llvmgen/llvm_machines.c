@@ -31,7 +31,7 @@ machine_init (const char *mspec)
     machinedef_t *mach;
     char *err;
     LLVMTargetRef target;
-    char *machspec = (char *) mspec;
+    const char *machspec = mspec;
     unsigned long allosize;
 
     if (machspec == 0) {
@@ -60,7 +60,7 @@ machine_init (const char *mspec)
         free(m);
         return 0;
     }
-    m->target_machine = LLVMCreateTargetMachine(target, (char *)machspec, "", "",
+    m->target_machine = LLVMCreateTargetMachine(target, machspec, "", "",
                                                 LLVMCodeGenLevelDefault,
                                                 LLVMRelocPIC, LLVMCodeModelDefault);
     if (m->target_machine == 0) {
