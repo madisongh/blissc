@@ -119,7 +119,7 @@ print_usage (void)
 } /* print_usage */
 
 static void
-parse_args (blissc_driverctx_t cctx, int argc, char * const argv[])
+parse_args (blissc_driverctx_t cctx, int argc, char *argv[])
 {
     int c, which, err;
     char *showopts;
@@ -229,7 +229,7 @@ parse_args (blissc_driverctx_t cctx, int argc, char * const argv[])
 
     if (!err) {
         if (optind < argc) {
-            srcfile = (char *) argv[optind];
+            srcfile = argv[optind];
         } else {
             fprintf(stderr, "Missing required argument (source file name)\n");
             err = 1;
@@ -243,7 +243,7 @@ parse_args (blissc_driverctx_t cctx, int argc, char * const argv[])
 } /* parse_args */
 
 int
-main (int argc, char * const argv[])
+main (int argc, char *argv[])
 {
     jmp_buf retenv;
     blissc_driverctx_t cctx = 0;
