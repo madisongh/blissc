@@ -1,0 +1,10 @@
+/*
+ * config.h.in for CMake builds
+ * Copyright (C2) 2018, Matthew Madison.
+ * Distributed under license. See LICENSE.TXT for details.
+ */
+#define BLISSC_HOST_TRIPLE "@LLVM_HOST_TRIPLE@"
+#define BLISSC_VERSION_MAJOR @blissc_VERSION_MAJOR@
+#define BLISSC_VERSION_MINOR @blissc_VERSION_MINOR@
+#define PACKAGE_NAME "@CMAKE_PROJECT_NAME@"
+#define PACKAGE_VERSION "@blissc_VERSION@"
