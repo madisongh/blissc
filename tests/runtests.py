@@ -26,13 +26,13 @@ failed = 0
 
 def process_test(testfile, blissc, cc, testharness, quiet=False, prefix='!!'):
     if not quiet:
-        print "Processing: {}".format(testfile)
+        print("Processing: {}".format(testfile))
     compout = []
     comperrs = []
     runout = []
     failures = 0
     cases = 0
-    f = file(testfile, 'rU')
+    f = open(testfile, 'r')
     for lraw in f.readlines():
         l = lraw.strip()
         if l.startswith(prefix):
@@ -70,29 +70,29 @@ def process_test(testfile, blissc, cc, testharness, quiet=False, prefix='!!'):
         else:
             failures = failures + 1
             if not quiet:
-                print "  FAIL: compiler output [{}] not found".format(s)
+                print("  FAIL: compiler output [{}] not found".format(s))
     if len(e) != 0 and len(comperrs) == 0:
         failures = failures + 1
         if not quiet:
-            print "  FAIL: unexpected compilation errors:"
+            print("  FAIL: unexpected compilation errors:")
             for l in e:
-                print "         {}".format(l)
+                print("         {}".format(l))
     else:
         for s in comperrs:
             if len(e) == 0:
                 failures = failures + 1
                 if not quiet:
-                    print "  FAIL: expected compilation error(s) not found"
+                    print("  FAIL: expected compilation error(s) not found")
                 break
             cur = e[0]
             e = e[1:]
             if not cur.startswith(s):
                 failures = failures + 1
                 if not quiet:
-                    print "  FAIL: unmatched error: {}".format(s)
-                    print "        actual: {}".format(cur)
+                    print("  FAIL: unmatched error: {}".format(s))
+                    print("        actual: {}".format(cur))
     if not quiet and failures == 0:
-        print "  compilation phase passed"
+        print("  compilation phase passed")
 
     subprocess.call([cc, '-o', barename, testharness, barename + '.o'])
     dorun = subprocess.Popen(['./' + barename], stdout=subprocess.PIPE,
@@ -117,11 +117,11 @@ def process_test(testfile, blissc, cc, testharness, quiet=False, prefix='!!'):
             else:
                 o.remove(actual)
             if not quiet:
-                print "   FAIL: wanted: {}".format(s)
-                print "         actual: {}".format(actual)
+                print("   FAIL: wanted: {}".format(s))
+                print("         actual: {}".format(actual))
 
     if not quiet:
-        print "  {:d} of {:d} test cases passed".format(passes,cases)
+        print("  {:d} of {:d} test cases passed".format(passes,cases))
     return (cases, passes, failures)
 
 
@@ -149,7 +149,7 @@ for t_or_s in args.testorsuite:
             tests.append(t_or_s)
     else:
         if not args.quiet:
-            print "Skipping non-existent test: {}".format(t_or_s)
+            print("Skipping non-existent test: {}".format(t_or_s))
         skipped = skipped + 1
 
 totcases = 0
@@ -165,8 +165,8 @@ for t in tests:
         failed = failed + 1
 
 if not args.quiet:
-    print "-- Tried: {:d}; Skipped: {:d}; Passed: {:d}; Failed: {:d} --".format(tried, skipped, passed, failed)
-    print "-- Total test cases: {:d} ({:d} passing) --".format(totcases, totpasses)
+    print("-- Tried: {:d}; Skipped: {:d}; Passed: {:d}; Failed: {:d} --".format(tried, skipped, passed, failed))
+    print("-- Total test cases: {:d} ({:d} passing) --".format(totcases, totpasses))
 if tried == 0 or failed != 0:
     sys.exit(1)
 sys.exit(0)

@@ -38,7 +38,7 @@
 using namespace llvm;
 
 void HelperSetAllocaAlignment(LLVMValueRef Inst, unsigned int Bytes) {
-    reinterpret_cast<AllocaInst*>(Inst)->setAlignment(Bytes);
+    reinterpret_cast<AllocaInst*>(Inst)->setAlignment(llvm::MaybeAlign(Bytes));
 }
 
 char *HelperGetDefaultTriple(void) {
