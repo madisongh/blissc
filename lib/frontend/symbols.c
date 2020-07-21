@@ -141,7 +141,7 @@ uint_log2 (unsigned int n, unsigned int *logvalp) {
     }
     for (val = n-1, logval = 0; val != 0; val = val >> 1, logval += 1);
     if (logvalp != 0) *logvalp = logval;
-    return n == (1 << logval);
+    return n == (1U << logval);
 } /* uint_log2 */
 
 /*
@@ -1010,7 +1010,7 @@ symbols_connect_hooks (symctx_t symctx)
 {
     namectx_t namectx = symctx->namectx;
     nametype_vectors_t sv;
-    int i;
+    unsigned int i;
 
     static nametype_vectors_t symvec[6] = {
         { .typesize = sizeof(sym_literal_t),
