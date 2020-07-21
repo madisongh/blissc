@@ -12,7 +12,6 @@
  */
 
 #include "llvmgen.h"
-#include "blissc/execfuncs.h"
 
 // Structure for tracking the inline assembly we generate for machine-specific
 // built-ins.

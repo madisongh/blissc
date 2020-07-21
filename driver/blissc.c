@@ -12,7 +12,6 @@
  */
 #include <stdio.h>
 #include <setjmp.h>
-#include <unistd.h>
 #include <getopt.h>
 #include <stdlib.h>
 #include "blissc/driver.h"

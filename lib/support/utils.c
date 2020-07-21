@@ -10,7 +10,6 @@
  * Distributed under license. See LICENSE.TXT for details.
  *--
  */
-#include <stdio.h>
 
 /*
  * bits_needed

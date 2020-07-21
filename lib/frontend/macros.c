@@ -22,14 +22,7 @@
  *--
  */
 #include <stdlib.h>
-#include <stdio.h>
 #include "blissc/declarations.h"
-#include "blissc/parser.h"
-#include "blissc/expression.h"
-#include "blissc/lexer.h"
-#include "blissc/nametable.h"
-#include "blissc/lexeme.h"
-#include "blissc/support/strings.h"
 #include "blissc/macros.h"
 
 // Macro structure

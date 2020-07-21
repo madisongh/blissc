@@ -16,7 +16,6 @@
  */
 
 #include "llvmgen.h"
-#include "blissc/execfuncs.h"
 
 #define FUNCGENS \
 FUNCGENDEF("MAXA",             gen_MINMAX,          LLVMIntSGT) \

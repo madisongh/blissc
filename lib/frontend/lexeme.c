@@ -14,12 +14,8 @@
  * Distributed under license. See LICENSE.TXT for details.
  *--
  */
-#include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
 #include "blissc/lexeme.h"
-#include "blissc/support/fileio.h"
-#include "blissc/support/strings.h"
 
 #define DOLEXTYPE(lt) "LEXTYPE_" #lt,
 static const char *ltnames[] = { DOLEXTYPES };

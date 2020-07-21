@@ -25,20 +25,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "blissc/symbols.h"
-#include "blissc/parser.h"
-#include "blissc/lexer.h"
-#include "blissc/nametable.h"
-#include "blissc/lexeme.h"
-#include "blissc/expression.h"
 #include "blissc/gencode.h"
 #include "blissc/declarations.h"
-#include "blissc/structures.h"
 #include "blissc/macros.h"
 #include "blissc/switches.h"
-#include "blissc/listings.h"
-#include "blissc/support/logging.h"
-#include "blissc/support/strings.h"
-#include "blissc/support/utils.h"
 
 struct declctx_s {
     macroctx_t mctx;

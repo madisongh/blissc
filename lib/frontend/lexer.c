@@ -16,14 +16,10 @@
  * Distributed under license. See LICENSE.TXT for details.
  *--
  */
-#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <errno.h>
 #include "blissc/lexeme.h"
 #include "blissc/lexer.h"
-#include "blissc/support/logging.h"
-#include "blissc/support/strings.h"
 
 struct saved_filename_s {
     struct saved_filename_s *next;

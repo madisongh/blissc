@@ -26,13 +26,6 @@
 #include "blissc/gencode.h"
 #include "blissc/execfuncs.h"
 #include "blissc/declarations.h"
-#include "blissc/symbols.h"
-#include "blissc/parser.h"
-#include "blissc/listings.h"
-#include "blissc/nametable.h"
-#include "blissc/lexeme.h"
-#include "blissc/machinedef.h"
-#include "blissc/support/logging.h"
 
 #undef DOEXPTYPE
 #define DOEXPTYPE(t_) "EXPTYPE_" #t_,

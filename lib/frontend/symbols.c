@@ -33,11 +33,6 @@
 #include <stdlib.h>
 #include "blissc/symbols.h"
 #include "blissc/structures.h"
-#include "blissc/nametable.h"
-#include "blissc/lexeme.h"
-#include "blissc/expression.h"
-#include "blissc/support/strings.h"
-#include "blissc/support/utils.h"
 
 /*
  * The following structures are the extensions to

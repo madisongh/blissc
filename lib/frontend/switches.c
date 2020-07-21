@@ -26,9 +26,6 @@
  *--
  */
 #include "blissc/switches.h"
-#include "blissc/parser.h"
-#include "blissc/nametable.h"
-#include "blissc/lexeme.h"
 
 struct switch_special_s {
     switch_parse_handler_fn handler;
