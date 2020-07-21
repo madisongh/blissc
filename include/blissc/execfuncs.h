@@ -40,7 +40,7 @@ typedef struct funcdef_s funcdef_t;
 /*
  * FUNCDEF(name, handler, contextptr, argcount, flags)
  */
-#define FUNCDEF(n_, h_, c_, a_, f_) { (h_), 0, (void *)(c_), 0, (a_), (f_), sizeof(n_)-1, (n_) }
+#define FUNCDEF(n_, h_, c_, a_, f_) { (h_), 0, (void *)(c_), 0, (a_), (f_), sizeof(n_)-1, n_ }
 
 void execfunc_init(expr_ctx_t ctx, scopectx_t scope);
 name_t *execfunc_define(scopectx_t ctx, funcdef_t *funcdef, textpos_t pos);
