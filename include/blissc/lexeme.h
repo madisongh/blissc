@@ -258,8 +258,6 @@ int lexeme_bind(lexctx_t lctx, textpos_t curpos,
 
 void lexseq_free(lexctx_t lctx, lexseq_t *seq);
 int lexseq_copy(lexctx_t lctx, lexseq_t *dst, lexseq_t *src);
-int lexseq_copy_and_setpos(lexctx_t lctx, lexseq_t *dst,
-                           lexseq_t *src, textpos_t pos);
 int lexemes_match(lexseq_t *a, lexseq_t *b);
 unsigned int lexseq_sersize(lexseq_t *seq);
 int lexseq_serialize(filectx_t fh, lexseq_t *seq);
