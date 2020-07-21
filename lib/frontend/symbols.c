@@ -656,7 +656,7 @@ struct data_serattr_s {
     unsigned int width;
     unsigned int symscope;
     unsigned long value;
-    unsigned int strucnamelen;
+    size_t strucnamelen;
     int has_struscope;
     unsigned int fieldcount;
 };
@@ -2149,6 +2149,6 @@ initval_size (symctx_t ctx, initval_t *ivlist)
             }
         }
     }
-    return totsize;
+    return (unsigned int) totsize;
     
 } /* initval_size */

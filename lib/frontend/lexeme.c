@@ -370,7 +370,7 @@ lexseq_serialize (filectx_t fh, lexseq_t *seq)
         strdesc_t *str = lexeme_text(lex);
         hdr[0] = lexeme_type(lex);
         hdr[1] = lexeme_boundtype(lex);
-        hdr[2] = str->len;
+        hdr[2] = (uint16_t) str->len;
         if (file_writebuf(fh, hdr, sizeof(hdr)) < 0) {
             return 0;
         }

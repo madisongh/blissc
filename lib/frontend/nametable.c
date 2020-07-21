@@ -1291,10 +1291,10 @@ name_serialize (name_t *np, void *fh, void *extra, unsigned int extrasize)
     }
     *((uint16_t *)bp) = (uint16_t)(np->nametype);
     bp += sizeof(uint16_t);
-    *((uint16_t *)bp) = (((np->nameflags & NAME_M_DCLBUILTIN) == 0 ? 0 : 0x100) |
-                         (np->namedsc.len & 0xFF));
+    *((uint16_t *)bp) = (uint16_t) (((np->nameflags & NAME_M_DCLBUILTIN) == 0 ? 0 : 0x100) |
+                                    (np->namedsc.len & 0xFF));
     bp += sizeof(uint16_t);
-    *((uint16_t *)bp) = extrasize;
+    *((uint16_t *)bp) = (uint16_t) extrasize;
     bp += sizeof(uint16_t);
     memcpy(bp, np->name, np->namedsc.len);
     bp += np->namedsc.len;
