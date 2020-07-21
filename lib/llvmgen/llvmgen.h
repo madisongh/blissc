@@ -197,7 +197,7 @@ siu LLVMValueRef llvmgen_adjustval(gencodectx_t gctx, LLVMValueRef val,
 
 LLVMBasicBlockRef llvmgen_exitblock_create(gencodectx_t gctx, char *label);
 llvm_btrack_t *llvmgen_btrack_create(gencodectx_t gctx, LLVMBasicBlockRef exitpoint);
-void llvmgen_btrack_free(gencodectx_t gctx, llvm_btrack_t *bt);
+
 LLVMValueRef llvmgen_btrack_finalize(gencodectx_t gctx, llvm_btrack_t *bt, LLVMTypeRef neededtype);
 void llvmgen_symgen_init(gencodectx_t gctx);
 llvm_btrack_t *llvmgen_label_btrack(name_t *np);
