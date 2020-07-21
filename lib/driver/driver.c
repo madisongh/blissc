@@ -47,19 +47,26 @@ struct blissc_driverctx_s {
     unsigned int    listflags;
     bliss_output_t  outtype;
     char            *outfn;
-    unsigned int    outfnlen;
+    size_t          outfnlen;
     int             free_outfn;
     char            *listfn;
-    unsigned int    listfnlen;
+    size_t          listfnlen;
     int             free_listfn;
     int             optlevel;
     int             dumpir;
     char            *irfn;
-    unsigned int    irfnlen;
+    size_t          irfnlen;
     int             free_irfn;
     unsigned int    pathcount;
     char            *paths[MAXPATHS];
 };
+
+static inline size_t
+filename_length (const char *fname, int fnlen) {
+    if (fnlen < 0)
+        return strlen(fname);
+    return (size_t) fnlen;
+}
 
 /*
  * blissc_init
@@ -117,11 +124,11 @@ blissc_package_version (void)
  */
 int
 blissc_output_set (blissc_driverctx_t ctx, bliss_output_t outtype,
-                   const char *fname, int fnlen)
+                   const char *fname, int fnlen_p)
 {
     ctx->outtype = outtype;
     if (fname != 0) {
-        if (fnlen < 0) fnlen = (int) strlen(fname);
+        size_t fnlen = filename_length(fname, fnlen_p);
         ctx->outfn = malloc(fnlen+1);
         if (ctx->outfn == 0) return 0;
         memcpy(ctx->outfn, fname, fnlen);
@@ -141,13 +148,13 @@ blissc_output_set (blissc_driverctx_t ctx, bliss_output_t outtype,
  */
 int
 blissc_listopt_set (blissc_driverctx_t ctx, unsigned int flags,
-                    const char *fname, int fnlen)
+                    const char *fname, int fnlen_p)
 {
     if (ctx->outtype == BLISS_K_OUTPUT_LIBRARY) return 0;
 
     ctx->listflags = flags;
     if (fname != 0) {
-        if (fnlen < 0) fnlen = (int) strlen(fname);
+        size_t fnlen = filename_length(fname, fnlen_p);
         ctx->listfn = malloc(fnlen);
         if (ctx->listfn == 0) return 0;
         memcpy(ctx->listfn, fname, fnlen);
@@ -165,13 +172,13 @@ blissc_listopt_set (blissc_driverctx_t ctx, unsigned int flags,
  */
 int
 blissc_dumpir_set (blissc_driverctx_t ctx, int val,
-                    const char *fname, int fnlen)
+                   const char *fname, int fnlen_p)
 {
     if (ctx->outtype == BLISS_K_OUTPUT_LIBRARY) return 0;
 
     ctx->dumpir = val;
     if (fname != 0) {
-        if (fnlen < 0) fnlen = (int) strlen(fname);
+        size_t fnlen = filename_length(fname, fnlen_p);
         ctx->irfn = malloc(fnlen);
         if (ctx->irfn == 0) return 0;
         memcpy(ctx->irfn, fname, fnlen);
@@ -237,7 +244,7 @@ blissc_optlevel_set (blissc_driverctx_t ctx, unsigned int val)
 int
 blissc_searchpath_add (blissc_driverctx_t ctx, const char *path, int pathlen)
 {
-    size_t len = (pathlen < 0 ? strlen(path) : (size_t) pathlen);
+    size_t len = filename_length(path, pathlen);
     int needsterm = (path[len-1] != '/');
     char *p;
 
@@ -264,7 +271,7 @@ int
 blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
 {
     int status;
-    size_t len = (fnlen < 0 ? strlen(fname) : (size_t) fnlen);
+    size_t len = filename_length(fname, fnlen);
     fio_pathparts_t srcparts, objparts, lstparts;
     compilerinfo_t compilerinfo;
     unsigned int i;
@@ -368,7 +375,7 @@ blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
     machine_dumpir_set(ctx->mach, ctx->irfn, ctx->irfnlen);
 
     if (ctx->optlevel >= 0) {
-        gencode_optlevel_set(expr_gencodectx(ctx->ectx), ctx->optlevel);
+        gencode_optlevel_set(expr_gencodectx(ctx->ectx), (unsigned int) ctx->optlevel);
     }
     status = parser_fopen_main(ctx->pctx, fname, len,
                                ctx->listflags, ctx->listfn, ctx->listfnlen);
