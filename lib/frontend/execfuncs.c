@@ -163,7 +163,7 @@ execfunc_define (scopectx_t scope, funcdef_t *funcdef, textpos_t pos)
 void
 execfunc_init (expr_ctx_t ctx, scopectx_t scope)
 {
-    int i;
+    unsigned int i;
     namedef_t ndef;
     nametype_vectors_t fvec;
 
