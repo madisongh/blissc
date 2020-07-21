@@ -240,7 +240,7 @@ blissc_optlevel_set (blissc_driverctx_t ctx, unsigned int val)
 int
 blissc_searchpath_add (blissc_driverctx_t ctx, const char *path, int pathlen)
 {
-    size_t len = (pathlen < 0 ? strlen(path) : pathlen);
+    size_t len = (pathlen < 0 ? strlen(path) : (size_t) pathlen);
     int needsterm = (path[len-1] != '/');
     char *p;
 
@@ -267,7 +267,7 @@ int
 blissc_compile (blissc_driverctx_t ctx, const char *fname, int fnlen)
 {
     int status;
-    size_t len = (fnlen < 0 ? strlen(fname) : fnlen);
+    size_t len = (fnlen < 0 ? strlen(fname) : (size_t) fnlen);
     fio_pathparts_t srcparts, objparts, lstparts;
     compilerinfo_t compilerinfo;
     unsigned int i;
