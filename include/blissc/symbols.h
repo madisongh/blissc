@@ -28,20 +28,20 @@ typedef enum {
     DCLASS_ARG        // subject to linkage
 } dataclass_t;
 
-#define SYM_M_VOLATILE  (1<<0)
-#define SYM_M_ALIAS     (1<<1)
-#define SYM_M_NOVALUE   (1<<2)
-#define SYM_M_REF       (1<<3)
-#define SYM_M_SIGNEXT   (1<<4)
-#define SYM_M_RESERVED  (1<<5)
-#define SYM_M_PENDING   (1<<6)
-#define SYM_M_FORWARD   (1<<7)
-#define SYM_M_BIND      (1<<8)
-#define SYM_M_PLIT      (1<<9)
+#define SYM_M_VOLATILE  (1U<<0U)
+#define SYM_M_ALIAS     (1U<<1U)
+#define SYM_M_NOVALUE   (1U<<2U)
+#define SYM_M_REF       (1U<<3U)
+#define SYM_M_SIGNEXT   (1U<<4U)
+#define SYM_M_RESERVED  (1U<<5U)
+#define SYM_M_PENDING   (1U<<6U)
+#define SYM_M_FORWARD   (1U<<7U)
+#define SYM_M_BIND      (1U<<8U)
+#define SYM_M_PLIT      (1U<<9U)
 
-#define PSECT_M_ATTR_WRITE   (1<<13)
-#define PSECT_M_ATTR_EXEC    (1<<14)
-#define PSECT_M_ATTR_OVERLAY (1<<15)
+#define PSECT_M_ATTR_WRITE   (1U<<13U)
+#define PSECT_M_ATTR_EXEC    (1U<<14U)
+#define PSECT_M_ATTR_OVERLAY (1U<<15U)
 
 struct symctx_s;
 typedef struct symctx_s *symctx_t;

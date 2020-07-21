@@ -418,8 +418,8 @@ lexer___next (lexer_ctx_t ctx, int erroneof, int peek, textpos_t *posp)
             scantype_t type;
             unsigned int sflags;
 
-            sflags = (erroneof ? SCAN_M_ERRONEOF : 0) |
-                     (ctx->signok ? SCAN_M_SIGNOK : 0);
+            sflags = (erroneof ? SCAN_M_ERRONEOF : 0U) |
+                     (ctx->signok ? SCAN_M_SIGNOK : 0U);
 
             type = scan_getnext(chain->strm, sflags, &tok,
                                 &chain->curline, &column);

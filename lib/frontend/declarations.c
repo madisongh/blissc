@@ -482,7 +482,7 @@ attr_psect (expr_ctx_t ctx, name_t **psnp)
  * keywords that are supported for the target machine will be recognized.
  */
 static int
-attr_allocunit (expr_ctx_t ctx, int *valp)
+attr_allocunit (expr_ctx_t ctx, unsigned int *valp)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     machinedef_t *mach = expr_machinedef(ctx);
@@ -501,7 +501,7 @@ attr_allocunit (expr_ctx_t ctx, int *valp)
         expr_signal(ctx, STC__AUSIZERR, (1<<which));
         *valp = machine_scalar_maxbytes(mach);
     } else {
-        *valp = 1 << which;
+        *valp = 1U << which;
     }
     return 1;
 
@@ -515,13 +515,13 @@ attr_allocunit (expr_ctx_t ctx, int *valp)
  * attribute on a data declaration.
  */
 static initval_t *
-plit_items (expr_ctx_t ctx, int defau, int is_static) {
+plit_items (expr_ctx_t ctx, unsigned int defau, int is_static) {
 
     symctx_t symctx = expr_symctx(ctx);
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     lexctx_t lctx = expr_lexmemctx(ctx);
     initval_t *ivlist, *iv;
-    int itemau = defau;
+    unsigned int itemau = defau;
     lexeme_t *lex;
     int ltces_ok = machine_linktime_constant_initializers(expr_machinedef(ctx));
     static lextype_t strtypes[] = { LEXTYPE_STRING, LEXTYPE_CSTRING };
@@ -610,7 +610,7 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     symctx_t symctx = expr_symctx(ctx);
     machinedef_t *mach = expr_machinedef(ctx);
-    int plitau;
+    unsigned int plitau;
     name_t *psname, *np;
     char namebuf[NAME_SIZE];
     strdesc_t plitname;
@@ -643,7 +643,6 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
                                         machine_scalar_units(mach), 0);
     }
 
-    np = 0;
     strdesc_init(&plitname, namebuf, 0);
     plitname.len = tempname_get(expr_namectx(ctx), namebuf, sizeof(namebuf));
     memset(&attr, 0, sizeof(attr));
@@ -735,7 +734,7 @@ attr_align (expr_ctx_t ctx, unsigned int *valp)
  * Handle the INITIAL attribute.
  */
 static int
-attr_initial (expr_ctx_t ctx, int defau, int is_static, initval_t **ivlistp)
+attr_initial (expr_ctx_t ctx, unsigned int defau, int is_static, initval_t **ivlistp)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
 
@@ -919,7 +918,7 @@ handle_data_attrs (expr_ctx_t ctx, scopectx_t scope, decltype_t dt,
     do {
         did1 = 0;
         if (!saw_au) {
-            saw_au = attr_allocunit(ctx, (int *)&attr->units);
+            saw_au = attr_allocunit(ctx, &attr->units);
             if (saw_au) { did1 = 1; saw_stru = -1; }
         }
         if (!saw_ext) {
@@ -1303,6 +1302,7 @@ parse_formals (expr_ctx_t ctx, scopectx_t curscope,
             string_free(expr_strctx(ctx), namestr);
             if (np == 0) {
                 expr_signal(ctx, STC__INTCMPERR, "parse_formals[1]");
+                which = -1;
                 break;
             }
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_COLON, 0, 1)) {
@@ -1534,7 +1534,7 @@ declare_require (parse_ctx_t pctx)
         log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__DELIMEXP, ";");
     }
     str = lexeme_text(lex);
-    if (parser_fopen(pctx, str->ptr, str->len, &fname)) {
+    if (parser_fopen(pctx, str->ptr, (int) str->len, &fname)) {
         listing_require_begin(parser_lstgctx(pctx), fname, strlen(fname));
     } else {
         log_signal(parser_logctx(pctx), parser_curpos(pctx), STC__REQFILERR, str);

@@ -2203,7 +2203,7 @@ parse_EXACTSTRING (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curl
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
-    len = val;
+    len = (size_t) val;
     if (len > STRING_MAXLEN) {
         expr_signal(ctx, STC__INVSTRLIT);
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
@@ -2474,7 +2474,6 @@ parse_NUMBER (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
         expr_signal(ctx, STC__DELIMEXP, "(");
         return 1;
     }
-    rlex = 0;
     lt = parser_next(pctx, QL_NORMAL, &lex);
     if (lt == LEXTYPE_STRING) {
         if (!string_numval(lexeme_text(lex), 10, &val)) {

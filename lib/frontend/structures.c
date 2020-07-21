@@ -839,6 +839,8 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
     myscope = parser_scope_begin(pctx);
     if (scopep != 0) {
         retscope = scope_begin(scope_namectx(myscope), 0);
+    } else {
+        retscope = NULL;
     }
 
     // Now fill in the default values for the allocation formals, if they
@@ -866,7 +868,7 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
         if (ref->np != 0) {
             name_t *np, *rnp;
             strdesc_t *alloname = name_string(ref->np);
-            unsigned long val;
+            unsigned long val = 0;
             int i = -1;
             np = 0;
             // An actual could be one of the allocation-unit keywords
@@ -878,13 +880,13 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
                     i = parser_expect_oneof(pctx, QL_NORMAL, aus,
                                             allowed_aus, 0, 1);
                     if (i >= 0) {
-                        val = 1L << i;
+                        val = 1UL << i;
                     }
                 }
                 if ((i < 0) && machine_signext_supported(mach)) {
                     i = parser_expect_oneof(pctx, QL_NORMAL, su, 2, 0, 1);
                     if (i >= 0) {
-                        val = i;
+                        val = (unsigned long) i;
                     }
                 }
                 if ((i < 0) && expr_parse_ctce(ctx, 0, (long *)&val)) {
@@ -906,7 +908,7 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
             }
             // Now copy the declaration into the scope we'll pass back
             // to the caller for later use
-            if (scopep != 0) {
+            if (retscope != NULL) {
                 rnp = litsym_special(retscope, alloname, val);
                 if (rnp == 0) {
                     expr_signal(ctx, STC__INTCMPERR, "structure_allocate[5]");
@@ -1146,7 +1148,7 @@ parse_FIELDEXPAND (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curl
 {
     expr_ctx_t ctx = vctx;
     lexctx_t lctx = expr_lexmemctx(ctx);
-    long val;
+    long val = 0;
     lexeme_t *lex;
     int gotval = 0;
     name_t *fnp;

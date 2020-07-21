@@ -18,7 +18,7 @@
 struct liststate_s {
     struct liststate_s *next;
     scopectx_t          this_scope;
-    unsigned int        listopts[LISTOPT_COUNT];
+    int                 listopts[LISTOPT_COUNT];
 };
 typedef struct liststate_s liststate_t;
 
@@ -345,7 +345,7 @@ listing_printsrc (void *vctx, char *buf, size_t len, unsigned int lineno, char l
     if (n < 0) {
         return 0;
     }
-    printline(ctx, outbuf, n);
+    printline(ctx, outbuf, (size_t) n);
     return 1;
 
 } /* listing_printsrc */

@@ -373,7 +373,7 @@ parser_init (strctx_t strctx, namectx_t namectx, machinedef_t *mach,
 
     pctx->mach = mach;
     if (machine_scalar_bits(mach) == sizeof(pctx->valmask)*8) {
-        pctx->valmask = -1;
+        pctx->valmask = (unsigned long) -1;
     } else {
         pctx->valmask = (1UL << machine_scalar_bits(mach)) - 1;
     }
@@ -1029,7 +1029,7 @@ parse_lexeme_seq (parse_ctx_t pctx, lexseq_t *seq, quotelevel_t ql,
                   lexseq_t *result, lextype_t *term)
 {
     lexeme_t *lex;
-    lextype_t lt;
+    lextype_t lt = 0;
     int i;
     int depth[3], status, hit_term, private_seq;
 
@@ -1302,7 +1302,7 @@ parse_C (parse_ctx_t pctx, void *ctx, quotelevel_t ql, lextype_t curlt) {
         char buf[8];
         int len = snprintf(buf, sizeof(buf), "%ld", (long)(*str->ptr & 0x7f));
         strdesc_t dsc;
-        strdesc_init(&dsc, buf, len);
+        strdesc_init(&dsc, buf, (size_t) len);
         parser_lexeme_add(pctx, LEXTYPE_NUMERIC, &dsc);
     }
     lexeme_free(pctx->lmemctx, lex);
@@ -1421,7 +1421,7 @@ parse_CHARCOUNT (parse_ctx_t pctx, void * ctx, quotelevel_t ql, lextype_t curlt)
     }
     str = lexeme_text(lex);
     len = snprintf(buf, sizeof(buf), "%lu", str->len);
-    strdesc_init(&dsc, buf, len);
+    strdesc_init(&dsc, buf, (size_t) len);
     parser_lexeme_add(pctx, LEXTYPE_NUMERIC, &dsc);
     lexeme_free(pctx->lmemctx, lex);
     string_free(pctx->strctx, str);

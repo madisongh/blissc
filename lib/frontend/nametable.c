@@ -1222,14 +1222,14 @@ name_undeclare (scopectx_t scope, name_t *np, textpos_t pos)
  * Used for PLITs and other typically unnamed data that gets allocated,
  * since every data segment must be referenced through some name.
  */
-int
+size_t
 tempname_get (namectx_t ctx, char *buf, size_t bufsiz)
 {
     ctx->tmpcount += 1;
     if (ctx->tmpcount > 999999) {
         log_signal(ctx->logctx, 0, STC__EXCTNCNT);
     }
-    return snprintf(buf, bufsiz, "%%TMP$%06u", ctx->tmpcount);
+    return (size_t) snprintf(buf, bufsiz, "%%TMP$%06u", ctx->tmpcount);
 
 } /* tempname_get */
 
@@ -1331,7 +1331,7 @@ name_deserialize (void *fh, char namebuf[NAME_SIZE], size_t *namelen,
         return 1;
     }
     *nametype = (lextype_t)buf[0];
-    *namelen = buf[1] & 0xFF;
+    *namelen = (size_t) (buf[1] & 0xFF);
     if (flags != 0) {
         *flags = (buf[1] & 0xFF00) == 0 ? 0 : NAME_M_DCLBUILTIN;
     }

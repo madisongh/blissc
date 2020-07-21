@@ -630,7 +630,6 @@ bind_data (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
     }
     sym = name_extraspace(np);
 
-    exp = 0;
     if (sym->attr.struc != 0 &&
         parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_LBRACK, 0, 1)) {
         exp = structure_reference(ctx, sym->attr.struc, 0, np, lex);
@@ -689,13 +688,13 @@ datasym_serialize (void *vctx, name_t *np, void *fh)
         if (iv->type == IVTYPE_EXPR_EXP) {
             expr_node_t *exp = iv->data.scalar.expr;
             if (expr_type(exp) == EXPTYPE_PRIM_LIT) {
-                serattr.value = expr_litval(exp);
+                serattr.value = (unsigned long) expr_litval(exp);
             } else {
                 // XXX
                 return 0;
             }
         } else if (iv->type == IVTYPE_SCALAR) {
-            serattr.value = iv->data.scalar.value;
+            serattr.value = (unsigned long) iv->data.scalar.value;
         } else {
             // XXX
             return 0;
@@ -849,13 +848,13 @@ rtnsym_serialize (void *vctx, name_t *np, void *fh)
         if (iv->type == IVTYPE_EXPR_EXP) {
             expr_node_t *exp = iv->data.scalar.expr;
             if (expr_type(exp) == EXPTYPE_PRIM_LIT) {
-                serattr.value = expr_litval(exp);
+                serattr.value = (unsigned long) expr_litval(exp);
             } else {
                 // XXX
                 return 0;
             }
         } else if (iv->type == IVTYPE_SCALAR) {
-            serattr.value = iv->data.scalar.value;
+            serattr.value = (unsigned long) iv->data.scalar.value;
         } else {
             // XXX
             return 0;
@@ -1322,8 +1321,8 @@ litsym_search (scopectx_t scope, strdesc_t *dsc, unsigned long *valp)
     sym_literal_t *sym;
     np = name_search_typed(scope, dsc->ptr, dsc->len, LEXTYPE_NAME_LITERAL, &sym);
     if (np != 0 && valp != 0) {
-        *valp = getvalue(sym->attr.value, sym->attr.width,
-                         (sym->attr.flags & SYM_M_SIGNEXT) != 0);
+        *valp = (unsigned long) getvalue(sym->attr.value, sym->attr.width,
+                                         (sym->attr.flags & SYM_M_SIGNEXT) != 0);
     }
     return np;
 
@@ -1412,7 +1411,7 @@ litsym_special (scopectx_t scope, strdesc_t *dsc, unsigned long value)
     sym_literal_t *sym;
 
     memcpy(&attr, &symctx->literal_defaults, sizeof(literal_attr_t));
-    attr.value = getvalue(value, attr.width, (attr.flags & SYM_M_SIGNEXT) != 0);
+    attr.value = (unsigned long) getvalue(value, attr.width, (attr.flags & SYM_M_SIGNEXT) != 0);
 
     memset(&ndef, 0, sizeof(ndef));
     ndef.lt = LEXTYPE_NAME_LITERAL;
@@ -2131,7 +2130,7 @@ initval_size (symctx_t ctx, initval_t *ivlist)
             } else if (expr_type(exp) == EXPTYPE_PRIM_FLDREF) {
                 expr_node_t *pos = expr_fldref_pos(exp);
                 expr_node_t *siz = expr_fldref_size(exp);
-                thissize = expr_seg_offset(expr_fldref_addr(exp));
+                thissize = (unsigned long) expr_seg_offset(expr_fldref_addr(exp));
                 if (expr_type(pos) != EXPTYPE_PRIM_LIT ||
                     expr_type(siz) != EXPTYPE_PRIM_LIT) {
                     expr_signal(ctx->expctx, STC__PROFNCTCE);

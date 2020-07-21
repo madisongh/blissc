@@ -50,8 +50,8 @@ static int
 write_header (libgen_ctx_t lgctx, const char *target_triple)
 {
     unsigned char hdrbuf[8];
-    int htlen = (int) strlen(lgctx->compilerinfo.host_triple);
-    int ttlen = (int) strlen(target_triple);
+    size_t htlen = strlen(lgctx->compilerinfo.host_triple);
+    size_t ttlen = strlen(target_triple);
 
     if (htlen >= 255) htlen = 255;
     if (ttlen >= 255) ttlen = 255;
@@ -139,14 +139,11 @@ lib_parse_header (logctx_t logctx, textpos_t curpos,
  * output file.
  */
 libgen_ctx_t
-libgen_init (fioctx_t fioctx, const char *libname, int lnlen,
+libgen_init (fioctx_t fioctx, const char *libname, size_t lnlen,
              compilerinfo_t *info)
 {
     libgen_ctx_t ctx;
 
-    if (lnlen < 0) {
-        lnlen = (int)strlen(libname);
-    }
     ctx = malloc(sizeof(struct libgen_ctx_s)+(lnlen+1));
     if (ctx == 0) {
         return 0;
@@ -177,7 +174,7 @@ libgen_parse (libgen_ctx_t lgctx, void *vctx)
     expr_libgen_set(ctx, 1);
     parse_libgen_declarations(ctx);
 
-    lgctx->file = file_open_output(lgctx->fioctx, lgctx->libname, -1);
+    lgctx->file = file_open_output(lgctx->fioctx, lgctx->libname, strlen(lgctx->libname));
     if (lgctx->file == 0) {
         return 0;
     }
