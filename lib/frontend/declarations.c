@@ -507,7 +507,7 @@ attr_allocunit (expr_ctx_t ctx, int *valp)
     if (which < 0) {
         return 0;
     }
-    if (1<<which > machine_scalar_maxbytes(mach)) {
+    if (1U<<which > machine_scalar_maxbytes(mach)) {
         expr_signal(ctx, STC__AUSIZERR, (1<<which));
         *valp = machine_scalar_maxbytes(mach);
     } else {
@@ -1650,7 +1650,7 @@ declctx_t
 declarations_init (expr_ctx_t ctx, parse_ctx_t pctx,
                    scopectx_t kwdscope, machinedef_t *mach)
 {
-    int i;
+    unsigned int i;
     literal_attr_t attr;
     name_t *errson, *errsoff;
     declctx_t dctx;
