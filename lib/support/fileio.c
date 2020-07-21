@@ -93,7 +93,7 @@ fileio_finish (fioctx_t fio)
  * in the filesystem for this to work properly.
  */
 char *
-file_canonicalname (fioctx_t fio, const char *orig, int origlen, unsigned int *lenp)
+file_canonicalname (fioctx_t fio, const char *orig, int origlen, size_t *lenp)
 {
     char *rpath;
 
@@ -107,7 +107,7 @@ file_canonicalname (fioctx_t fio, const char *orig, int origlen, unsigned int *l
         rpath = realpath(ocopy, 0);
         free(ocopy);
     }
-    if (rpath != 0 && lenp != 0) *lenp = (unsigned int)strlen(rpath);
+    if (rpath != 0 && lenp != 0) *lenp = strlen(rpath);
     return rpath;
 
 } /* file_canonicalname */
@@ -125,7 +125,7 @@ int
 file_splitname (fioctx_t fio, const char *orig, int origlen, int canonicalize,
                 fio_pathparts_t *parts)
 {
-    unsigned int len, partlen;
+    size_t len, partlen;
     char *cp;
 
     memset(parts, 0, sizeof(fio_pathparts_t));
@@ -134,12 +134,12 @@ file_splitname (fioctx_t fio, const char *orig, int origlen, int canonicalize,
         if (parts->path_fullname == 0) return 0;
         parts->path_fullnamelen = len;
     } else {
-        if (origlen < 0) origlen = (int) strlen(orig);
-        parts->path_fullname = malloc((unsigned int)origlen+1);
+        size_t origlen_actual = (origlen < 0) ? strlen(orig) : (size_t) origlen;
+        parts->path_fullname = malloc(origlen_actual+1);
         if (parts->path_fullname == 0) return 0;
-        memcpy(parts->path_fullname, orig, origlen);
-        parts->path_fullname[origlen] = '\0';
-        len = parts->path_fullnamelen = (unsigned int) origlen;
+        memcpy(parts->path_fullname, orig, origlen_actual);
+        parts->path_fullname[origlen_actual] = '\0';
+        len = parts->path_fullnamelen = origlen_actual;
     }
     for (cp = parts->path_fullname + (len-1), partlen = 0;
          cp >= parts->path_fullname && *cp != '.' && *cp != '/';
@@ -148,7 +148,7 @@ file_splitname (fioctx_t fio, const char *orig, int origlen, int canonicalize,
         if (*cp == '.') {
             parts->path_suffix = cp;
             parts->path_suffixlen = partlen+1;
-            len = (unsigned int)(cp - parts->path_fullname);
+            len = (size_t)(cp - parts->path_fullname);
         }
     }
     for (cp = parts->path_fullname + (len-1), partlen = 0;
