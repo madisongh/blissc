@@ -162,7 +162,8 @@ gen_literal (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
         int signext = machine_signext_supported(gctx->mach);
         result = LLVMConstInt(gctx->fullwordtype, expr_litval(exp), signext);
     } else {
-        result = LLVMConstStringInContext(gctx->llvmctx, str->ptr, str->len, 1);
+        result = LLVMConstStringInContext(gctx->llvmctx, str->ptr,
+                                          (unsigned int) str->len, 1);
     }
 
     return llvmgen_adjustval(gctx, result, neededtype, 0);

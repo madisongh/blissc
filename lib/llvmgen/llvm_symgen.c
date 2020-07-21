@@ -233,7 +233,8 @@ llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount
                 LLVMValueRef *savep = valp;
                 LLVMValueRef *srcp, *dstp;
 
-                llvmgen_initializer(gctx, iv->data.listptr, 0, &valp, arrsize-(valp-valarr));
+                llvmgen_initializer(gctx, iv->data.listptr, 0, &valp,
+                                    (unsigned int) (arrsize-(valp-valarr)));
                 dstp = valp;
                 // Handle (> 1) repeat count by appending copies of the pointer(s) just inserted
                 while (--count > 0) {
@@ -256,7 +257,7 @@ llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount
             }
             case IVTYPE_STRING:
                 thisval = LLVMConstStringInContext(gctx->llvmctx, iv->data.string->ptr,
-                                                 iv->data.string->len, 1);
+                                                   (unsigned int) iv->data.string->len, 1);
                 break;
             case IVTYPE_SCALAR:
                 thisval = LLVMConstInt(LLVMIntTypeInContext(gctx->llvmctx,
