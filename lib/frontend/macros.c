@@ -613,7 +613,7 @@ macros_init (scopectx_t kwdscope, expr_ctx_t ctx)
     parse_ctx_t pctx = expr_parse_ctx(ctx);
     macroctx_t mctx = malloc(sizeof(struct macroctx_s));
     nametype_vectors_t vec;
-    int i;
+    unsigned int i;
 
     for (i = 0; i < sizeof(macro_names)/sizeof(macro_names[0]); i++) {
         name_declare(kwdscope, &macro_names[i], 0, 0, 0, 0);
@@ -1072,7 +1072,7 @@ macro_expand (macroctx_t mctx, name_t *macroname, lexseq_t *result)
     name_t *np;
     scopectx_t expscope;
     int which;
-    int nactuals;
+    unsigned int nactuals;
     punctclass_t pcl;
     lextype_t psep;
     lextype_t terms[3];
