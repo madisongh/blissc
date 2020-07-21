@@ -616,8 +616,7 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
     strdesc_t plitname;
     data_attr_t attr;
     initval_t *ivlist;
-    unsigned long size;
-    unsigned int padding, overage;
+    unsigned int size, padding, overage;
 
     if (!attr_psect(ctx, &psname)) {
         psname = scope_sclass_psectname(parser_scope_get(pctx), SCLASS_PLIT);

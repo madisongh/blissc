@@ -32,7 +32,7 @@ struct funcdef_s {
     void                 *genfnctx;
     unsigned int          numargs; // min # of args when VARARGS
     unsigned int          flags;
-    unsigned short        namelen;
+    size_t                namelen;
     char                  name[NAME_SIZE];
 };
 

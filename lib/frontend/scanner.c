@@ -287,7 +287,7 @@ scan_getnext (streamctx_t strm, unsigned int flags, strdesc_t **tok,
                 strm->curline += 1;
                 if (ctx->listfn != 0) {
                     (*ctx->listfn)(ctx->lstctx, strm->linebuf, strm->linelen, strm->curline,
-                                   (curstate == STATE_IN_EMBEDDED_COMMENT ? 'C' : ' '));
+                                   (char) (curstate == STATE_IN_EMBEDDED_COMMENT ? 'C' : ' '));
                 }
             }
 
@@ -343,7 +343,7 @@ scan_getnext (streamctx_t strm, unsigned int flags, strdesc_t **tok,
                     if (valid_ident_char(*cp) ||
                         (*cp == '%' && remain > 1 && valid_ident_char(*(cp+1)))) {
                         if (bufsiz > 0) {
-                            *outp++ = (*cp == '%' ? '%' : valid_ident_char(*cp));
+                            *outp++ = (char) (*cp == '%' ? '%' : valid_ident_char(*cp));
                             bufsiz -= 1;
                         }
                         curstate = STATE_IN_IDENTIFIER;

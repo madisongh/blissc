@@ -215,7 +215,7 @@ structure_serialize (void *vctx, name_t *np, void *fh)
     buf[1] = (uint16_t)namereflist_length(&s->alloformals);
     buf[2] = (uint16_t)lexseq_sersize(&s->accbody);
     buf[3] = (uint16_t)lexseq_sersize(&s->allobody);
-    buf[4] = ((s->acctbl == 0) ? 0 : 1) | ((s->allotbl == 0) ? 0 : 2);
+    buf[4] = (uint16_t)(((s->acctbl == 0) ? 0 : 1) | ((s->allotbl == 0) ? 0 : 2));
     status = name_serialize(np, fh, buf, sizeof(buf));
     if (status) status = scope_serialize(s->acctbl, fh, 1);
     if (status) status = scope_serialize(s->allotbl, fh, 1);
