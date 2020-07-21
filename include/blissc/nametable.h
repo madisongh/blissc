@@ -145,7 +145,7 @@ int scope_deserialize(scopectx_t scope, void *fh, int allnames);
 void nametype_dataop_register(namectx_t ctx, lextype_t lt,
                               nametype_vectors_t *vec, void *vctx);
 int name_undeclare(scopectx_t scope, name_t *np, textpos_t pos);
-int tempname_get(namectx_t ctx, char *buf, size_t bufsiz);
+size_t tempname_get(namectx_t ctx, char *buf, size_t bufsiz);
 
 nameref_t *nameref_alloc(namectx_t ctx, name_t *np);
 void nameref_free(namectx_t ctx, nameref_t *nr);

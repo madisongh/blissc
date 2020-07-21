@@ -9,6 +9,7 @@
  * Distributed under license. See LICENSE.TXT for details.
  *--
  */
+#include <string.h>
 
 #define MACH_M_ADDRS_SIGNED (1<<0)
 #define MACH_M_SIGNEXT      (1<<1)
@@ -61,8 +62,8 @@ machinedef_t *machine_init(const char *machspec);
 void machine_finish(machinedef_t *mach);
 void machine_psects_init(machinedef_t *mach, void *scope);
 void machine_output_set(machinedef_t *mach, machine_output_t outtype,
-                         char *fname, int fnlen);
-void machine_dumpir_set(machinedef_t *mach, char *fname, int fnlen);
+                         char *fname, size_t fnlen);
+void machine_dumpir_set(machinedef_t *mach, char *fname, size_t fnlen);
 const char *machine_triple(machinedef_t *mach);
 
 #endif /* machinedef_h__ */

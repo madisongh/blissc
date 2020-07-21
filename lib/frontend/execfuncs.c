@@ -192,7 +192,7 @@ execfunc_MINMAX (expr_ctx_t ctx, compare_fn cmpfn, name_t *fnp, exprseq_t *argli
     strdesc_t *fname = name_string(fnp);
     exprseq_t newargs;
     expr_node_t *arg, *result;
-    long curmax;
+    long curmax = -1;
     int did1 = 0;
 
     if (fname->len > 3 && fname->ptr[3] == 'A' && !machine_addr_signed(mach)) {

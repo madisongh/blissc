@@ -806,6 +806,7 @@ macro_paramlist (expr_ctx_t ctx, scopectx_t curscope,
         string_free(expr_strctx(ctx), namestr);
         if (mnp == 0) {
             expr_signal(ctx, STC__INTCMPERR, "macro_paramlist");
+            lt = 0;
             break;
         }
         namereflist_instail(plist, nameref_alloc(namectx, mnp));

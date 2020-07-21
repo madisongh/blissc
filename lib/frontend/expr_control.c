@@ -302,18 +302,19 @@ parse_case (expr_ctx_t ctx, lextype_t lt, lexeme_t *curlex)
         expr_case_cases_set(exp, cases);
         expr_case_index_set(exp, caseidx);
         expr_has_value_set(exp, every_case_has_value);
-    } else {
-        expr_node_free(ctx, caseidx);
-        free(cases);
-        while (unique_actions > 0) {
-            expr_node_free(ctx, unique[--unique_actions]);
-        }
-        free(unique);
+        free(todo);
+        return exp;
     }
 
+    expr_node_free(ctx, caseidx);
+    free(cases);
+    while (unique_actions > 0) {
+        expr_node_free(ctx, unique[--unique_actions]);
+    }
+    free(unique);
     free(todo);
 
-    return (status ? exp : 0);
+    return 0;
 
 } /* parse_case */
 
@@ -365,7 +366,7 @@ parse_select (expr_ctx_t ctx, lextype_t curlt, lexeme_t *curlex)
             break;
         }
         while (1) {
-            sel = lo = hi = 0;
+            lo = hi = 0;
             if (parser_expect(pctx, QL_NORMAL, LEXTYPE_KWD_OTHERWISE, 0, 1)) {
                 if (otherwise != 0) {
                     expr_signal(ctx, STC__MULOTHERW);

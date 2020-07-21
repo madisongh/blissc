@@ -20,7 +20,7 @@ typedef struct libgen_ctx_s *libgen_ctx_t;
 
 int lib_parse_header(logctx_t logctx, textpos_t curpos,
                      filectx_t fh, compilerinfo_t *me, machinedef_t *mach);
-libgen_ctx_t libgen_init(fioctx_t fioctx, const char *libname, int lnlen,
+libgen_ctx_t libgen_init(fioctx_t fioctx, const char *libname, size_t lnlen,
                          compilerinfo_t *compilerinfo);
 int libgen_parse(libgen_ctx_t lgctx, void *exprctx);
 void libgen_finish(libgen_ctx_t lgctx);
