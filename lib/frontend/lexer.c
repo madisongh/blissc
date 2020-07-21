@@ -97,8 +97,8 @@ static lextype_t delimtypes[] = {
  * These static lexemes are used to simplify the
  * logic in the parser.
  */
-static lexeme_t errlex = { 0, LEXTYPE_NONE, LEXTYPE_NONE };
-static lexeme_t endlex = { 0, LEXTYPE_END, LEXTYPE_END };
+static lexeme_t errlex = { .type = LEXTYPE_NONE, .boundtype = LEXTYPE_NONE };
+static lexeme_t endlex = { .type = LEXTYPE_END, .boundtype = LEXTYPE_END };
 
 /*
  * Operators that are keywords.  These are common enough to put down
