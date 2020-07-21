@@ -24,7 +24,6 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include "blissc/support/logging.h"
-#include "blissc/support/utils.h"
 
 struct logctx_s {
     jmp_buf             retenv;

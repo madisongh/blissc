@@ -15,18 +15,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 #include "blissc/parser.h"
-#include "blissc/lexeme.h"
 #include "blissc/lexer.h"
-#include "blissc/nametable.h"
 #include "blissc/libgen.h"
-#include "blissc/support/strings.h"
-#include "blissc/listings.h"
-#include "blissc/support/logging.h"
-#include "blissc/support/fileio.h"
-#include "blissc/machinedef.h"
-#include "blissc/support/utils.h"
 
 #define MAX_SEARCH_PATHS    32
 // Parser context structure

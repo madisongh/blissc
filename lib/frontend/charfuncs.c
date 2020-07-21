@@ -16,13 +16,8 @@
  * Distributed under license.  See LICENSE.TXT for details.
  *--
  */
-#include <stdio.h>
 #include "blissc/execfuncs.h"
-#include "blissc/expression.h"
 #include "blissc/symbols.h"
-#include "blissc/parser.h"
-#include "blissc/nametable.h"
-#include "blissc/lexeme.h"
 
 /*
  * charfunc_ALLOCATION

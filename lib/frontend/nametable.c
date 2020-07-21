@@ -41,10 +41,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "blissc/nametable.h"
-#include "blissc/support/logging.h"
-#include "blissc/support/fileio.h"
-#include "blissc/support/strings.h"
-#include "blissc/lexeme.h"
 
 /*
  * Internal flags.

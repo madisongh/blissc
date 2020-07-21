@@ -17,7 +17,6 @@
 #include "llvm_machinectx.h"
 #include <string.h>
 #include <stdlib.h>
-#include <stdio.h>
 
 /*
  * machine_init

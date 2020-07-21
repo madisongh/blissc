@@ -25,9 +25,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/uio.h>
-#include <libgen.h>
 #include "blissc/support/fileio.h"
-#include "blissc/support/logging.h"
 #include <errno.h>
 
 // Per-file context

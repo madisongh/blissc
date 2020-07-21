@@ -11,7 +11,6 @@
  *--
  */
 #include "llvmgen.h"
-#include "blissc/nametable.h"
 
 
 /*

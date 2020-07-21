@@ -18,12 +18,9 @@
 #include "blissc/machinedef.h"
 #include "blissc/nametable.h"
 #include "blissc/gencode.h"
-#include "blissc/parser.h"
-#include "blissc/expression.h"
 #include "blissc/declarations.h"
 #include "blissc/libgen.h"
 #include "blissc/config.h"
-#include <stdlib.h>
 
 #ifndef PACKAGE_NAME
 #define PACKAGE_NAME "blissc"

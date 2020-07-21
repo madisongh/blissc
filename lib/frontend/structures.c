@@ -16,13 +16,8 @@
  */
 #include <stdio.h>
 #include "blissc/declarations.h"
-#include "blissc/structures.h"
 #include "blissc/symbols.h"
 #include "blissc/macros.h"
-#include "blissc/parser.h"
-#include "blissc/expression.h"
-#include "blissc/nametable.h"
-#include "blissc/lexeme.h"
 
 /*
  * Structure definition.  Contains

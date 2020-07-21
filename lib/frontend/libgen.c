@@ -26,16 +26,9 @@
  *--
  */
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include "blissc/libgen.h"
 #include "blissc/declarations.h"
-#include "blissc/expression.h"
-#include "blissc/machinedef.h"
-#include "blissc/support/logging.h"
-#include "blissc/support/fileio.h"
-#include "blissc/support/statcodes.h"
-#include "blissc/support/utils.h"
 
 struct libgen_ctx_s {
     fioctx_t fioctx;
