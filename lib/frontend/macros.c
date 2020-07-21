@@ -485,7 +485,7 @@ macro_deserialize (void *vctx, name_t *np, void *fh,
     if (file_readbuf(fh, buf, sizeof(buf), &len) <= 0) return 0;
     if (len != sizeof(buf)) return 0;
 
-    m->type = buf[0];
+    m->type = (macrotype_t) buf[0];
     if (buf[1] + buf[2] != 0) {
         m->ptable = scope_begin(expr_namectx(ctx), 0);
         status = scope_deserialize(m->ptable, fh, 1);
