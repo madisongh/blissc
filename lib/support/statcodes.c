@@ -30,7 +30,7 @@ static const char *mctext[] = {
 #undef STATCODE
 
 #define MSG_COUNT (sizeof(mctext)/sizeof(mctext[0]))
-static const char sevchars[8] = "?SI??WEF";
+static const char sevchars[8] = {'?', 'S', 'I', '?', '?', 'W', 'E', 'F'};
 
 /*
  * stc_msg_format
