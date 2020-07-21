@@ -82,7 +82,7 @@ stc_msg_vformat (statcode_t statcode, char *buf, size_t bufsiz, va_list ap)
     }
 
     len = snprintf(buf, bufsiz, "%%BLISS-%c-%s, ", sevchars[sev], mcnames[msgno]);
-    if (len >= bufsiz) len = (int) bufsiz - 1;
+    if (len >= (int) bufsiz) { len = (int) bufsiz - 1; }
     outp = buf + len;
     bufsiz -= len;
 
@@ -111,7 +111,7 @@ stc_msg_vformat (statcode_t statcode, char *buf, size_t bufsiz, va_list ap)
             len = snprintf(tmpbuf, sizeof(tmpbuf),
                            (*fmt == 'U' ? "%lu" : "%lX"), val);
             if (len < 0) { len = 0; }
-            if (len >= bufsiz) { len = (int) bufsiz-1; }
+            if (len >= (int) bufsiz) { len = (int) bufsiz-1; }
             memcpy(outp, tmpbuf, len);
             outp += len;
             bufsiz -= len;
@@ -127,7 +127,7 @@ stc_msg_vformat (statcode_t statcode, char *buf, size_t bufsiz, va_list ap)
             } else continue;
             len = snprintf(tmpbuf, sizeof(tmpbuf), "%ld", val);
             if (len < 0) { len = 0; }
-            if (len >= bufsiz) { len = (int) bufsiz-1; }
+            if (len >= (int) bufsiz) { len = (int) bufsiz-1; }
             memcpy(outp, tmpbuf, len);
             outp += len;
             bufsiz -= len;
@@ -137,7 +137,7 @@ stc_msg_vformat (statcode_t statcode, char *buf, size_t bufsiz, va_list ap)
         if (*fmt == 'P') {
             len = snprintf(tmpbuf, sizeof(tmpbuf), "%p", va_arg(ap, void *));
             if (len < 0) { len = 0; }
-            if (len >= bufsiz) { len = (int) bufsiz-1; }
+            if (len >= (int) bufsiz) { len = (int) bufsiz-1; }
             memcpy(outp, tmpbuf, len);
             outp += len;
             bufsiz -= len;
@@ -152,13 +152,13 @@ stc_msg_vformat (statcode_t statcode, char *buf, size_t bufsiz, va_list ap)
                 slen = va_arg(ap, unsigned int);
             } else if (*(fmt+1) == 'Z') {
                 ptr = va_arg(ap, char *);
-                slen = (unsigned int)strlen(ptr);
+                slen = (unsigned int) strlen(ptr);
             } else if (*(fmt+1) == 'D') {
                 strdesc_t *dsc = va_arg(ap, strdesc_t *);
                 ptr = dsc->ptr;
                 slen = dsc->len;
             } else continue;
-            if (slen >= (unsigned int) bufsiz) slen = (unsigned int)bufsiz-1;
+            if (slen >= (unsigned int) bufsiz) { slen = (unsigned int) bufsiz - 1; }
             memcpy(outp, ptr, slen);
             outp += slen;
             bufsiz -= slen;
@@ -168,6 +168,6 @@ stc_msg_vformat (statcode_t statcode, char *buf, size_t bufsiz, va_list ap)
         // Unrecognized directive here, just loop back up to the top
     } /* while bufsiz > 0 && *fmt != null char */
 
-    return (int)(outp - buf);
+    return (int) (outp - buf);
 
 } /* stc_msg_vformat */
