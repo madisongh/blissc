@@ -216,7 +216,7 @@ void llvmgen_opexpgen_init(gencodectx_t gctx);
 void llvmgen_ctrlexpgen_init(gencodectx_t gctx);
 void llvmgen_execfuncgen_init(gencodectx_t gctx);
 void llvmgen_expgen_init(gencodectx_t gctx);
-LLVMIntPredicate llvmgen_predfromop(optype_t op, int addrsigned);
+int llvmgen_predfromop(optype_t op, int addrsigned, LLVMIntPredicate *predp);
 void *llvmgen_builtins_init(gencodectx_t gctx, scopectx_t kwdscope);
 void llvmgen_builtins_finish(void *actx);
 LLVMValueRef llvmgen_builtinfunc(gencodectx_t gctx, const char *name,
