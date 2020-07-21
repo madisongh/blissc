@@ -58,7 +58,6 @@ struct lexer_ctx_s {
     logctx_t                 logctx;
     strctx_t                 strctx;
     lexctx_t                 lexctx;
-    void                    *fioctx;
     scanctx_t                scnctx;
     struct saved_filename_s *saved_filenames;
     lexchain_t              *chain;

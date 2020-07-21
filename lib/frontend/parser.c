@@ -29,7 +29,6 @@ struct parse_ctx_s {
     scopectx_t      kwdscope, curscope;
     machinedef_t    *mach;
     lexer_ctx_t     lexctx;
-    int             lib_compile;
     quotemodifier_t quotemodifier;
     condstate_t     condstate[64];
     unsigned int    condlevel;

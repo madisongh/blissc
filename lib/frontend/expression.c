@@ -55,7 +55,6 @@ struct expr_ctx_s {
     void               *fake_label_ptr;
     unsigned int        loopdepth;
     int                 longstringsok;
-    int                 noreduce;
     int                 libgen;
     int                 predeclaring;
 };

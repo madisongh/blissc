@@ -59,7 +59,6 @@ typedef struct sym_label_s sym_label_t;
 struct sym_data_s {
     name_t          *globalsym;
     data_attr_t      attr;
-    initval_t       *ivlist_head, *ivlist_tail;
     void            *genspace;
 };
 typedef struct sym_data_s sym_data_t;
@@ -67,7 +66,6 @@ typedef struct sym_data_s sym_data_t;
 struct sym_routine_s {
     name_t          *globalsym;
     expr_node_t     *rtnexp;
-    scopectx_t       argscope;
     routine_attr_t   attr;
     void            *genspace;
 };
@@ -102,7 +100,6 @@ struct symctx_s {
     strctx_t        strctx;
     machinedef_t   *mach;
     data_attr_t     data_defaults;
-    routine_attr_t  routine_defaults;
     literal_attr_t  literal_defaults;
     void            *genctx;
     sym_genvec_t     genvec;
