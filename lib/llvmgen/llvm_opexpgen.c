@@ -19,8 +19,8 @@
  * Translates our OPER_xxx operator type code, for a comparison
  * operator, into an LLVM predicate code.
  */
-LLVMIntPredicate
-llvmgen_predfromop (optype_t op, int addrsigned)
+int
+llvmgen_predfromop (optype_t op, int addrsigned, LLVMIntPredicate *predp)
 {
     static LLVMIntPredicate pred[] = {
         LLVMIntEQ, LLVMIntNE, LLVMIntSLT, LLVMIntSLE,
@@ -29,11 +29,14 @@ llvmgen_predfromop (optype_t op, int addrsigned)
     };
 
     if (op >= OPER_CMP_EQLA && op <= OPER_CMP_GEQA) {
-        return pred[op-(addrsigned ? 12 : 6)-OPER_CMP_EQL];
+        *predp = pred[op-(addrsigned ? 12 : 6)-OPER_CMP_EQL];
+        return 1;
     }
     if (op >= OPER_CMP_EQL && op <= OPER_CMP_GEQU) {
-        return pred[op-OPER_CMP_EQL];
+        *predp = pred[op-OPER_CMP_EQL];
+        return 1;
     }
+
     return 0;
 
 } /* llvmgen_predfromop */
@@ -318,9 +321,12 @@ gen_operator_expression (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef needed
             break;
         default:
             if (op >= OPER_CMP_EQL && op <= OPER_CMP_GEQA) {
-                result = LLVMBuildICmp(builder,
-                                       llvmgen_predfromop(op, machine_addr_signed(gctx->mach)),
-                                       lval, rval, llvmgen_temp(gctx));
+                LLVMIntPredicate pred;
+                if (!llvmgen_predfromop(op, machine_addr_signed(gctx->mach), &pred)) {
+                    log_signal(expr_logctx(gctx->ectx), expr_textpos(rhs),
+                               STC__INTCMPERR, __func__);
+                }
+                result = LLVMBuildICmp(builder, pred, lval, rval, llvmgen_temp(gctx));
             } else {
                 // Everything should be covered
                 expr_signal(gctx->ectx, STC__INTCMPERR, "gen_operator_expression");

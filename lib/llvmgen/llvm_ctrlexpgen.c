@@ -417,6 +417,7 @@ gen_incr_decr_loop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     int addrsigned = machine_addr_signed(gctx->mach);
     LLVMValueRef initval, endval, stepval, testphi, cmpval, result;
     LLVMBasicBlockRef loopblk, testblk, curblk;
+    LLVMIntPredicate pred;
     int is_decr;
 
     is_decr = (compareop == OPER_CMP_GEQ || compareop == OPER_CMP_GEQU
@@ -445,8 +446,10 @@ gen_incr_decr_loop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     testphi = LLVMBuildPhi(builder, gctx->fullwordtype, llvmgen_temp(gctx));
     LLVMAddIncoming(testphi, &initval, &curblk, 1);
     LLVMBuildStore(builder, testphi, loopidx);
-    cmpval = LLVMBuildICmp(builder, llvmgen_predfromop(compareop, addrsigned),
-                           testphi, endval, llvmgen_temp(gctx));
+    if (!llvmgen_predfromop(compareop, addrsigned, &pred)) {
+        log_signal(expr_logctx(gctx->ectx), expr_textpos(exp), STC__INTCMPERR, __func__);
+    }
+    cmpval = LLVMBuildICmp(builder, pred, testphi, endval, llvmgen_temp(gctx));
     LLVMBuildCondBr(builder, cmpval, loopblk, exitblk);
     llvmgen_btrack_update_phi(gctx, bt, LLVMGetInsertBlock(builder), neg1);
     llvmgen_btrack_update_brcount(gctx, bt);
