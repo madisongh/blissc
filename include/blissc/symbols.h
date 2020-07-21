@@ -182,7 +182,7 @@ initval_t *initval_string_add(symctx_t ctx, initval_t *head, unsigned int reps,
 initval_t *initval_ivlist_add(symctx_t ctx, initval_t *head, unsigned int reps,
                               initval_t *sublist);
 void initval_freelist(symctx_t ctx, initval_t *iv);
-unsigned long initval_size(symctx_t ctx, initval_t *ivlist);
+unsigned int initval_size(symctx_t ctx, initval_t *ivlist);
 initval_t *preset_expr_add(symctx_t ctx, initval_t *head, void *pexp, void *exp);
 
 #endif /* symbols_h__ */

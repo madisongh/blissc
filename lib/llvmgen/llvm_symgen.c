@@ -541,7 +541,7 @@ handle_initializer (gencodectx_t gctx, llvm_datasym_t *ld, name_t *np, unsigned 
     unsigned int nunits, padding;
     LLVMValueRef initval = 0;
 
-    nunits = (unsigned int)initval_size(gctx->symctx, attr->ivlist);
+    nunits = initval_size(gctx->symctx, attr->ivlist);
     if (nunits > typesize) {
         if (typesize != 0) {
             log_signal(expr_logctx(gctx->ectx), name_defpos(np), STC__INITSZERR, name_string(np));

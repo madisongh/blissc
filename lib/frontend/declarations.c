@@ -652,7 +652,7 @@ define_plit (expr_ctx_t ctx, lextype_t curlt, textpos_t pos)
     attr.flags = SYM_M_PLIT;
     attr.dclass = DCLASS_STATIC;
     attr.ivlist = ivlist;
-    attr.units = (unsigned int) initval_size(symctx, ivlist);
+    attr.units = initval_size(symctx, ivlist);
     attr.width = machine_scalar_bits(mach);
     attr.sc = SYMSCOPE_LOCAL;
     np = datasym_declare(parser_scope_get(pctx), &plitname, &attr, pos);

@@ -18,10 +18,10 @@ typedef struct strctx_s *strctx_t;
  * String descriptor structure.
  */
 typedef struct {
-    unsigned short flags;
-#define STR_M_STATIC (1<<0)
-    unsigned short len;
-    char           *ptr;
+    unsigned int flags;
+#define STR_M_STATIC (1U<<0U)
+    size_t       len;
+    char         *ptr;
 } strdesc_t;
 
 /*
