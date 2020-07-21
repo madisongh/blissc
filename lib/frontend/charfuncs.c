@@ -373,7 +373,7 @@ static funcdef_t charfunc_funcs[] = {
 void
 charfuncs_init (expr_ctx_t ctx, scopectx_t scope)
 {
-    int i;
+    unsigned int i;
     namedef_t ndef;
 
     memset(&ndef, 0, sizeof(ndef));
