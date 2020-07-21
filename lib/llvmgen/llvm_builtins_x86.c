@@ -113,7 +113,7 @@ decode_type (gencodectx_t gctx, const char *arginfo, LLVMTypeRef *typep, LLVMVal
         case '2':
         case '4':
         case '8':
-            *typep = LLVMIntTypeInContext(gctx->llvmctx, (*cp - '0') * 8);
+            *typep = LLVMIntTypeInContext(gctx->llvmctx, (*cp - '0') * 8U);
             if (xargp != 0) *xargp = 0;
             cp += 1;
             break;
@@ -134,7 +134,10 @@ decode_type (gencodectx_t gctx, const char *arginfo, LLVMTypeRef *typep, LLVMVal
                 val = val * 10 + (*cp - '0');
                 cp += 1;
             }
-            if (negate) val = -val;
+            if (negate) {
+                long signedval = (long) val;
+                val = (unsigned long) -signedval;
+            }
             if (xargp != 0) *xargp = LLVMConstInt(*typep, val, 1);
             if (*cp != '\0') cp += 1;
             break;

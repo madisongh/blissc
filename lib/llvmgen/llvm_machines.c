@@ -110,14 +110,11 @@ machine_triple (machinedef_t *mach)
  * Called by the driver to set the output type and output filename.
  */
 void
-machine_output_set (machinedef_t *mach, machine_output_t outtype, char *fname, int fnlen)
+machine_output_set (machinedef_t *mach, machine_output_t outtype, char *fname, size_t fnlen)
 {
     machine_ctx_t m = machine_context(mach);
 
     m->outputtype = (outtype == MACH_K_OUTPUT_ASM ? LLVMAssemblyFile : LLVMObjectFile);
-    if (fnlen < 0) {
-        fnlen = (int) strlen(fname);
-    }
     m->outfile = malloc(fnlen+1);
     memcpy(m->outfile, fname, fnlen);
     m->outfile[fnlen] = '\0';
@@ -130,7 +127,7 @@ machine_output_set (machinedef_t *mach, machine_output_t outtype, char *fname, i
  * Called by the driver when an IR dump is requested.
  */
 void
-machine_dumpir_set (machinedef_t *mach, char *fname, int fnlen)
+machine_dumpir_set (machinedef_t *mach, char *fname, size_t fnlen)
 {
     machine_ctx_t m = machine_context(mach);
 
@@ -138,13 +135,10 @@ machine_dumpir_set (machinedef_t *mach, char *fname, int fnlen)
         free(m->irdumpfile);
         m->irdumpfile = 0;
     }
-    if (fname != 0) {
-        if (fnlen < 0) fnlen = (int) strlen(fname);
-        if (fnlen != 0) {
-            m->irdumpfile = malloc(fnlen+1);
-            memcpy(m->irdumpfile, fname, fnlen);
-            m->irdumpfile[fnlen] = '\0';
-        }
+    if (fname != 0 && fnlen != 0) {
+        m->irdumpfile = malloc(fnlen+1);
+        memcpy(m->irdumpfile, fname, fnlen);
+        m->irdumpfile[fnlen] = '\0';
     }
 
 } /* machine_dumpir_set */

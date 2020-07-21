@@ -217,10 +217,10 @@ gen_shift (gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs, LLVMTypeRef ne
     if (expr_type(rhs) == EXPTYPE_PRIM_LIT) {
         long count = expr_litval(rhs);
         if (count < 0) {
-            rval = LLVMConstInt(inttype, -count, 0);
+            rval = LLVMConstInt(inttype, (unsigned long long int) -count, 0);
             result = LLVMBuildLShr(builder, lval, rval, llvmgen_temp(gctx));
         } else {
-            rval = LLVMConstInt(inttype, count, 0);
+            rval = LLVMConstInt(inttype, (unsigned long long int) count, 0);
             result = LLVMBuildShl(builder, lval, rval, llvmgen_temp(gctx));
         }
     } else {

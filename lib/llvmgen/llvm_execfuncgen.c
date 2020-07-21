@@ -271,7 +271,7 @@ gen_ch_pointer (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef need
         arg = arg->tq_next;
         if (expr_type(arg) == EXPTYPE_PRIM_LIT) {
             if (expr_litval(arg) != 0) {
-                offset = LLVMConstInt(gctx->fullwordtype, expr_litval(arg), 0);
+                offset = LLVMConstInt(gctx->fullwordtype, (unsigned long long int) expr_litval(arg), 0);
                 if (LLVMIsConstant(result)) {
                     result = LLVMConstGEP(offset, &offset, 1);
                 } else {
