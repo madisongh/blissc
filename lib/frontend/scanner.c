@@ -483,24 +483,21 @@ scan_getnext (streamctx_t strm, unsigned int flags, strdesc_t **tok,
         strm->curpos = cp - &strm->linebuf[0];
         switch (curstate) {
             case STATE_IN_DECLIT:
-                len = outp - strm->tokbuf;
-                *tok = string_from_chrs(ctx->strctx, 0, strm->tokbuf, len);
-                return SCANTYPE_DECLITERAL;
+                rettype = SCANTYPE_DECLITERAL;
+                goto depart;
             case STATE_IN_IDENTIFIER:
-                len = outp - strm->tokbuf;
-                *tok = string_from_chrs(ctx->strctx, 0, strm->tokbuf, len);
-                return SCANTYPE_IDENTIFIER;
+                rettype = SCANTYPE_IDENTIFIER;
+                goto depart;
             case STATE_IN_QSTRING:
                 return SCANTYPE_ERR_QSTR;
             case STATE_EXIT:
-                len = outp - strm->tokbuf;
-                *tok = string_from_chrs(ctx->strctx, 0, strm->tokbuf, len);
-                return rettype;
+                goto depart;
             default:
                 break;
         }
     }
 
+depart:
     len = outp - strm->tokbuf;
     *tok = string_from_chrs(ctx->strctx, 0, strm->tokbuf, len);
     return rettype;
