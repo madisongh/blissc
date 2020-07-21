@@ -841,11 +841,6 @@ attr_preset (expr_ctx_t ctx, name_t *np, data_attr_t *attr)
         if (!expr_parse_expr(ctx, &exp)) {
             expr_signal(ctx, STC__EXPREXP);
         }
-//        if (exp != 0 && expr_type(exp) == EXPTYPE_PRIM_LIT) {
-//            ivlist = preset_scalar_add(symctx, ivlist, pexp, expr_litval(exp));
-//            expr_node_free(ctx, exp);
-//            exp = 0;
-//        }
         if (exp != 0) {
             if (attr->dclass == DCLASS_STATIC) {
                 if (ltces_ok && !expr_is_ltce(exp)) {

@@ -1921,36 +1921,6 @@ initval_scalar_add (symctx_t ctx, initval_t *listhead, unsigned int reps,
 } /* initval_scalar_add */
 
 /*
- * preset_scalar_add
- *
- * Adds a scalar expression to an initval list.
- */
-initval_t *
-preset_scalar_add (symctx_t ctx, initval_t *listhead, void *pexp, long val)
-{
-    initval_t *iv = initval_alloc(ctx);
-
-    if (iv == 0) {
-        return 0;
-    }
-    iv->type = IVTYPE_SCALAR;
-    iv->repcount = 0;
-    iv->preset_expr = pexp;
-    iv->data.scalar.expr = 0;
-    iv->data.scalar.value = val;
-    iv->data.scalar.width = 0;
-    iv->data.scalar.signext = 0;
-    if (listhead == 0) {
-        iv->lastptr = iv;
-        return iv;
-    }
-    listhead->lastptr->next = iv;
-    listhead->lastptr = iv;
-    return listhead;
-
-} /* preset_scalar_add */
-
-/*
  * initval_expr_add
  *
  * Adds an expression initializer to an initval list.
