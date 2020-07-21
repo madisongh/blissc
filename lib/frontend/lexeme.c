@@ -40,7 +40,7 @@ struct lexctx_s {
     void                *bctx[LEXTYPE_COUNT];
 };
 
-static lexeme_t errlex = { 0, LEXTYPE_NONE };
+static lexeme_t errlex = { .type = LEXTYPE_NONE };
 
 /*
  * lextype_name

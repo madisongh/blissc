@@ -113,7 +113,7 @@ static namedef_t parser_names[] = {
 #undef DODEF
 
 // Some frequently-used static definitions
-static lexeme_t errlex = { 0, LEXTYPE_NONE };
+static lexeme_t errlex = { .type = LEXTYPE_NONE };
 
 static lextype_t opener[3] = {
     LEXTYPE_DELIM_LPAR, LEXTYPE_DELIM_LANGLE, LEXTYPE_DELIM_LBRACK };
