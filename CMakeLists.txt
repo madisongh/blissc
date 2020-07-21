@@ -1,12 +1,16 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.13)
 
-project(blissc VERSION 0.2)
+project(blissc VERSION 0.3.0)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
 find_package(LLVM 4.0 REQUIRED)
 
 include_directories(${blissc_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+
+if(NOT MSVC)
+  add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wpedantic $<$<CONFIG:DEBUG>:-Werror>)
+endif()
 
 add_library(libdriver STATIC lib/driver/driver.c)
 add_library(libfrontend STATIC
@@ -45,16 +49,24 @@ add_library(libsupport STATIC
   lib/support/statcodes.c
   lib/support/strings.c
   lib/support/utils.c)
-add_library(libir STATIC lib/ir/blissir.c)
-add_executable(blissc driver/blissc)
+add_executable(blissc driver/blissc.c)
 target_link_libraries(blissc
   libdriver
   libfrontend
   libsupport
   libllvmgen
-  libir
   ${LLVM_LIBRARIES}
-  -lstdc++
-  ${LLVM_SYSTEM_LIBRARIES})
-set_property(TARGET blissc PROPERTY LINK_FLAGS ${LLVM_LDFLAGS})
+  ${LLVM_SYSTEM_LIBS})
+target_link_options(blissc PUBLIC ${LLVM_LDFLAGS} -Wl,-rpath=${LLVM_LIBDIR} -Wl,-rpath-link=${LLVM_LIBDIR})
 configure_file(${CMAKE_SOURCE_DIR}/cmake/config.h.in ${blissc_BINARY_DIR}/include/blissc/config.h @ONLY)
+
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+add_custom_target(testharness
+        COMMAND $<TARGET_FILE:blissc> --library -o ${CMAKE_BINARY_DIR}/tests/testharness.lib ${CMAKE_SOURCE_DIR}/tests/testharness.req
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+        DEPENDS blissc)
+
+add_custom_target(check ALL
+        COMMAND python3 "${CMAKE_SOURCE_DIR}/tests/runtests.py" --blissc=$<TARGET_FILE:blissc> --cc="${CMAKE_C_COMPILER}" "${CMAKE_SOURCE_DIR}/tests"
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+        DEPENDS testharness blissc)
