@@ -93,14 +93,15 @@ fileio_finish (fioctx_t fio)
  * in the filesystem for this to work properly.
  */
 char *
-file_canonicalname (fioctx_t fio, const char *orig, int origlen, size_t *lenp)
+file_canonicalname (fioctx_t fio, const char *orig, ssize_t origlen_p, size_t *lenp)
 {
     char *rpath;
 
-    if (origlen < 0) {
+    if (origlen_p < 0) {
         rpath = realpath(orig, 0);
     } else {
-        char *ocopy = malloc((unsigned)(origlen+1));
+        size_t origlen = (size_t) origlen_p;
+        char *ocopy = malloc((origlen+1));
         if (ocopy == 0) return 0;
         memcpy(ocopy, orig, origlen);
         ocopy[origlen] = '\0';
@@ -122,7 +123,7 @@ file_canonicalname (fioctx_t fio, const char *orig, int origlen, size_t *lenp)
  * a string buffer that the caller must free.
  */
 int
-file_splitname (fioctx_t fio, const char *orig, int origlen, int canonicalize,
+file_splitname (fioctx_t fio, const char *orig, ssize_t origlen, int canonicalize,
                 fio_pathparts_t *parts)
 {
     size_t len, partlen;
@@ -421,7 +422,7 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
             status = -1;
             break;
         }
-        ctx->buflen = ret;
+        ctx->buflen = (size_t) ret;
         ctx->bufpos = 0;
         if (ret == 0) {
             if (outp == buf) {
@@ -468,7 +469,7 @@ file_readbuf (filectx_t ctx, void *buf, size_t bufsiz, size_t *len)
         return -1;
     }
     if (ret == 0) return 0;
-    *len = ret;
+    *len = (size_t) ret;
     return 1;
 
 } /* file_readbuf */

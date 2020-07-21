@@ -34,8 +34,8 @@ struct fio_pathparts_s {
 };
 typedef struct fio_pathparts_s fio_pathparts_t;
 
-char *file_canonicalname(fioctx_t fio, const char *orig, int origlen, size_t *lenp);
-int file_splitname(fioctx_t fio, const char *orig, int origlen, int canoncialize,
+char *file_canonicalname(fioctx_t fio, const char *orig, ssize_t origlen, size_t *lenp);
+int file_splitname(fioctx_t fio, const char *orig, ssize_t origlen, int canoncialize,
                    fio_pathparts_t *parts);
 int file_combinename(fioctx_t fio, fio_pathparts_t *parts);
 void file_freeparts(fioctx_t fio, fio_pathparts_t *parts);

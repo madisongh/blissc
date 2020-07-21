@@ -112,7 +112,7 @@ stc_msg_vformat (statcode_t statcode, char *buf, size_t bufsiz, va_list ap)
                            (*fmt == 'U' ? "%lu" : "%lX"), val);
             if (len < 0) { len = 0; }
             if (len >= (int) bufsiz) { len = (int) bufsiz-1; }
-            memcpy(outp, tmpbuf, len);
+            memcpy(outp, tmpbuf, (size_t) len);
             outp += len;
             bufsiz -= len;
             fmt += 2;
@@ -128,7 +128,7 @@ stc_msg_vformat (statcode_t statcode, char *buf, size_t bufsiz, va_list ap)
             len = snprintf(tmpbuf, sizeof(tmpbuf), "%ld", val);
             if (len < 0) { len = 0; }
             if (len >= (int) bufsiz) { len = (int) bufsiz-1; }
-            memcpy(outp, tmpbuf, len);
+            memcpy(outp, tmpbuf, (size_t) len);
             outp += len;
             bufsiz -= len;
             fmt += 2;
@@ -138,7 +138,7 @@ stc_msg_vformat (statcode_t statcode, char *buf, size_t bufsiz, va_list ap)
             len = snprintf(tmpbuf, sizeof(tmpbuf), "%p", va_arg(ap, void *));
             if (len < 0) { len = 0; }
             if (len >= (int) bufsiz) { len = (int) bufsiz-1; }
-            memcpy(outp, tmpbuf, len);
+            memcpy(outp, tmpbuf, (size_t) len);
             outp += len;
             bufsiz -= len;
             fmt += 1;
