@@ -11,16 +11,13 @@
  * Distributed under license. See LICENSE.TXT for details.
  *--
  */
-#include <stdio.h>
 #include "blissc/execfuncs.h"
 #include "blissc/expression.h"
 #include "blissc/parser.h"
 #include "blissc/nametable.h"
 #include "blissc/lexeme.h"
-#include "blissc/gencode.h"
 #include "blissc/charfuncs.h"
 
-typedef int (*compare_fn)(long, long);
 static int cmplss (long val1, long val2) { return (val1 < val2); }
 static int cmplssu (long val1, long val2) {
     return ((unsigned long) val1 < (unsigned long)val2); }
@@ -28,11 +25,11 @@ static int cmpgtr (long val1, long val2) { return (val1 > val2); }
 static int cmpgtru (long val1, long val2) {
     return ((unsigned long) val1 > (unsigned long) val2); }
 
-static expr_node_t *execfunc_MINMAX(expr_ctx_t ctx, void *fctx,
+static expr_node_t *execfunc_MINMAX(expr_ctx_t ctx, compare_fn fn,
                                     name_t *fnp, exprseq_t *arglist, textpos_t curpos);
-static expr_node_t *execfunc_SIGN(expr_ctx_t ctx, void *fctx, name_t *fnp,
+static expr_node_t *execfunc_SIGN(expr_ctx_t ctx, compare_fn fn, name_t *fnp,
                                   exprseq_t *arglist, textpos_t curpos);
-static expr_node_t *execfunc_ABS(expr_ctx_t ctx, void *fctx, name_t *fnp,
+static expr_node_t *execfunc_ABS(expr_ctx_t ctx, compare_fn fn, name_t *fnp,
                                  exprseq_t *arglist, textpos_t curpos);
 
 static funcdef_t stdfuncs[] = {
@@ -125,7 +122,7 @@ function_bind (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
             expr_has_value_set(result, (func->flags & FUNC_M_NOVALUE) == 0);
         }
     } else {
-        result = (*func->handler)(ctx, func->fnctx, np, &args, pos);
+        result = (*func->handler)(ctx, func->fn, np, &args, pos);
     }
 
     if (result == 0) {
@@ -192,12 +189,11 @@ execfunc_init (expr_ctx_t ctx, scopectx_t scope)
  * value.
  */
 static expr_node_t *
-execfunc_MINMAX (expr_ctx_t ctx, void *fctx, name_t *fnp, exprseq_t *arglist,
+execfunc_MINMAX (expr_ctx_t ctx, compare_fn cmpfn, name_t *fnp, exprseq_t *arglist,
                  textpos_t curpos)
 {
     machinedef_t *mach = expr_machinedef(ctx);
     strdesc_t *fname = name_string(fnp);
-    compare_fn cmpfn = fctx;
     exprseq_t newargs;
     expr_node_t *arg, *result;
     long curmax;
@@ -252,8 +248,8 @@ execfunc_MINMAX (expr_ctx_t ctx, void *fctx, name_t *fnp, exprseq_t *arglist,
  * SIGN() function.
  */
 static expr_node_t *
-execfunc_SIGN (expr_ctx_t ctx, void *fctx, name_t *fnp,
-               exprseq_t *arglist, textpos_t curpos)
+execfunc_SIGN (expr_ctx_t ctx, compare_fn fn __attribute__((unused)),
+               name_t *fnp, exprseq_t *arglist, textpos_t curpos)
 {
     expr_node_t *result = exprseq_head(arglist);
 
@@ -278,7 +274,7 @@ execfunc_SIGN (expr_ctx_t ctx, void *fctx, name_t *fnp,
  * ABS() function.
  */
 static expr_node_t *
-execfunc_ABS (expr_ctx_t ctx, void *fctx, name_t *fnp,
+execfunc_ABS (expr_ctx_t ctx, compare_fn fn __attribute__((unused)), name_t *fnp,
               exprseq_t *arglist, textpos_t curpos)
 {
     expr_node_t *result = exprseq_head(arglist);
