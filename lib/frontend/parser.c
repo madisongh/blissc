@@ -42,7 +42,7 @@ struct parse_ctx_s {
     int             lib_compile;
     quotemodifier_t quotemodifier;
     condstate_t     condstate[64];
-    int             condlevel;
+    unsigned int    condlevel;
     int             no_eof;
     int             macroskip;
     textpos_t       curpos;
@@ -342,7 +342,7 @@ parser_init (strctx_t strctx, namectx_t namectx, machinedef_t *mach,
     parse_ctx_t pctx;
     scopectx_t kwdscope;
     lextype_t lt;
-    int i;
+    unsigned int i;
 
     if (namectx == 0) {
         namectx = nametables_init(logctx);
@@ -868,11 +868,12 @@ parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
                 sval = 0;
             }
             if (sval < 0) {
-                if ((pctx->valmask & (-sval)) != (-sval)) {
+                unsigned long negated = (unsigned long) (-sval);
+                if ((pctx->valmask & negated) != negated) {
                     log_signal(pctx->logctx, pctx->curpos, STC__NUMLITTRC, sval);
                     string_printf(pctx->strctx, &lex->text, "%ld", (sval | ~pctx->valmask));
                 }
-            } else if ((pctx->valmask & sval) != sval) {
+            } else if ((pctx->valmask & (unsigned long) sval) != (unsigned long) sval) {
                 log_signal(pctx->logctx, pctx->curpos, STC__NUMLITTRC, sval);
                 string_printf(pctx->strctx, &lex->text, "%ld", (sval & pctx->valmask));
             }
