@@ -140,7 +140,7 @@ parse_args (blissc_driverctx_t cctx, int argc, char *argv[])
                     }
                     showopts = optarg;
                     err = 0;
-                    while (*showopts != '\0' && !err) {
+                    while (*showopts != '\0') {
                         char *value;
                         int i = getsubopt(&showopts, listopts, &value);
                         if (i < 0) {
