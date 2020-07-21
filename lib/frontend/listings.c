@@ -361,7 +361,7 @@ listings_init (scopectx_t kwdscope, logctx_t logctx)
 {
     lstgctx_t ctx = malloc(sizeof(struct lstgctx_s));
     name_t *onp, *offp;
-    int i;
+    unsigned int i;
 
     if (ctx != 0) {
         memset(ctx, 0, sizeof(struct lstgctx_s));
