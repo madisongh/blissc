@@ -138,7 +138,7 @@ stringpool_expand (strctx_t strctx, int idx)
     }
     // on exit, 'str' still points to the last allocated entry
     str->next = strctx->pool[idx].freelist;
-    strctx->pool[idx].freelist = (string_t *) more;
+    strctx->pool[idx].freelist = more;
     return 1;
 
 } /* stringpool_expand */
