@@ -485,8 +485,6 @@ int expr_parse_block(expr_ctx_t ctx, expr_node_t **blkexp);
 int expr_parse_seq(expr_ctx_t ctx, lexseq_t *seq, expr_node_t **expp);
 void expr_dispatch_register(expr_ctx_t ctx, lextype_t lt, expr_dispatch_fn fn);
 parse_ctx_t expr_parse_ctx(expr_ctx_t ctx);
-void *expr_decl_ctx(expr_ctx_t ctx);
-void expr_decl_ctx_set(expr_ctx_t ctx, void *d);
 void *expr_gencodectx(expr_ctx_t);
 machinedef_t *expr_machinedef(expr_ctx_t);
 namectx_t expr_namectx(expr_ctx_t);
