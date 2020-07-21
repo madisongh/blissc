@@ -389,7 +389,7 @@ declare_psect (expr_ctx_t ctx, scopectx_t scope)
     static lextype_t classkws[] = { LEXTYPE_KWD_NODEFAULT,
         LEXTYPE_DCL_OWN, LEXTYPE_DCL_GLOBAL,
         LEXTYPE_KWD_PLIT, LEXTYPE_KWD_CODE };
-    static storageclass_t classes[] = { 0, SCLASS_OWN, SCLASS_GLOBAL,
+    static storageclass_t classes[] = { SCLASS_OWN, SCLASS_GLOBAL,
         SCLASS_PLIT, SCLASS_CODE };
 
 
@@ -425,7 +425,7 @@ declare_psect (expr_ctx_t ctx, scopectx_t scope)
             np = psect_declare(scope, psname, attr, defpos);
         }
         if (which > 0) {
-            scope_sclass_psectname_set(scope, classes[which], np);
+            scope_sclass_psectname_set(scope, classes[which-1], np);
         }
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_SEMI, 0, 1)) {
             break;
