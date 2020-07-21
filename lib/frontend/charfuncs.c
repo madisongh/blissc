@@ -129,7 +129,7 @@ charfunc_PTR (expr_ctx_t ctx, compare_fn fn, name_t *fnp,
     machinedef_t *mach = expr_machinedef(ctx);
     expr_node_t *e;
     unsigned int i = exprseq_length(arglist);
-    int is_ltce = 0;
+    int is_ltce;
 
     if (i > 3) {
         expr_signal(ctx, STC__EXCFUNARGS, name_string(fnp));
@@ -310,7 +310,6 @@ charfunc_TRANSTABLE (expr_ctx_t ctx, compare_fn fn, name_t *fnp,
     if (padding != 0) {
         ivlist = initval_scalar_add(symctx, ivlist, padding, 0, 1, 0);
     }
-    np = 0;
     strdesc_init(&plitname, namebuf, 0);
     plitname.len = tempname_get(expr_namectx(ctx), namebuf, sizeof(namebuf));
     memset(&attr, 0, sizeof(attr));
