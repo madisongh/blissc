@@ -99,7 +99,7 @@ print_version (void)
 static void
 print_usage (void)
 {
-    int i;
+    unsigned int i;
     print_version();
     printf("\nUsage:\n");
     printf("\tblissc [options] filename\n\n");
