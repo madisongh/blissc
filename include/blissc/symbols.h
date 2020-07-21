@@ -83,11 +83,16 @@ typedef struct routine_attr_s routine_attr_t;
 // Initval structure - for handling compile-time
 // initialization of PLITs and data segments (via INITIAL
 // and PRESET).
+typedef enum {
+    IVTYPE_SCALAR,
+    IVTYPE_EXPR_EXP,
+    IVTYPE_STRING,
+    IVTYPE_LIST } ivtype_t;
+
 struct initval_s {
     struct initval_s *next;
     struct initval_s *lastptr;
-    enum { IVTYPE_SCALAR, IVTYPE_EXPR_EXP,
-           IVTYPE_STRING, IVTYPE_LIST } type;
+    ivtype_t type;
     unsigned int repcount;
     void *preset_expr;
     union {
