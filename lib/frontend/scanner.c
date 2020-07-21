@@ -73,7 +73,7 @@ typedef enum {
 
 // Lookup table for identifying characters that are
 // valid for BLISS names/keywords.
-const static char valid_ident_charmap[256] = {
+static const char valid_ident_charmap[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, '$', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
