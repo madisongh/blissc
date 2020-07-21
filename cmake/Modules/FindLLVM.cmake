@@ -1,4 +1,4 @@
-# Copyright (c) 2018, Matthew Madison
+# Copyright (c) 2018-2020, Matthew Madison
 # Distributed under license.  See LICENSE.TXT for details.
 
 #.rst:
@@ -9,12 +9,16 @@
 #
 # This will define the following variables:
 #
-#   LLVM_FOUND     - True if LLVM is found
-#   LLVM_VERSION   - The version of LLVM which was found
-#
-# and the following imported targets:
-#
-#   LLVM::LLVM     - LLVM libraries, headers, etc.
+#   LLVM_FOUND            - True if LLVM is found
+#   LLVM_VERSION_STRING   - The version of LLVM which was found
+#   LLVM_HOST_TRIPLE      - The host triple LLVM was built with
+#   LLVM_CFLAGS           - Compiler options for C modules calling LLVM
+#   LLVM_CXXFLAGS         - Compiler options for C++ modules calling LLVM
+#   LLVM_INCLUDE_DIRS     - Include directories for LLVM
+#   LLVM_LDFLAGS          - Linker options for linking with LLVM
+#   LLVM_LIBDIR           - Path to the LLVM libraries directory
+#   LLVM_LIBRARIES        - Libraries to include when linking with LLVM
+#   LLVM_SYSTEM_LIBS      - System libraries to link with when using LLVM
 #
 # Variables that control where to look:
 #
@@ -64,7 +68,7 @@ else()
   _llvm_set(INCLUDE_DIRS includedir PATH "LLVM include directories")
   _llvm_set(LDFLAGS ldflags STRING "LLVM LDFLAGS")
   _llvm_set(SYSTEM_LIBS system-libs STRING "LLVM system libraies")
-  _llvm_set(LIBRARY_DIRS libdir PATH "LLVM library directory")
+  _llvm_set(LIBDIR libdir PATH "LLVM library directory")
   _llvm_set(LIBRARIES libs STRING "LLVM libraries")
   _llvm_set(HOST_TRIPLE host-target STRING "LLVM host triple")
 endif()
