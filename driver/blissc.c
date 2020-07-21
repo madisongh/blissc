@@ -280,7 +280,7 @@ main (int argc, char *argv[])
             goto finish;
         }
         if (optlevel >= 0) {
-            if (!blissc_optlevel_set(cctx, optlevel)) {
+            if (!blissc_optlevel_set(cctx, (unsigned int) optlevel)) {
                 fprintf(stderr, "Error setting optimization level");
                 status = 1;
                 goto finish;
