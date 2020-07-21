@@ -655,7 +655,7 @@ expr_ctx_t
 expr_init (strctx_t strctx, parse_ctx_t pctx, scopectx_t kwdscope)
 {
     expr_ctx_t ectx;
-    int i;
+    unsigned int i;
 
     ectx = malloc(sizeof(struct expr_ctx_s));
     if (ectx == 0) {
@@ -1304,10 +1304,11 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         expr_is_ctce_set(exp, 1);
         expr_has_value_set(exp, 1);
     } else if (lt == LEXTYPE_STRING) {
-        int i;
+        unsigned int i;
         strdesc_t *text = lexeme_text(lex);
+        uint8_t *strptr = (uint8_t *) text->ptr;
         unsigned long val = 0;
-        int len = text->len;
+        unsigned int len = text->len;
         if (len > machine_scalar_maxbytes(ctx->mach) && !ctx->longstringsok) {
             expr_signal(ctx, STC__STRLENERR);
             len = machine_scalar_maxbytes(ctx->mach);
@@ -1315,9 +1316,10 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         exp = expr_node_alloc(ctx, EXPTYPE_PRIM_LIT, parser_curpos(pctx));
         expr_litstring_set(exp, string_copy(ctx->strctx, 0, text));
         for (i = 0; i < len; i++) {
-            val = val | (*(text->ptr+i) << (i*8));
+            unsigned long curbyte = *(strptr+i) << (i*8);
+            val = val | curbyte;
         }
-        expr_litval_set(exp, val);
+        expr_litval_set(exp, (long) val);
         expr_is_ctce_set(exp, 1);
         expr_has_value_set(exp, 1);
     } else if (lt == LEXTYPE_NAME) {
