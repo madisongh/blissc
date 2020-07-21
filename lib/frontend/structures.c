@@ -59,7 +59,7 @@ static namedef_t mynames[] = {
  */
 struct pdclinfo_s {
     char *lines[4];
-    int current;
+    unsigned int current;
 };
 
 static char *predeclared_bitvector =
@@ -572,7 +572,7 @@ structures_init (expr_ctx_t ctx, scopectx_t kwdscope)
     int nounits = (machine_scalar_units(mach) == 1);
     int signext = machine_signext_supported(mach);
     nametype_vectors_t vec;
-    int i;
+    unsigned int i;
 
     for (i = 0; i < sizeof(mynames)/sizeof(mynames[0]); i++) {
         name_declare(kwdscope, &mynames[i], 0, 0, 0, 0);
@@ -838,7 +838,7 @@ structure_allocate (expr_ctx_t ctx, name_t *struname,
     // but only on byte-addressable machines
     if (machine_unit_bits(mach) == 8) {
         for (allowed_aus = 0; allowed_aus < 4 &&
-             machine_scalar_units(mach) >= (1<<allowed_aus); allowed_aus++);
+             machine_scalar_units(mach) >= (1U<<allowed_aus); allowed_aus++);
     }
 
     myscope = parser_scope_begin(pctx);
