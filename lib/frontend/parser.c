@@ -27,7 +27,6 @@
 #include "blissc/support/fileio.h"
 #include "blissc/machinedef.h"
 #include "blissc/support/utils.h"
-#include "scanner.h"
 
 #define MAX_SEARCH_PATHS    32
 // Parser context structure
@@ -681,9 +680,8 @@ parser_fopen_main (parse_ctx_t pctx, const char *fname, size_t fnlen,
  * Begin parsing from a programmed source.
  */
 int
-parser_popen (parse_ctx_t pctx, void *vinpfn, void *fnctx)
+parser_popen (parse_ctx_t pctx, scan_input_fn inpfn, void *fnctx)
 {
-    scan_input_fn inpfn = vinpfn;
     return lexer_popen(pctx->lexctx, inpfn, fnctx);
 }
 
