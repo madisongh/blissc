@@ -132,16 +132,16 @@ typedef enum {
 // Access information structure, used to pass information
 // about a data segment being accessed (for a fetch or an
 // assignment).
-#define LLVMGEN_M_SEG_SIGNEXT  (1<<0)
-#define LLVMGEN_M_SEG_VOLATILE (1<<1)
-#define LLVMGEN_M_SEG_DEREFED  (1<<2)
-#define LLVMGEN_M_SEG_ISREF    (1<<3)
-#define LLVMGEN_M_SEG_ISBIND   (1<<4)
-#define LLVMGEN_M_SEG_BINDPTR  (1<<7)
+#define LLVMGEN_M_SEG_SIGNEXT  (1U<<0U)
+#define LLVMGEN_M_SEG_VOLATILE (1U<<1U)
+#define LLVMGEN_M_SEG_DEREFED  (1U<<2U)
+#define LLVMGEN_M_SEG_ISREF    (1U<<3U)
+#define LLVMGEN_M_SEG_ISBIND   (1U<<4U)
+#define LLVMGEN_M_SEG_BINDPTR  (1U<<7U)
 // Flags above are also used in the accinfo structure below,
 // along with the following flags
-#define LLVMGEN_M_ACC_CONSTSIZ (1<<5)
-#define LLVMGEN_M_ACC_GENEXPR  (1<<6)
+#define LLVMGEN_M_ACC_CONSTSIZ (1U<<5U)
+#define LLVMGEN_M_ACC_GENEXPR  (1U<<6U)
 struct llvm_accinfo_s {
     llvm_stgclass_t     segclass;
     unsigned int        flags;

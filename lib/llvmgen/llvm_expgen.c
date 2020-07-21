@@ -128,7 +128,7 @@ llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp,
             }
         }
         if (off != 0) {
-            LLVMValueRef offval = LLVMConstInt(gctx->fullwordtype, off, 1);
+            LLVMValueRef offval = LLVMConstInt(gctx->fullwordtype, (unsigned long long int) off, 1);
             addr = llvmgen_adjustval(gctx, addr, gctx->unitptrtype, 0);
             if (LLVMIsConstant(addr)) {
                 addr = LLVMConstGEP(addr, &offval, 1);
@@ -160,7 +160,7 @@ gen_literal (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 
     if (str == 0 || str->len <= machine_scalar_units(gctx->mach)) {
         int signext = machine_signext_supported(gctx->mach);
-        result = LLVMConstInt(gctx->fullwordtype, expr_litval(exp), signext);
+        result = LLVMConstInt(gctx->fullwordtype, (unsigned long long int) expr_litval(exp), signext);
     } else {
         result = LLVMConstStringInContext(gctx->llvmctx, str->ptr,
                                           (unsigned int) str->len, 1);

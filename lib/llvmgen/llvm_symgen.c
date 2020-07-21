@@ -155,7 +155,7 @@ litsym_generator (void *vctx, name_t *np, void *p)
     }
     type = LLVMIntTypeInContext(gctx->llvmctx, attr->width);
     if ((attr->flags & SYM_M_SIGNEXT) != 0) {
-        ll->value = LLVMConstInt(type, name_value_signed(np), 1);
+        ll->value = LLVMConstInt(type, (unsigned long long int) name_value_signed(np), 1);
     } else {
         ll->value = LLVMConstInt(type, name_value_unsigned(np), 0);
     }
@@ -208,7 +208,7 @@ llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount
 {
     unsigned int arrsize;
     unsigned int bpunit = machine_unit_bits(gctx->mach);
-    LLVMValueRef *valarr, *valp, *lastvalp, oneval, initconst;
+    LLVMValueRef *valarr, *valp, *lastvalp, oneval = 0, initconst;
     initval_t *iv;
     int allsametype = 1;
 
@@ -261,8 +261,9 @@ llvmgen_initializer (gencodectx_t gctx, initval_t *ivlist, unsigned int padcount
                 break;
             case IVTYPE_SCALAR:
                 thisval = LLVMConstInt(LLVMIntTypeInContext(gctx->llvmctx,
-                                                          iv->data.scalar.width * bpunit),
-                                     iv->data.scalar.value, iv->data.scalar.signext);
+                                                            iv->data.scalar.width * bpunit),
+                                       (unsigned long long int) iv->data.scalar.value,
+                                       iv->data.scalar.signext);
                 break;
             case IVTYPE_EXPR_EXP: {
                 expr_node_t *exp = iv->data.scalar.expr;
@@ -334,7 +335,7 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
     unsigned int curoff, curbitpos, arrsize;
     int pcount, i;
     initval_t *iv;
-    LLVMValueRef *varr, *valp, oneval, initconst;
+    LLVMValueRef *varr, *valp, oneval = 0, initconst;
 
     if (bpunit == 0 || bpaddr == 0) {
         expr_signal(gctx->ectx, STC__INTCMPERR, "llvmgen_presetter[0]");
@@ -351,7 +352,7 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
             this->o = (unsigned int) expr_seg_offset(exp);
             this->p = 0;
             this->s = expr_seg_width(exp);
-            this->e = expr_seg_signext(exp);
+            this->e = (unsigned int) expr_seg_signext(exp);
         } else if (expr_type(exp) == EXPTYPE_PRIM_FLDREF) {
             this->o = (unsigned int) expr_seg_offset(expr_fldref_addr(exp));
             this->p = (unsigned int) expr_litval(expr_fldref_pos(exp));
@@ -361,7 +362,7 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
                 this->p = this->p % bpunit;
             }
             this->s = (unsigned int) expr_litval(expr_fldref_size(exp));
-            this->e = expr_fldref_signext(exp);
+            this->e = (unsigned int) expr_fldref_signext(exp);
         } else {
             // Should never get here
             expr_signal(gctx->ectx, STC__INTCMPERR, "llvmgen_presetter[1]");
@@ -370,7 +371,7 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
         exp = iv->data.scalar.expr;
         if (expr_type(exp) == EXPTYPE_PRIM_LIT) {
             this->val = LLVMConstInt(LLVMIntTypeInContext(gctx->llvmctx, this->s),
-                                     expr_litval(exp), this->e);
+                                     (unsigned long long int) expr_litval(exp), this->e);
         } else if (expr_type(exp) == EXPTYPE_PRIM_SEG) {
             long offset = expr_seg_offset(exp);
             LLVMValueRef v, o;
@@ -386,7 +387,7 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
                 LLVMTypeRef inttype = LLVMIntTypeInContext(gctx->llvmctx, bpval);
                 LLVMTypeRef unittype = LLVMIntTypeInContext(gctx->llvmctx, bpunit);
                 LLVMTypeRef vtype = LLVMGetElementType(LLVMTypeOf(v));
-                o = LLVMConstInt(inttype, offset, 1);
+                o = LLVMConstInt(inttype, (unsigned long long int) offset, 1);
                 if (LLVMGetTypeKind(vtype) != LLVMArrayTypeKind ||
                     LLVMGetElementType(vtype) != unittype) {
                     vtype = LLVMPointerType(LLVMArrayType(unittype, (unsigned int)(offset+1)), 0);
@@ -512,7 +513,7 @@ llvmgen_presetter (gencodectx_t gctx, initval_t *ivlist, unsigned int padding)
         *valp++ = LLVMConstNull(LLVMIntTypeInContext(gctx->llvmctx, bpunit - curbitpos));
     }
     if (padding != 0) {
-        *valp++ = LLVMConstNull(LLVMArrayType(LLVMIntTypeInContext(gctx->llvmctx, bpunit),
+        *valp = LLVMConstNull(LLVMArrayType(LLVMIntTypeInContext(gctx->llvmctx, bpunit),
                                               padding));
     }
     if (arrsize == 1) {
@@ -603,7 +604,7 @@ static LLVMTypeRef
 gendatatype (gencodectx_t gctx, data_attr_t *attr, unsigned int *ucountp)
 {
     unsigned int bpunit = machine_unit_bits(gctx->mach);
-    unsigned int isref = (attr->flags & SYM_M_REF) != 0;
+    int isref = (attr->flags & SYM_M_REF) != 0;
     LLVMTypeRef basetype;
 
     if (attr->struc != 0 || attr->units > machine_scalar_units(gctx->mach)) {
@@ -668,7 +669,7 @@ datasym_generator (void *vctx, name_t *np, void *p)
             LLVMValueRef sval;
             sval = LLVMConstInt(LLVMIntTypeInContext(gctx->llvmctx,
                                                      iv->data.scalar.width * bpunit),
-                                   iv->data.scalar.value, iv->data.scalar.signext);
+                                (unsigned long long int) iv->data.scalar.value, iv->data.scalar.signext);
             bindval = llvmgen_adjustval(gctx, sval, type,
                                         (attr->flags & SYM_M_SIGNEXT) != 0);
         } else {
@@ -705,7 +706,7 @@ datasym_generator (void *vctx, name_t *np, void *p)
             LLVMSetLinkage(ld->value, LLVMInternalLinkage);
         }
         if (attr->alignment != 0) {
-            LLVMSetAlignment(ld->value, 1<<attr->alignment);
+            LLVMSetAlignment(ld->value, 1U<<attr->alignment);
         }
     } else {
         // Everything else is LOCAL, with an alloca, even REGISTER
@@ -714,7 +715,7 @@ datasym_generator (void *vctx, name_t *np, void *p)
         type = gendatatype(gctx, attr, &units);
         ld->value = LLVMBuildAlloca(gctx->curfn->builder, type, name_azstring(np));
         if (attr->alignment != 0) {
-            HelperSetAllocaAlignment(ld->value, 1<<attr->alignment);
+            HelperSetAllocaAlignment(ld->value, 1U<<attr->alignment);
         }
         if (attr->ivlist != 0) {
             handle_initializer(gctx, ld, np, units);
