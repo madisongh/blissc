@@ -114,7 +114,7 @@ stringpool_expand (strctx_t strctx, int idx)
     size_t maxsize = strctx->pool[idx].maxsize;
     struct extenthdr_s *extent;
     string_t *more;
-    string_t *str;
+    string_t *str = 0;
     char *cp;
     int i;
 
@@ -442,7 +442,7 @@ string_printf (strctx_t strctx, strdesc_t *dst, const char *fmt, ...)
     va_start(ap, fmt);
     len = vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
-    return string_from_chrs(strctx, dst, buf, (len < 0 ? 0 : len));
+    return string_from_chrs(strctx, dst, buf, (size_t) (len < 0 ? 0 : len));
 
 } /* string_printf */
 

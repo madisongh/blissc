@@ -162,13 +162,13 @@ log_vsignal (logctx_t ctx, textpos_t pos, statcode_t code, va_list ap)
             }
         }
         len = stc_msg_vformat(code, logbuf, sizeof(logbuf)-1, ap);
-        doprint(ctx, logbuf, len, 0);
+        doprint(ctx, logbuf, (size_t) len, 0);
         if (pos != 0 && ctx->fetchfn != 0) {
             strdesc_t *fname = ctx->fetchfn(ctx->ffctx, fileno);
             if (fname != 0)  {
                 len = snprintf(logbuf, sizeof(logbuf)-1, "-  at %-*.*s:%u:%u",
                                (int) fname->len, (int) fname->len, fname->ptr, lineno, colno+1);
-                if (len > 0) doprint(ctx, logbuf, len, 0);
+                if (len > 0) doprint(ctx, logbuf, (size_t) len, 0);
             }
         }
     }
@@ -180,7 +180,7 @@ log_vsignal (logctx_t ctx, textpos_t pos, statcode_t code, va_list ap)
             ctx->logtoterm = 1;
             len = snprintf(logbuf, sizeof(logbuf)-1, "%%BLISS-F-TOOMANYERRS, "
                            "maximum number of errors exceeded, aborting");
-            if (len > 0) doprint(ctx, logbuf, len, 0);
+            if (len > 0) doprint(ctx, logbuf, (size_t) len, 0);
             // FALLTHROUGH
         case STC_K_FATAL:
             fflush(stderr);
