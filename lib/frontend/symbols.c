@@ -2085,7 +2085,7 @@ initval_ivlist_add (symctx_t ctx, initval_t *listhead, unsigned int reps,
  * Computes the size of an initval list, taking into
  * account repeat counts, sublists, etc.
  */
-unsigned long
+unsigned int
 initval_size (symctx_t ctx, initval_t *ivlist)
 {
     initval_t *iv;

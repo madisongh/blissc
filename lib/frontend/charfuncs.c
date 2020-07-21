@@ -312,7 +312,7 @@ charfunc_TRANSTABLE (expr_ctx_t ctx, compare_fn fn, name_t *fnp,
     attr.flags = 0;
     attr.dclass = DCLASS_STATIC;
     attr.ivlist = ivlist;
-    attr.units = (unsigned int) initval_size(symctx, ivlist);
+    attr.units = initval_size(symctx, ivlist);
     attr.sc = SYMSCOPE_LOCAL;
     np = datasym_declare(parser_scope_get(pctx), &plitname, &attr, curpos);
     if (np == 0) {

@@ -156,7 +156,7 @@ stc_msg_vformat (statcode_t statcode, char *buf, size_t bufsiz, va_list ap)
             } else if (*(fmt+1) == 'D') {
                 strdesc_t *dsc = va_arg(ap, strdesc_t *);
                 ptr = dsc->ptr;
-                slen = dsc->len;
+                slen = (unsigned int) dsc->len;
             } else continue;
             if (slen >= (unsigned int) bufsiz) { slen = (unsigned int) bufsiz - 1; }
             memcpy(outp, ptr, slen);

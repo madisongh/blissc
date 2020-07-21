@@ -286,7 +286,7 @@ ascic_string_from_chrs (strctx_t strctx, strdesc_t *dest, const char *cp, size_t
     }
     dest->len = len+1;
     memcpy(dest->ptr+1, cp, len);
-    *(dest->ptr) = (len & 0xff);
+    *(dest->ptr) = (char) (len & 0xff);
     return dest;
 
 } /* ascic_string_from_chrs */
@@ -466,7 +466,7 @@ string_numval (strdesc_t *str, int base, long *valp)
     buf[str->len] = '\0';
     errno = 0;
     numval = strtoul(buf, &cp, base);
-    if (errno != 0 || (cp-buf) != str->len) {
+    if (errno != 0 || (cp-buf) != (long) str->len) {
         return 0;
     }
     *valp = numval;

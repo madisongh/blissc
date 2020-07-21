@@ -1300,7 +1300,7 @@ parse_primary (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
         strdesc_t *text = lexeme_text(lex);
         uint8_t *strptr = (uint8_t *) text->ptr;
         unsigned long val = 0;
-        unsigned int len = text->len;
+        size_t len = text->len;
         if (len > machine_scalar_maxbytes(ctx->mach) && !ctx->longstringsok) {
             expr_signal(ctx, STC__STRLENERR);
             len = machine_scalar_maxbytes(ctx->mach);
@@ -2218,7 +2218,7 @@ parse_EXACTSTRING (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curl
         parser_skip_to_delim(pctx, LEXTYPE_DELIM_RPAR);
         return 1;
     }
-    fillchr = val & 0xff;
+    fillchr = (char) (val & 0xff);
     if (val > 255) {
         strdesc_t *valstr = string_printf(ctx->strctx, 0, "%ld", val);
         expr_signal(ctx, STC__INVCHRVAL, valstr);
@@ -2310,7 +2310,7 @@ parse_CHAR (parse_ctx_t pctx, void *vctx, quotelevel_t ql, lextype_t curlt)
             hit_error = 1;
             break;
         }
-        ch = val & 0xff;
+        ch = (char) (val & 0xff);
         result = string_append(ctx->strctx, result, &chdsc);
         if (parser_expect(pctx, QL_NORMAL, LEXTYPE_DELIM_RPAR, 0, 1)) {
             break;

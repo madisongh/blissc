@@ -167,7 +167,7 @@ log_vsignal (logctx_t ctx, textpos_t pos, statcode_t code, va_list ap)
             strdesc_t *fname = ctx->fetchfn(ctx->ffctx, fileno);
             if (fname != 0)  {
                 len = snprintf(logbuf, sizeof(logbuf)-1, "-  at %-*.*s:%u:%u",
-                               fname->len, fname->len, fname->ptr, lineno, colno+1);
+                               (int) fname->len, (int) fname->len, fname->ptr, lineno, colno+1);
                 if (len > 0) doprint(ctx, logbuf, len, 0);
             }
         }

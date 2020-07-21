@@ -276,7 +276,7 @@ siu void lexeme_boundtype_set(lexeme_t *lex, lextype_t type) { lex->boundtype = 
 siu strdesc_t *lexeme_text (lexeme_t *lex) { return &lex->text; }
 siu void lexeme_text_set (lexeme_t *lex, strctx_t strctx, strdesc_t *newtext) {
     string_copy(strctx, &lex->text, newtext); }
-siu unsigned short lexeme_textlen(lexeme_t *lex) { return lex->text.len; }
+siu size_t lexeme_textlen(lexeme_t *lex) { return lex->text.len; }
 siu void *lexeme_ctx_get (lexeme_t *lex) { return lex->extra; }
 siu void lexeme_ctx_set (lexeme_t *lex, void *p) { lex->extra = p; }
 #undef siu

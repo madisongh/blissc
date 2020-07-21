@@ -160,7 +160,7 @@ name_bind (lexctx_t lctx, void *ctx, quotelevel_t ql, quotemodifier_t qm,
     strdesc_t *ltext = lexeme_text(lex);
     name_t *np;
     lextype_t nt;
-    unsigned int nlen = (ltext->len >= NAME_SIZE ? NAME_SIZE-1 : ltext->len);
+    size_t nlen = (ltext->len >= NAME_SIZE ? NAME_SIZE-1 : ltext->len);
 
     np = name_search(pctx->curscope, ltext->ptr, nlen, &nt);
 
@@ -1420,7 +1420,7 @@ parse_CHARCOUNT (parse_ctx_t pctx, void * ctx, quotelevel_t ql, lextype_t curlt)
         return 1;
     }
     str = lexeme_text(lex);
-    len = snprintf(buf, sizeof(buf), "%d", str->len);
+    len = snprintf(buf, sizeof(buf), "%lu", str->len);
     strdesc_init(&dsc, buf, len);
     parser_lexeme_add(pctx, LEXTYPE_NUMERIC, &dsc);
     lexeme_free(pctx->lmemctx, lex);
