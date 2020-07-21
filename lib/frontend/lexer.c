@@ -267,7 +267,7 @@ lexer_ctx_t
 lexer_init (strctx_t strctx, scopectx_t kwdscope, logctx_t logctx, void *fioctx)
 {
     lexer_ctx_t ctx;
-    int i;
+    unsigned int i;
 
     for (i = 0; i < sizeof(operator_names)/sizeof(operator_names[0]); i++) {
         name_declare(kwdscope, &operator_names[i], 0, 0, 0, 0);
