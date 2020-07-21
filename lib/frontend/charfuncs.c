@@ -36,7 +36,7 @@
  * a CTCE is returned.
  */
 static expr_node_t *
-charfunc_ALLOCATION (expr_ctx_t ctx, void *fctx, name_t *fnp,
+charfunc_ALLOCATION (expr_ctx_t ctx, compare_fn fn, name_t *fnp,
                 exprseq_t *arglist, textpos_t curpos)
 {
     machinedef_t *mach = expr_machinedef(ctx);
@@ -87,7 +87,7 @@ charfunc_ALLOCATION (expr_ctx_t ctx, void *fctx, name_t *fnp,
  * character size, this is CTCE.
  */
 static expr_node_t *
-charfunc_SIZE (expr_ctx_t ctx, void *fctx, name_t *fnp,
+charfunc_SIZE (expr_ctx_t ctx, compare_fn fn, name_t *fnp,
           exprseq_t *arglist, textpos_t curpos)
 {
     machinedef_t *mach = expr_machinedef(ctx);
@@ -123,7 +123,7 @@ charfunc_SIZE (expr_ctx_t ctx, void *fctx, name_t *fnp,
  * size.
  */
 static expr_node_t *
-charfunc_PTR (expr_ctx_t ctx, void *fctx, name_t *fnp,
+charfunc_PTR (expr_ctx_t ctx, compare_fn fn, name_t *fnp,
          exprseq_t *arglist, textpos_t curpos)
 {
     machinedef_t *mach = expr_machinedef(ctx);
@@ -172,7 +172,7 @@ charfunc_PTR (expr_ctx_t ctx, void *fctx, name_t *fnp,
  * is adequate for this operation.
  */
 static expr_node_t *
-charfunc_DIFF (expr_ctx_t ctx, void *fctx, name_t *fnp,
+charfunc_DIFF (expr_ctx_t ctx, compare_fn fn, name_t *fnp,
           exprseq_t *arglist, textpos_t curpos)
 {
     expr_node_t *e, *arg;
@@ -196,7 +196,7 @@ charfunc_DIFF (expr_ctx_t ctx, void *fctx, name_t *fnp,
  * so the back-end code generator can process the function.
  */
 static expr_node_t *
-charfunc_passthru (expr_ctx_t ctx, void *fctx, name_t *fnp,
+charfunc_passthru (expr_ctx_t ctx, compare_fn fn, name_t *fnp,
               exprseq_t *arglist, textpos_t curpos)
 {
     expr_node_t *e;
@@ -284,7 +284,7 @@ tt_items (expr_ctx_t ctx) {
  * by the executable-function binding routine.
  */
 static expr_node_t *
-charfunc_TRANSTABLE (expr_ctx_t ctx, void *fctx, name_t *fnp,
+charfunc_TRANSTABLE (expr_ctx_t ctx, compare_fn fn, name_t *fnp,
                 exprseq_t *arglist, textpos_t curpos)
 {
     parse_ctx_t pctx = expr_parse_ctx(ctx);
