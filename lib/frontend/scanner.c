@@ -24,8 +24,8 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
+#include "blissc/scanner.h"
 #include "blissc/support/fileio.h"
-#include "scanner.h"
 #include "blissc/support/logging.h"
 #include "blissc/support/strings.h"
 #include "blissc/support/utils.h"

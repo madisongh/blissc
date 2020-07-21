@@ -22,7 +22,6 @@
 #include <errno.h>
 #include "blissc/lexeme.h"
 #include "blissc/lexer.h"
-#include "scanner.h"
 #include "blissc/support/logging.h"
 #include "blissc/support/strings.h"
 
@@ -333,9 +332,8 @@ lexer_fopen (lexer_ctx_t ctx, const char *fname, size_t fnlen,
  * Insert a programmatic input source at the front of the stream.
  */
 int
-lexer_popen (lexer_ctx_t ctx, void *vinfn, void *fnctx)
+lexer_popen (lexer_ctx_t ctx, scan_input_fn infn, void *fnctx)
 {
-    scan_input_fn infn = vinfn;
     lexchain_t *chain = lexchain_alloc(ctx);
 
     if (chain == 0) {
