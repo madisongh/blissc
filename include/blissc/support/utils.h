@@ -133,7 +133,7 @@ static inline __attribute__((unused)) long getmvalue(long val, unsigned long mas
 #define TQ_HDR_FIELDS(enttype_) \
     enttype_ *tq_head; \
     enttype_ *tq_tail; \
-    int      tq_count;
+    unsigned int tq_count;
 #define TQ_ENT_FIELDS(enttype_) \
     enttype_ *tq_next;
 #define DEFINE_TQ_FUNCS(pfx_, hdrtype_, enttype_) \
@@ -177,6 +177,6 @@ static inline __attribute__((unused)) enttype_ * pfx_##_remtail (hdrtype_ *h) { 
      return pfx_##_remove(h, h->tq_tail); } \
 static inline __attribute__((unused)) enttype_ * pfx_##_head (hdrtype_ *h) { return h->tq_head; } \
 static inline __attribute__((unused)) enttype_ * pfx_##_tail (hdrtype_ *h) { return h->tq_tail; } \
-static inline __attribute__((unused)) int pfx_##_length (hdrtype_ *h) { return h->tq_count; }
+static inline __attribute__((unused)) unsigned int pfx_##_length (hdrtype_ *h) { return h->tq_count; }
 
 #endif /* utils_h__ */
