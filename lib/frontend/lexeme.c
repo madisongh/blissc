@@ -411,9 +411,9 @@ lexseq_deserialize (lexctx_t lctx, filectx_t fh, unsigned int sersize, lexseq_t 
             if (b != buf) free(b);
             return 0;
         }
-        lex = lexeme_alloc(lctx, hdr[0], b, len);
+        lex = lexeme_alloc(lctx, (lextype_t) hdr[0], b, len);
         if (b != buf) free(b);
-        lex->boundtype = hdr[1];
+        lex->boundtype = (lextype_t) hdr[1];
         lexseq_instail(seq, lex);
         sersize -= sizeof(uint16_t) * 3 + hdr[2];
     }
