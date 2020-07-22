@@ -48,6 +48,8 @@ AC_SUBST(LLVM_LDFLAGS,[$ac_llvm_ldflags])
 AC_PROG_CXX
 AC_PROG_CC
 AC_PROG_RANLIB
+AM_PATH_PYTHON([3.0],,[:])
+AM_CONDITIONAL([HAVE_PYTHON], [test "$PYTHON" != :])
 
 AC_CONFIG_FILES([Makefile tests/Makefile])
 AC_CONFIG_HEADERS([include/blissc/config.h:config.h.in])
