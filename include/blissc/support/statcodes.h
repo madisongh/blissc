@@ -169,7 +169,8 @@ STATCODE(118,E,INVLIBHDR, "invalid header in library !SZ") \
 STATCODE(119,E,LIBVERMISM,"compiler version mismatch for library !SZ") \
 STATCODE(120,E,LIBHSTMISM,"host mismatch for library !SZ") \
 STATCODE(121,E,LIBTRGMISM,"target mismatch for library !SZ") \
-STATCODE(122,E,LIBRDERR,  "error reading library file !SZ")
+STATCODE(122,E,LIBRDERR,  "error reading library file !SZ") \
+STATCODE(123,E,LIBOPNERR, "could not open library file !SD")
 
 typedef unsigned int statcode_t;
 #ifdef STATCODES_INSTANTIATE
