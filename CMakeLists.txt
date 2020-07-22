@@ -4,7 +4,7 @@ project(blissc VERSION 0.3.0)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
-find_package(LLVM 4.0 REQUIRED)
+find_package(LLVM 9.0 REQUIRED)
 find_package(Python3 COMPONENTS Interpreter)
 
 include_directories(${blissc_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
