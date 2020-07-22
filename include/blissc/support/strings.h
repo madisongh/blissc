@@ -4,7 +4,7 @@
  *++
  * strings.h - string-handling definitions.
  *
- * Copyright © 2013, Matthew Madison.
+ * Copyright © 2013-2020, Matthew Madison.
  * All rights reserved.
  * Distributed under license.  See LICENSE.TXT for details.
  *--

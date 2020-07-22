@@ -16,7 +16,7 @@
  * get stashed in a private table and bound manually during
  * the prepare_body() phase of macro expansion.
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012-2020, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--

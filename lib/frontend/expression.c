@@ -15,7 +15,7 @@
  * contains an exprseq_t listing the expressions contained in
  * the block.
  *
- * Copyright © 2012-2013, Matthew Madison.
+ * Copyright © 2012-2020, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--

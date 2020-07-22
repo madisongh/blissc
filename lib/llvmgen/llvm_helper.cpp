@@ -8,7 +8,7 @@
  * helper functions to provide C APIs for the handful
  * of other functions not already provided.
  *
- * Copyright © 2013, Matthew Madison.
+ * Copyright © 2013-2020, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--

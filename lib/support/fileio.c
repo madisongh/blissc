@@ -14,7 +14,7 @@
  * are text divided into lines ending with linemarks
  * (for standard C I/O, '\n').
  *
- * Copyright © 2012-2013, Matthew Madison.
+ * Copyright © 2012-2020, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--

@@ -9,7 +9,7 @@
  * the plug-in framework for lexical binding that the parser and other
  * modules use.
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012-2020, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
