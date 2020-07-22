@@ -1,6 +1,6 @@
 # Makefile for blissc
 #
-# Copyright (c) 2013, 2014, Matthew Madison.
+# Copyright (c) 2013-2020, Matthew Madison.
 # All rights reserved.
 # Distributed under license.  See LICENSE.TXT for details.
 #
@@ -9,7 +9,7 @@ AUTOMAKE_OPTIONS = subdir-objects foreign
 AM_CPPFLAGS = -Iinclude -I$(srcdir)/include -I$(LLVM_INCLUDEDIR)
 AM_CFLAGS = -Wall
 
-noinst_LIBRARIES = libdriver.a libfrontend.a libsupport.a libllvmgen.a libir.a
+noinst_LIBRARIES = libdriver.a libfrontend.a libsupport.a libllvmgen.a
 libdriver_a_SOURCES = lib/driver/driver.c
 libfrontend_a_SOURCES = \
 	lib/frontend/charfuncs.c \
@@ -48,13 +48,11 @@ libsupport_a_SOURCES = \
 	lib/support/statcodes.c \
 	lib/support/strings.c \
 	lib/support/utils.c
-libir_a_SOURCES = \
-	lib/ir/blissir.c
 
 bin_PROGRAMS = blissc
 blissc_SOURCES = driver/blissc.c
 blissc_LDADD = $(noinst_LIBRARIES) $(LLVM_LIBS) -lstdc++ $(LLVM_SYSLIBS) $(LLVM_LDFLAGS)
-blissc_LDFLAGS = -L$(LLVM_LIBDIR)
+blissc_LDFLAGS = -L$(LLVM_LIBDIR) -Wl,-rpath=$(LLVM_LIBDIR) -Wl,-rpath-link=$(LLVM_LIBDIR)
 
 SUBDIRS = tests
 DIST_SUBDIRS =
