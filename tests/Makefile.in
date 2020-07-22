@@ -9,7 +9,7 @@
 
 BLISSC = @top_builddir@/blissc
 TESTDIR = @top_srcdir@/tests
-PYTHON = python
+PYTHON = @PYTHON@
 
 .PHONY: check all install distdir dist
 

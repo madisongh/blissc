@@ -5,6 +5,7 @@ project(blissc VERSION 0.3.0)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
 find_package(LLVM 4.0 REQUIRED)
+find_package(Python3 COMPONENTS Interpreter)
 
 include_directories(${blissc_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 
@@ -60,6 +61,7 @@ target_link_libraries(blissc
 target_link_options(blissc PUBLIC ${LLVM_LDFLAGS} -Wl,-rpath=${LLVM_LIBDIR} -Wl,-rpath-link=${LLVM_LIBDIR})
 configure_file(${CMAKE_SOURCE_DIR}/cmake/config.h.in ${blissc_BINARY_DIR}/include/blissc/config.h @ONLY)
 
+if (${Python3_FOUND})
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 add_custom_target(testharness
         COMMAND $<TARGET_FILE:blissc> --library -o ${CMAKE_BINARY_DIR}/tests/testharness.lib ${CMAKE_SOURCE_DIR}/tests/testharness.req
@@ -70,3 +72,6 @@ add_custom_target(check ALL
         COMMAND python3 "${CMAKE_SOURCE_DIR}/tests/runtests.py" --blissc=$<TARGET_FILE:blissc> --cc="${CMAKE_C_COMPILER}" "${CMAKE_SOURCE_DIR}/tests"
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/tests
         DEPENDS testharness blissc)
+else()
+  message(No Python3 - omitting compiler tests)
+endif()
