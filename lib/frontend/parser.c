@@ -628,11 +628,14 @@ parser_lib_process (parse_ctx_t pctx, strdesc_t *libname)
         fh = file_open_input(pctx->fioctx, pp.path_fullname, pp.path_fullnamelen);
         if (fh != 0) break;
 
-    } while (do_search && i++ <= pctx->searchpathcount);
+    } while (do_search && ++i <= pctx->searchpathcount);
 
     file_freeparts(pctx->fioctx, &pp);
     file_freeparts(pctx->fioctx, &mainpp);
-    if (fh == 0) return 0;
+    if (fh == 0) {
+        log_signal(pctx->logctx, pctx->curpos, STC__LIBOPNERR, libname);
+        return 0;
+    }
     status = lib_parse_header(pctx->logctx, pctx->curpos,
                               fh, &pctx->compilerinfo, pctx->mach);
     if (status) status = scope_deserialize(pctx->curscope, fh, 0);
