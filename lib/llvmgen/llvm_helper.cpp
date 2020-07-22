@@ -27,16 +27,18 @@
 #include "llvm/Target/TargetMachine.h"
 #pragma clang diagnostic pop
 #include "llvm_helper.h"
-#if LLVM_VERSION_MAJOR > 3 || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >=  3)
 #include "llvm/IR/Instructions.h"
-#endif
 
 #include "llvm/Support/TargetRegistry.h"
 
 using namespace llvm;
 
 void HelperSetAllocaAlignment(LLVMValueRef Inst, unsigned int Bytes) {
+#if LLVM_VERSION_MAJOR > 9
     reinterpret_cast<AllocaInst*>(Inst)->setAlignment(llvm::MaybeAlign(Bytes));
+#else
+    reinterpret_cast<AllocaInst*>(Inst)->setAlignment(Bytes);
+#endif
 }
 
 char *HelperGetDefaultTriple(void) {
@@ -51,9 +53,5 @@ LLVMTargetRef HelperLookupTarget(const char *triple, char **err) {
 }
 
 void HelperSetAsmVerbosity(LLVMTargetMachineRef tm, LLVMBool v) {
-#if LLVM_VERSION_MAJOR > 3 || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 6)
     reinterpret_cast<TargetMachine*>(tm)->Options.MCOptions.AsmVerbose = (bool) v;
-#else
-    reinterpret_cast<TargetMachine*>(tm)->setAsmVerbosityDefault(v);
-#endif
 }
