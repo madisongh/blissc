@@ -1,53 +1,48 @@
-README for the BLISS-M Compiler
-===============================
+# README for the BLISS-M Compiler
 
 This is the source package for the BLISS-M compiler, a portable
 cross-compiler for the BLISS programming language.
 Visit the [project website](http://madisongh.github.io/blissc)
 for more information about BLISS-M.
 
-Current Status
---------------
+## Current Status
 
 Work in progress.   The front-end is mostly complete, with a fully
 functioning parser and macro facility.  Back-end support is currently
 limited to LLVM and x86 CPUs (32- or 64-bit), with a limited amount
 of machine-specific support.
 
-Prerequisites
--------------
+## Prerequisites
 
-Known to build on Mac OS X 10.8 and 10.9 (using Xcode 4.6 and later)
-and Ubuntu 16.04 and later (64-bit).
+* Recent-vintage C compiler
+* Recent version LLVM
+* CMake 3.13 or later, or a recent version of autotools
 
-The code generator uses LLVM 3.9, 4.0 or 5.0, which you can download
-directly from llvm.org.  On Mac OS, you can use the MacPorts llvm
-packages, although debugging is easier if you build against a copy of
-LLVM you have built yourself from source. On Ubuntu systems, you can
-install one of the llvm-dev packages using apt.
+Recent development and testing has been on Ubuntu 20.04 with
+gcc 9 and LLVM 9.0.1 (prebuilt llvm-9-dev package) and LLVM
+10.0.1 (built from sources).
 
-The build system uses Autoconf and Automake.  On Mac OS X, you'll
-need to install these packages (e.g., through MacPorts).
+## Building the compiler
 
-Building the compiler
----------------------
+First, clone [the repository](https://github.com/madisongh/blissc.git).
 
-1. Clone [the repository](https://github.com/madisongh/blissc.git).
-
-2. cd to the top-level source directory and run `autoreconf -i`
-   to set up the autotools build.
-
-3. If you want to build outside the source tree, cd to your
+### Using Autotools
+1. cd to the top-level source directory and run `autoreconf -i`.
+2. If you want to build outside the source tree, cd to your
    build directory.
-
-4. Run the `configure` script that was generated in step 2.  If
+3. Run the `configure` script that was generated in step 2.  If
    `llvm-config` is not in your PATH, use the `--with-llvm-config`
    option on `configure` to specify its location.
+4. Run `make` to build the compiler.
+5. Run `make check` to test the built compiler.
 
-5. Run `make` to build the compiler.
-
-6. Run `make check` to test the built compiler.
-
+### Using CMake
+1. Create a directory for the build.
+2. Run `cmake <path-to-sources>` to generate the build files.
+   CMake will attempt to locate a usable copy of LLVM automatically,
+   but you can specify -DLLVM_CONFIG=<path-to-llvm-config> to force
+   it to use a particular installation of LLVM.
+3. Run `make` to build the compiler.
 
 Running the compiler
 --------------------
