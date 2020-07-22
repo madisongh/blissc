@@ -32,7 +32,7 @@
  * between heap usage/fragmentation and speed.
  *
  *
- * Copyright © 2012-2013, Matthew Madison.
+ * Copyright © 2012-2020, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--

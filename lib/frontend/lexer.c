@@ -11,7 +11,7 @@
  * happens -- specifically, conversion of operators and delimiters,
  * and the primitive numeric and string literals.
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012-2020, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--

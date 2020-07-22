@@ -1,6 +1,6 @@
 /*
  * config.h.in for CMake builds
- * Copyright (C2) 2018, Matthew Madison.
+ * Copyright (C) 2018-2020, Matthew Madison.
  * Distributed under license. See LICENSE.TXT for details.
  */
 #define BLISSC_HOST_TRIPLE "@LLVM_HOST_TRIPLE@"

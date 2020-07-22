@@ -9,7 +9,7 @@
  * Fields are also implemented as macros, and field sets are
  * simply lists of references to field definitions.
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012-2020, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--

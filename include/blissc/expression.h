@@ -4,7 +4,7 @@
  *++
  * expression.h - Expression definitions.
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012-2020, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--

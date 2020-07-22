@@ -15,7 +15,7 @@
  * the input line, zero for EOF, or a negative return code
  * for an error, just like the file I/O routines do.
  *
- * Copyright © 2012, Matthew Madison.
+ * Copyright © 2012-2020, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--

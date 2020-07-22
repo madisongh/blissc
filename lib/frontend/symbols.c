@@ -23,7 +23,7 @@
  * a symbol, marking it "pending" until all attributes have been
  * parsed and the symbol information gets updated.
  *
- * Copyright © 2012-2013, Matthew Madison.
+ * Copyright © 2012-2020, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *

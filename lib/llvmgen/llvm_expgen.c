@@ -8,7 +8,7 @@
  * type, along with some of the generators.  Control, operator,
  * and executable-function expression generators are in other modules.
  *
- * Copyright © 2013, Matthew Madison.
+ * Copyright © 2013-2020, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
