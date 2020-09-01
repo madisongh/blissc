@@ -2,8 +2,14 @@
 
 This is the source package for the BLISS-M compiler, a portable
 cross-compiler for the BLISS programming language.
-Visit the [project website](http://madisongh.github.io/blissc)
-for more information about BLISS-M.
+
+## What is BLISS?
+The BLISS language was developed at Carnegie-Mellon University in the 1970's for systems programming.
+It was adopted and used extensively by Digital Equipment Corporation for development of systems
+software across their 16-bit, 32-bit, 36-bit, and 64-bit systems.  It is a typeless, block-structured,
+language with an extensive lexical processing (macro) facility.  See the
+[Wikipedia article on BLISS](http://en.wikipedia.org/wiki/BLISS) for more information about the language.
+
 
 ## Current Status
 
@@ -51,13 +57,6 @@ The build will produce a program called **blissc** in your build
 directory.  Run `./blissc --help` for a description of the arguments
 and options.
 
-
-Contributions
--------------
-
-There is a lot more yet to do on this project!  If you are interested
-in contributing, contact me (madisongh on GitHub, or by e-mail at
-matt _at_ madison _dot_ systems).
 
 License
 -------
