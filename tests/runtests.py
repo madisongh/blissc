@@ -54,7 +54,7 @@ def process_test(testfile, blissc, cc, testharness, quiet=False, prefix='!!'):
     barename = os.path.splitext(os.path.basename(testfile))[0]
     try:
         docompile = subprocess.run([blissc, '-o', barename + '.o', '-I', '.', testfile],
-                                   capture_output=True, text=True, check=True)
+                                   capture_output=True, encoding='utf-8', check=True)
         o = docompile.stdout.split('\n')
         if docompile.stderr:
             e = [line for line in docompile.stderr.split('\n') if line.startswith('%')]
@@ -108,7 +108,7 @@ def process_test(testfile, blissc, cc, testharness, quiet=False, prefix='!!'):
               "\n        {}").format(barename + '.o', '\n        '.join([line for line in e.stderr.split('\n')])))
         return cases, 0, cases
     try:
-        dorun = subprocess.run(['./' + barename], capture_output=True, text=True, check=True)
+        dorun = subprocess.run(['./' + barename], capture_output=True, encoding='utf-8', check=True)
     except subprocess.CalledProcessError as e:
         print(("  FAIL: test harness failed to run for {}" +
               "\n        {}").format(testfile, '\n        '.join([line for line in e.stderr.split('\n')])))
