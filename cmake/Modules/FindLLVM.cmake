@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, Matthew Madison
+# Copyright (c) 2018-2024, Matthew Madison
 # Distributed under license.  See LICENSE.TXT for details.
 
 #.rst:
@@ -25,7 +25,8 @@
 #   LLVM_CONFIG - pathname of a working llvm-config program
 
 if(NOT LLVM_CONFIG)
-  find_program(LLVM_CONFIG NAMES llvm-config)
+  string(REGEX REPLACE "([0-9]+)\\..*" "\\1" _llvm_find_version_major "${LLVM_FIND_VERSION}")
+  find_program(LLVM_CONFIG NAMES llvm-config-${_llvm_find_version_major} llvm-config)
 endif()
 
 macro(_llvm_fail _msg)
