@@ -8,37 +8,24 @@
  * helper functions to provide C APIs for the handful
  * of other functions not already provided.
  *
- * Copyright © 2013-2020, Matthew Madison.
+ * Copyright © 2013-2024, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
  */
-#ifndef __STDC_LIMIT_MACROS
-#define __STDC_LIMIT_MACROS
-#endif
-#ifndef __STDC_CONSTANT_MACROS
-#define __STDC_CONSTANT_MACROS
-#endif
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wconversion"
-#include "llvm-c/Core.h"
-#include "llvm-c/Target.h"
 #include "llvm-c/TargetMachine.h"
 #include "llvm/Target/TargetMachine.h"
-#pragma clang diagnostic pop
 #include "llvm_helper.h"
 #include "llvm/IR/Instructions.h"
 
 #include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/Alignment.h"
+#include "llvm/Support/Host.h"
 
 using namespace llvm;
 
 void HelperSetAllocaAlignment(LLVMValueRef Inst, unsigned int Bytes) {
-#if LLVM_VERSION_MAJOR > 9
-    reinterpret_cast<AllocaInst*>(Inst)->setAlignment(llvm::MaybeAlign(Bytes));
-#else
-    reinterpret_cast<AllocaInst*>(Inst)->setAlignment(Bytes);
-#endif
+    reinterpret_cast<AllocaInst*>(Inst)->setAlignment(Align(Bytes));
 }
 
 char *HelperGetDefaultTriple(void) {

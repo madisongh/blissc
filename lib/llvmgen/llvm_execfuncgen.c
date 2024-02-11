@@ -9,7 +9,7 @@
  * only generic LLVM code; machine-specific functions
  * should go into other modules.  XXX
  *
- * Copyright © 2013-2020, Matthew Madison.
+ * Copyright © 2013-2024, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -202,7 +202,7 @@ gen_MINMAX (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef neededty
 {
     unsigned int bpval = machine_scalar_bits(gctx->mach);
     exprseq_t *args = expr_func_arglist(exp);
-    LLVMIntPredicate pred = (LLVMIntPredicate) ctx;
+    LLVMIntPredicate pred = (LLVMIntPredicate) (uintptr_t) ctx;
     LLVMBuilderRef builder = gctx->curfn->builder;
     LLVMTypeRef inttype = LLVMIntTypeInContext(gctx->llvmctx, bpval);
     LLVMValueRef val, cmpval, test;

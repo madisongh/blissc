@@ -7,7 +7,7 @@
  * points and some common routines shared by the other
  * llvmgen modules.
  *
- * Copyright © 2012, 2013  Matthew Madison.
+ * Copyright © 2012-2024, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -235,7 +235,7 @@ llvmgen_cast_trunc_ext (gencodectx_t gctx, LLVMValueRef val, LLVMTypeRef neededt
             }
             return LLVMBuildZExt(builder, val, neededtype, llvmgen_temp(gctx));
         }
-    } else if (needkind == LLVMPointerTypeKind) {
+    } else { // Value is a pointer
         val = llvmgen_adjustval(gctx, val, gctx->intptrtszype, machine_addr_signed(gctx->mach));
         if (constcast) {
             return LLVMConstIntToPtr(val, neededtype);

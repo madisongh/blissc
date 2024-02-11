@@ -8,13 +8,14 @@
  *
  * XXX Currently only handles one target machine.
  *
- * Copyright © 2013-2020, Matthew Madison.
+ * Copyright © 2013-2024, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
  */
 
 #include "llvm_machinectx.h"
+#include "llvm_helper.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -34,7 +35,7 @@ machine_init (const char *mspec)
     unsigned long allosize;
 
     if (machspec == 0) {
-        machspec = LLVM_DEFAULT_TARGET_TRIPLE;
+        machspec = HelperGetDefaultTriple();
     }
     allosize = (sizeof(struct machine_ctx_s) +
                 sizeof(struct machinedef_s) +
@@ -163,4 +164,3 @@ machine_finish (machinedef_t *mach)
     free(m);
     
 } /* machine_finish */
-
