@@ -20,7 +20,7 @@
  * one host to be readable by another (for the same target).
  * XXX
  *
- * Copyright © 2013-2020, Matthew Madison.
+ * Copyright © 2013-2024, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--

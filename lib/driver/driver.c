@@ -6,7 +6,7 @@
  * providing a callable interface to specify compiler options
  * and exposing these options to other parts of the compiler.
  *
- * Copyright © 2013-2020, Matthew Madison.
+ * Copyright © 2013-2024, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -16,7 +16,6 @@
 #include "blissc/support/logging.h"
 #include "blissc/support/fileio.h"
 #include "blissc/machinedef.h"
-#include "blissc/nametable.h"
 #include "blissc/gencode.h"
 #include "blissc/declarations.h"
 #include "blissc/libgen.h"

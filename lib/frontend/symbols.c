@@ -23,13 +23,12 @@
  * a symbol, marking it "pending" until all attributes have been
  * parsed and the symbol information gets updated.
  *
- * Copyright © 2012-2020, Matthew Madison.
+ * Copyright © 2012-2024, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *
  *--
  */
-#include <stdio.h>
 #include <stdlib.h>
 #include "blissc/symbols.h"
 #include "blissc/structures.h"
@@ -1356,7 +1355,7 @@ litsym_declare (scopectx_t scope, strdesc_t *dsc, literal_attr_t *attrp, textpos
     ndef.flags |= (attrp->flags & SYM_M_RESERVED) ? NAME_M_RESERVED : 0;
 
     if (attrp->sc == SYMSCOPE_EXTERNAL || attrp->sc == SYMSCOPE_GLOBAL) {
-        name_t *gnp = 0;
+        name_t *gnp;
         sym_literal_t *gsym;
         scopectx_t gscope = nametables_globalscope(namectx);
         gnp = name_search_typed(gscope, dsc->ptr, dsc->len,

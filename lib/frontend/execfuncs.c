@@ -6,7 +6,7 @@
  * handling executable function calls, as well as
  * implementing the standard functions.
  *
- * Copyright © 2012-2020, Matthew Madison.
+ * Copyright © 2012-2024, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -89,7 +89,7 @@ function_bind (expr_ctx_t ctx, lextype_t lt, lexeme_t *lex)
     textpos_t pos = parser_curpos(expr_parse_ctx(ctx));
     funcdef_t *func;
     exprseq_t args;
-    expr_node_t *result = 0;
+    expr_node_t *result;
 
     if (np == 0) {
         expr_signal(ctx, STC__INTCMPERR, "function_bind");

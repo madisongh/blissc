@@ -32,7 +32,7 @@
  * are also handled through dispatch function pointers on
  * a per-type basis.
  *
- * Copyright © 2012-2020, Matthew Madison.
+ * Copyright © 2012-2024, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -905,19 +905,17 @@ nametype_dataop_register (namectx_t ctx, lextype_t lt,
  * (i.e, has a nametype other than LEXTYPE_NAME).
  */
 static name_t *
-name_search_internal (scopectx_t curscope, const char *id, size_t len,
-                      lextype_t *ntypep, void *datapp, int undeclared_ok)
+name_search_internal (scopectx_t curscope, const char *id, size_t len, lextype_t *ntypep, int undeclared_ok)
 {
     int i;
-    name_t *np = 0;
-    nameref_t *ref = 0;
     scopectx_t nullscope = curscope->home->nullscope;
     scopectx_t scope;
 
     for (scope = curscope; scope != 0 && scope != nullscope; scope = scope->parent) {
-        np = 0;
+        name_t *np = 0;
         if (scope->htptr != 0) {
             hashtable_t *table = scope->htptr;
+            nameref_t *ref;
             i = hash(id, len);
             for (ref = namereflist_head(&table->listhead[i]);
                  ref != 0; ref = ref->tq_next) {
@@ -942,7 +940,6 @@ name_search_internal (scopectx_t curscope, const char *id, size_t len,
                         ((np->nameflags & NAME_M_BUILTIN) == 0 &&
                          np->nametype != LEXTYPE_NAME))) {
             if (ntypep != 0) *ntypep = np->nametype;
-            if (datapp != 0) *(void **)datapp = np->nameextra;
             return np;
         }
     }
@@ -960,7 +957,7 @@ name_t *
 name_search (scopectx_t curscope, const char *id, size_t len,
                      lextype_t *ntypep)
 {
-    return name_search_internal(curscope, id, len, ntypep, 0, 0);
+    return name_search_internal(curscope, id, len, ntypep, 0);
 
 } /* name_search */
 
@@ -977,7 +974,7 @@ name_search_typed (scopectx_t curscope, const char *id,
 {
     lextype_t acttype;
     name_t *np;
-    np = name_search_internal(curscope, id, len, &acttype, 0, 0);
+    np = name_search_internal(curscope, id, len, &acttype, 0);
     if (np == 0 || acttype != ntype) return 0;
     if (datapp != 0) *(void **)datapp = np->nameextra;
     return np;
@@ -996,7 +993,7 @@ name_search_typed_special (scopectx_t curscope, const char *id,
 {
     lextype_t acttype;
     name_t *np;
-    np = name_search_internal(curscope, id, len, &acttype, 0, 1);
+    np = name_search_internal(curscope, id, len, &acttype, 1);
     if (acttype != ntype) return 0;
     if (datapp != 0) *(void **)datapp = np->nameextra;
     return np;
@@ -1012,7 +1009,7 @@ int
 name_is_declared (scopectx_t curscope, const char *id, size_t len)
 {
     lextype_t acttype;
-    name_t *np = name_search_internal(curscope, id, len, &acttype, 0, 0);
+    name_t *np = name_search_internal(curscope, id, len, &acttype, 0);
     return (np != 0) && ((np->nameflags & NAME_M_DECLARED) != 0);
 
 } /* name_is_declared */
@@ -1086,7 +1083,7 @@ name_declare_internal (scopectx_t scope, const char *id, size_t len,
         len = NAME_SIZE-1;
     }
 
-    np = name_search_internal(scope, id, len, &nt, 0, 1);
+    np = name_search_internal(scope, id, len, &nt, 1);
     if (!rescheck && np != 0) {
         // with the override, we go ahead and define
         // the name in the local scope, regardless
@@ -1243,7 +1240,7 @@ tempname_get (namectx_t ctx, char *buf, size_t bufsiz)
 int
 name_declare_builtin (scopectx_t scope, strdesc_t *namestr, textpos_t pos)
 {
-    name_t *np = name_search_internal(scope, namestr->ptr, namestr->len, 0, 0, 1);
+    name_t *np = name_search_internal(scope, namestr->ptr, namestr->len, 0, 1);
 
     if (np == 0 || (np->nameflags & NAME_M_BUILTIN) == 0) {
         logctx_t logctx = scope->home->logctx;
@@ -1382,7 +1379,7 @@ namereflist_deserialize (scopectx_t scope, void *fh, namereflist_t *lst,
 
     while (count > 0) {
         if (!name_deserialize(fh, namebuf, &len, &lt, 0, 0)) return 0;
-        np = name_search_internal(scope, namebuf, len, 0, 0, 0);
+        np = name_search_internal(scope, namebuf, len, 0, 0);
         if (np == 0 || np->nametype != lt) return 0;
         nr = nameref_alloc(ctx, np);
         if (nr == 0) return 0;

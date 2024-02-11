@@ -14,14 +14,15 @@
  * are text divided into lines ending with linemarks
  * (for standard C I/O, '\n').
  *
- * Copyright © 2012-2020, Matthew Madison.
+ * Copyright © 2012-2024, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
  */
-#include <stdio.h>
-#include <fcntl.h>
+#define _DEFAULT_SOURCE
 #include <stdlib.h>
+#undef _DEFAULT_SOURCE
+#include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/uio.h>
@@ -377,6 +378,7 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
     char *origbp = &ctx->filebuf[ctx->bufpos];
     char *bp = origbp;
     char *cp;
+    char errbuf[64];
     size_t remain = ctx->buflen - ctx->bufpos;
     ssize_t ret;
     int status = 0;
@@ -415,7 +417,6 @@ file_readline (filectx_t ctx, char *buf, size_t bufsiz, size_t *len)
         }
         ret = read(ctx->fd, ctx->filebuf, sizeof(ctx->filebuf));
         if (ret < 0) {
-            char errbuf[64];
             errbuf[0] = '\0';
             strerror_r(errno, errbuf, sizeof(errbuf));
             log_signal(ctx->fio->logctx, 0, STC__FIOERR, errbuf);

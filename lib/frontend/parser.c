@@ -7,7 +7,7 @@
  * functions. This module sits above the lexer module, which manages
  * the lexeme stream.
  *
- * Copyright © 2012-2020, Matthew Madison.
+ * Copyright © 2012-2024, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -816,7 +816,7 @@ parser_punct_separator (parse_ctx_t pctx)
 lextype_t
 parser_next (parse_ctx_t pctx, quotelevel_t ql, lexeme_t **lexp)
 {
-    lexeme_t *lex = 0;
+    lexeme_t *lex;
     lexseq_t result;
     lextype_t lt;
     int status;

@@ -15,7 +15,7 @@
  * the input line, zero for EOF, or a negative return code
  * for an error, just like the file I/O routines do.
  *
- * Copyright © 2012-2020, Matthew Madison.
+ * Copyright © 2012-2024, Matthew Madison.
  * All rights reserved.
  * Distributed under license. See LICENSE.TXT for details.
  *--
@@ -26,7 +26,6 @@
 #include "blissc/scanner.h"
 #include "blissc/support/fileio.h"
 
-#define SCAN_MAXFILES 16
 #define SCAN_LINESIZE 1024
 
 // Structure for tracking an input stream and
