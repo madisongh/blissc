@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
-project(blissc VERSION 0.3.90)
+project(blissc VERSION 0.4.0)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
@@ -10,7 +10,7 @@ find_package(Python3 COMPONENTS Interpreter)
 include_directories(${blissc_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 
 if(NOT MSVC)
-  add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wpedantic $<$<CONFIG:DEBUG>:-Werror> $<$<CONFIG:DEBUG>:-Wno-error=deprecated-declarations>)
+  add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wpedantic $<$<CONFIG:DEBUG>:-Werror>)
 endif()
 
 add_library(libdriver STATIC lib/driver/driver.c)

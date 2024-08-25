@@ -1,19 +1,19 @@
 dnl ++
 dnl  configure.ac - autoconf script for blissc
 dnl
-dnl  Copyright (c) 2013-2020, Matthew Madison.
+dnl  Copyright (c) 2013-2024, Matthew Madison.
 dnl  All rights reserved.
 dnl
 dnl  Distributed under license.  See LICENSE.TXT for details.
 dnl --
 
-AC_INIT([blissc], [0.3.0], [http://github.com/madisongh/blissc/issues])
+AC_INIT([blissc], [0.4.0], [http://github.com/madisongh/blissc/issues])
 AC_DEFINE([BLISSC_VERSION_MAJOR], [0], [Major version of blissc])
-AC_DEFINE([BLISSC_VERSION_MINOR], [3], [Minor version of blissc])
+AC_DEFINE([BLISSC_VERSION_MINOR], [4], [Minor version of blissc])
 AC_DEFINE([BLISSC_VERSION_MAINT], [0], [Maintenance level of blissc])
 AM_INIT_AUTOMAKE([subdir-objects foreign])
 AM_SILENT_RULES([yes])
-AC_COPYRIGHT([Copyright (c) 2013-2020, Matthew Madison])
+AC_COPYRIGHT([Copyright (c) 2013-2024, Matthew Madison])
 
 AC_PREREQ(2.69)
 
