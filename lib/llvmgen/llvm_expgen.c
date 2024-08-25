@@ -296,9 +296,7 @@ gen_routine_call (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
 
     if (expr_type(rtnexp) == EXPTYPE_PRIM_SEG &&
         name_type(expr_seg_name(rtnexp)) == LEXTYPE_NAME_ROUTINE) {
-        rtnadr = LLVMGetNamedFunction(gctx->module, name_azstring(expr_seg_name(rtnexp)));
-        type = LLVMGetElementType(LLVMTypeOf(rtnadr));
-        rettype = LLVMGetReturnType(type);
+        rtnadr = llvmgen_rtntype_info(gctx, expr_seg_name(rtnexp), &type, &rettype);
         formalcount = LLVMCountParamTypes(type);
     } else {
         rettype = gctx->fullwordtype;
