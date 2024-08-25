@@ -112,7 +112,7 @@ llvmgen_addr_expression (gencodectx_t gctx, expr_node_t *exp,
         long off = expr_seg_offset(base);
         llvm_stgclass_t valclass;
         unsigned int sflags;
-        addr = llvmgen_segaddress(gctx, expr_seg_name(base), &valclass, &sflags);
+        addr = llvmgen_segaddress(gctx, expr_seg_name(base), &valclass, &sflags, 0);
         if (valclass == LLVM_REG && accinfo == 0 &&
             (sflags & (LLVMGEN_M_SEG_DEREFED|LLVMGEN_M_SEG_ISBIND)) == 0) {
             // XXX
