@@ -206,7 +206,7 @@ void llvmgen_memcpy(gencodectx_t gctx, LLVMValueRef dest, LLVMValueRef src, LLVM
 void llvmgen_memset(gencodectx_t gctx, LLVMValueRef dest, LLVMValueRef val, LLVMValueRef len);
 LLVMValueRef llvmgen_assignment(gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs);
 LLVMValueRef llvmgen_segaddress(gencodectx_t gctx, name_t *np, llvm_stgclass_t *segclass,
-                                unsigned int *flagsp);
+                                unsigned int *flagsp, LLVMTypeRef *llvm_type);
 LLVMValueRef llvmgen_expression(gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype);
 LLVMValueRef llvmgen_addr_expression(gencodectx_t gctx, expr_node_t *exp, llvm_accinfo_t *accinfo);
 LLVMValueRef llvmgen_rtntype_info(gencodectx_t gctx, name_t *np, LLVMTypeRef *func_type, LLVMTypeRef *return_type);

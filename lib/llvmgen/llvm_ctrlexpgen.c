@@ -413,7 +413,7 @@ gen_incr_decr_loop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     optype_t compareop = expr_idloop_cmptype(exp);
     LLVMValueRef neg1 = LLVMConstAllOnes(gctx->fullwordtype);
     LLVMValueRef zero = LLVMConstNull(gctx->fullwordtype);
-    LLVMValueRef loopidx = llvmgen_segaddress(gctx, expr_idloop_index(exp), 0, 0);
+    LLVMValueRef loopidx = llvmgen_segaddress(gctx, expr_idloop_index(exp), 0, 0, 0);
     int addrsigned = machine_addr_signed(gctx->mach);
     LLVMValueRef initval, endval, stepval, testphi, cmpval, result;
     LLVMBasicBlockRef loopblk, testblk, curblk;
