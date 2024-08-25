@@ -18,7 +18,11 @@
 #include "llvm_helper.h"
 #include "llvm/IR/Instructions.h"
 
+#if LLVM_VERSION_MAJOR >= 14
+#include "llvm/MC/TargetRegistry.h"
+#else
 #include "llvm/Support/TargetRegistry.h"
+#endif
 #include "llvm/Support/Alignment.h"
 #include "llvm/Support/Host.h"
 
