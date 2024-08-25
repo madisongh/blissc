@@ -446,6 +446,7 @@ gencode_init (void *ectx, logctx_t logctx, machinedef_t *mach, symctx_t symctx)
     gctx->llvmctx = gctx->mctx->llvmctx;
     gctx->int1type = LLVMIntTypeInContext(gctx->llvmctx, 1);
     gctx->fullwordtype = LLVMIntTypeInContext(gctx->llvmctx, machine_scalar_bits(mach));
+    gctx->unittype = LLVMIntTypeInContext(gctx->llvmctx, machine_unit_bits(mach));
     gctx->unitptrtype = LLVMPointerType(LLVMIntTypeInContext(gctx->llvmctx,
                                                              machine_unit_bits(mach)), 0);
     gctx->intptrtszype = LLVMIntTypeInContext(gctx->llvmctx, machine_addr_bits(mach));

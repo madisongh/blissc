@@ -460,7 +460,7 @@ gen_incr_decr_loop (gencodectx_t gctx, expr_node_t *exp, LLVMTypeRef neededtype)
     llvmgen_expression(gctx, expr_idloop_body(exp), 0);
     if (LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder)) == 0) {
         LLVMValueRef v;
-        v = LLVMBuildLoad(builder, loopidx, llvmgen_temp(gctx));
+        v = LLVMBuildLoad2(builder, gctx->fullwordtype, loopidx, llvmgen_temp(gctx));
         if (is_decr) {
             v = LLVMBuildSub(builder, v, stepval, llvmgen_temp(gctx));
         } else {

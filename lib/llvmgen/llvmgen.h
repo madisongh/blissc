@@ -110,6 +110,7 @@ struct gencodectx_s {
     LLVMModuleRef       module;
     LLVMPassManagerRef  passmgr;
 
+    LLVMTypeRef         unittype;
     LLVMTypeRef         unitptrtype;
     LLVMTypeRef         fullwordtype;
     LLVMTypeRef         int1type;

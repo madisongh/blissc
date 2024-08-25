@@ -104,7 +104,7 @@ llvmgen_assignment (gencodectx_t gctx, expr_node_t *lhs, expr_node_t *rhs)
         v = LLVMBuildShl(builder, srcmask, accinfo.posval, llvmgen_temp(gctx));
         v = llvmgen_adjustval(gctx, v, lhstype, 0);
         dstmask = LLVMBuildNot(builder, v, llvmgen_temp(gctx));
-        v = LLVMBuildLoad(builder, lhsaddr, llvmgen_temp(gctx));
+        v = LLVMBuildLoad2(builder, lhstype, lhsaddr, llvmgen_temp(gctx));
         v = llvmgen_adjustval(gctx, v, lhstype, (accinfo.flags & LLVMGEN_M_SEG_SIGNEXT) != 0);
         v = LLVMBuildAnd(builder, v, dstmask, llvmgen_temp(gctx));
         v = LLVMBuildOr(builder, v, rhstemp, llvmgen_temp(gctx));
@@ -165,7 +165,7 @@ gen_fetch (gencodectx_t gctx, expr_node_t *rhs, LLVMTypeRef neededtype)
         val = llvmgen_adjustval(gctx, addr, type, signext);
     } else {
         addr = llvmgen_adjustval(gctx, addr, LLVMPointerType(type, 0), 0);
-        val = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
+        val = LLVMBuildLoad2(builder, type, addr, llvmgen_temp(gctx));
         if ((accinfo.flags & LLVMGEN_M_SEG_VOLATILE) != 0) LLVMSetVolatile(val, 1);
     }
     if (shifts_required) {

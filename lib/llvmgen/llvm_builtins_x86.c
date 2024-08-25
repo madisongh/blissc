@@ -204,10 +204,10 @@ gen_asminstr (gencodectx_t gctx, void *fctx, expr_node_t *exp, LLVMTypeRef neede
     i += 1;
     }
     if (LLVMGetTypeKind(asmp->rettype) == LLVMVoidTypeKind) {
-        LLVMBuildCall(gctx->curfn->builder, asmp->asminstr, argvals, asmp->argcount, "");
+        LLVMBuildCall2(gctx->curfn->builder, asmp->functype, asmp->asminstr, argvals, asmp->argcount, "");
         result = (neededtype == 0 ? 0 : LLVMConstNull(neededtype));
     } else {
-        result = LLVMBuildCall(gctx->curfn->builder, asmp->asminstr, argvals,
+        result = LLVMBuildCall2(gctx->curfn->builder, asmp->functype, asmp->asminstr, argvals,
                                asmp->argcount, llvmgen_temp(gctx));
         result = llvmgen_adjustval(gctx, result, neededtype, 0);
     }
@@ -339,10 +339,10 @@ llvmgen_asminstr (gencodectx_t gctx, const char *name, LLVMValueRef *arg, unsign
     i += 1;
     }
     if (LLVMGetTypeKind(asmp->rettype) == LLVMVoidTypeKind) {
-        LLVMBuildCall(gctx->curfn->builder, asmp->asminstr, argvals, asmp->argcount, "");
+        LLVMBuildCall2(gctx->curfn->builder, asmp->functype, asmp->asminstr, argvals, asmp->argcount, "");
         result = 0;
     } else {
-        result = LLVMBuildCall(gctx->curfn->builder, asmp->asminstr, argvals,
+        result = LLVMBuildCall2(gctx->curfn->builder, asmp->functype, asmp->asminstr, argvals,
                                asmp->argcount, llvmgen_temp(gctx));
     }
 
