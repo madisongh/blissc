@@ -4,13 +4,13 @@ project(blissc VERSION 0.3.90)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
-find_package(LLVM 12.0 REQUIRED)
+find_package(LLVM 14.0 REQUIRED)
 find_package(Python3 COMPONENTS Interpreter)
 
 include_directories(${blissc_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 
 if(NOT MSVC)
-  add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wpedantic $<$<CONFIG:DEBUG>:-Werror>)
+  add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wpedantic $<$<CONFIG:DEBUG>:-Werror> $<$<CONFIG:DEBUG>:-Wno-error=deprecated-declarations>)
 endif()
 
 add_library(libdriver STATIC lib/driver/driver.c)
