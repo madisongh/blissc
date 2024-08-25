@@ -273,9 +273,9 @@ gen_ch_pointer (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef need
             if (expr_litval(arg) != 0) {
                 offset = LLVMConstInt(gctx->fullwordtype, (unsigned long long int) expr_litval(arg), 0);
                 if (LLVMIsConstant(result)) {
-                    result = LLVMConstGEP(offset, &offset, 1);
+                    result = LLVMConstGEP2(gctx->unittype, offset, &offset, 1);
                 } else {
-                    result = LLVMBuildGEP(builder, result, &offset, 1, llvmgen_temp(gctx));
+                    result = LLVMBuildGEP2(builder, gctx->unittype, result, &offset, 1, llvmgen_temp(gctx));
                 }
             }
         } else {
@@ -305,7 +305,7 @@ gen_ch_rchar (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef needed
 
     arg = exprseq_head(args);
     addr = llvmgen_expression(gctx, arg, gctx->unitptrtype);
-    result = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
+    result = LLVMBuildLoad2(builder, gctx->unittype, addr, llvmgen_temp(gctx));
 
     return llvmgen_adjustval(gctx, result, neededtype, 0);
 
@@ -328,15 +328,15 @@ gen_ch_rchar_a (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef need
 
     arg = exprseq_head(args);
     addraddr = llvmgen_expression(gctx, arg, LLVMPointerType(gctx->unitptrtype, 0));
-    addr = LLVMBuildLoad(builder, addraddr, llvmgen_temp(gctx));
+    addr = LLVMBuildLoad2(builder, gctx->unitptrtype, addraddr, llvmgen_temp(gctx));
     if (!postincrement) {
-        LLVMValueRef tmp = LLVMBuildGEP(builder, addr, &one, 1, llvmgen_temp(gctx));
+        LLVMValueRef tmp = LLVMBuildGEP2(builder, gctx->unittype, addr, &one, 1, llvmgen_temp(gctx));
         LLVMBuildStore(builder, tmp, addraddr);
         addr = tmp;
     }
-    result = LLVMBuildLoad(builder, addr, llvmgen_temp(gctx));
+    result = LLVMBuildLoad2(builder, gctx->unittype, addr, llvmgen_temp(gctx));
     if (postincrement) {
-        LLVMValueRef tmp = LLVMBuildGEP(builder, addr, &one, 1, llvmgen_temp(gctx));
+        LLVMValueRef tmp = LLVMBuildGEP2(builder, gctx->unittype, addr, &one, 1, llvmgen_temp(gctx));
         LLVMBuildStore(builder, tmp, addraddr);
     }
 
@@ -390,15 +390,15 @@ gen_ch_wchar_a (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef need
     ch = llvmgen_expression(gctx, arg, LLVMInt8TypeInContext(gctx->llvmctx));
     arg = arg->tq_next;
     addraddr = llvmgen_expression(gctx, arg, LLVMPointerType(gctx->unitptrtype, 0));
-    addr = LLVMBuildLoad(builder, addraddr, llvmgen_temp(gctx));
+    addr = LLVMBuildLoad2(builder, gctx->unittype, addraddr, llvmgen_temp(gctx));
     if (!postincrement) {
-        LLVMValueRef tmp = LLVMBuildGEP(builder, addr, &one, 1, llvmgen_temp(gctx));
+        LLVMValueRef tmp = LLVMBuildGEP2(builder, gctx->unittype, addr, &one, 1, llvmgen_temp(gctx));
         LLVMBuildStore(builder, tmp, addraddr);
         addr = tmp;
     }
     LLVMBuildStore(builder, ch, addr);
     if (postincrement) {
-        LLVMValueRef tmp = LLVMBuildGEP(builder, addr, &one, 1, llvmgen_temp(gctx));
+        LLVMValueRef tmp = LLVMBuildGEP2(builder, gctx->unittype, addr, &one, 1, llvmgen_temp(gctx));
         LLVMBuildStore(builder, tmp, addraddr);
     }
 
@@ -499,14 +499,14 @@ gen_ch_compare (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef need
 
     LLVMPositionBuilderAtEnd(builder, str2longer);
     argvals[0] = LLVMBuildSub(builder, len2, bound, llvmgen_temp(gctx));
-    argvals[1] = LLVMBuildGEP(builder, ptr2, &bound, 1, llvmgen_temp(gctx));
+    argvals[1] = LLVMBuildGEP2(builder, gctx->unittype, ptr2, &bound, 1, llvmgen_temp(gctx));
     argvals[2] = fill;
     result = llvmgen_asminstr(gctx, "SCASB_CMP", argvals, 3);
     llvmgen_btrack_update(gctx, bt, result);
 
     LLVMPositionBuilderAtEnd(builder, str1longer);
     argvals[0] = LLVMBuildSub(builder, len1, bound, llvmgen_temp(gctx));
-    argvals[1] = LLVMBuildGEP(builder, ptr1, &bound, 1, llvmgen_temp(gctx));
+    argvals[1] = LLVMBuildGEP2(builder, gctx->unittype, ptr1, &bound, 1, llvmgen_temp(gctx));
     argvals[2] = fill;
     result = llvmgen_asminstr(gctx, "SCASB_CMP", argvals, 3);
     llvmgen_btrack_update(gctx, bt, result);
@@ -610,7 +610,7 @@ gen_ch_findsub (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef need
     plen = llvmgen_expression(gctx, arg, gctx->fullwordtype);
     arg = arg->tq_next;
     pptr = llvmgen_expression(gctx, arg, gctx->unitptrtype);
-    pfirst = LLVMBuildLoad(builder, pptr, llvmgen_temp(gctx));
+    pfirst = LLVMBuildLoad2(builder, gctx->unittype, pptr, llvmgen_temp(gctx));
 
     test = LLVMBuildIsNull(builder, plen, llvmgen_temp(gctx));
     curblk = LLVMGetInsertBlock(builder);
@@ -658,7 +658,7 @@ gen_ch_findsub (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef need
     llvmgen_btrack_update_brcount(gctx, bt);
 
     LLVMPositionBuilderAtEnd(builder, updblk);
-    v = LLVMBuildGEP(builder, result, &one, 1, llvmgen_temp(gctx));
+    v = LLVMBuildGEP2(builder, gctx->unittype, result, &one, 1, llvmgen_temp(gctx));
     LLVMAddIncoming(curptr, &v, &updblk, 1);
     v = LLVMBuildSub(builder, remain, one, llvmgen_temp(gctx));
     LLVMAddIncoming(curlen, &v, &updblk, 1);
@@ -806,11 +806,11 @@ gen_ch_translate (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef ne
     LLVMBuildCondBr(builder, test, postloop, loopbody);
 
     LLVMPositionBuilderAtEnd(builder, loopbody);
-    sptr = LLVMBuildGEP(builder, sptr, &offphi, 1, llvmgen_temp(gctx));
-    chr = LLVMBuildLoad(builder, sptr, llvmgen_temp(gctx));
-    v = LLVMBuildGEP(builder, transtab, &chr, 1, llvmgen_temp(gctx));
-    chr = LLVMBuildLoad(builder, v, llvmgen_temp(gctx));
-    v = LLVMBuildGEP(builder, dptr, &offphi, 1, llvmgen_temp(gctx));
+    sptr = LLVMBuildGEP2(builder, gctx->unittype, sptr, &offphi, 1, llvmgen_temp(gctx));
+    chr = LLVMBuildLoad2(builder, gctx->unittype, sptr, llvmgen_temp(gctx));
+    v = LLVMBuildGEP2(builder, gctx->unittype, transtab, &chr, 1, llvmgen_temp(gctx));
+    chr = LLVMBuildLoad2(builder, gctx->unittype, v, llvmgen_temp(gctx));
+    v = LLVMBuildGEP2(builder, gctx->unittype, dptr, &offphi, 1, llvmgen_temp(gctx));
     LLVMBuildStore(builder, chr, v);
     v = LLVMBuildSub(builder, loopphi, one, llvmgen_temp(gctx));
     LLVMAddIncoming(loopphi, &v, &loopbody, 1);
@@ -819,7 +819,7 @@ gen_ch_translate (gencodectx_t gctx, void *ctx, expr_node_t *exp, LLVMTypeRef ne
     LLVMBuildBr(builder, loopblk);
 
     LLVMPositionBuilderAtEnd(builder, postloop);
-    dptr = LLVMBuildGEP(builder, dptr, &loopcount, 1, llvmgen_temp(gctx));
+    dptr = LLVMBuildGEP2(builder, gctx->unittype, dptr, &loopcount, 1, llvmgen_temp(gctx));
     test = LLVMBuildICmp(builder, LLVMIntULT, loopcount, dlen, llvmgen_temp(gctx));
     LLVMBuildCondBr(builder, test, fillblk, exitblk);
     llvmgen_btrack_update_phi(gctx, bt, LLVMGetInsertBlock(builder), dptr);
