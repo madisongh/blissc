@@ -880,6 +880,28 @@ llvmgen_segaddress (gencodectx_t gctx, name_t *np, llvm_stgclass_t *segclassp, u
 } /* llvmgen_segaddress */
 
 /*
+ * llvmgen_rtntype_info
+ *
+ * Returns LLVM type info about a routine.
+ * Returns: function address
+ */
+LLVMValueRef
+llvmgen_rtntype_info (gencodectx_t gctx, name_t *np, LLVMTypeRef *func_type, LLVMTypeRef *return_type)
+{
+    lextype_t ntype = name_type(np);
+
+    if (ntype == LEXTYPE_NAME_ROUTINE) {
+        llvm_rtnsym_t *lr = sym_genspace(np);
+        if (func_type != 0) *func_type = lr->type;
+        if (return_type != 0) *return_type = lr->returntype;
+        return lr->func;
+    }
+    // Should never be called on any other name types
+    expr_signal(gctx->ectx, STC__INTCMPERR, "llvmgen_rtntype_info");
+    return 0;
+
+} /* llvmgen_rtntype_info */
+/*
  * symbol_gen_dispatch
  *
  * Dispatcher routine for generating a symbol.  Called
