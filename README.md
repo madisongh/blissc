@@ -21,11 +21,11 @@ of machine-specific support.
 ## Prerequisites
 
 * Recent-vintage C compiler
-* Recent version LLVM
+* Recent version LLVM (one that has support for opaque pointers)
 * CMake 3.13 or later, or a recent version of autotools
 
 Recent development and testing has been on Ubuntu 22.04 with
-gcc 11 and LLVM 12.0.
+gcc 11 and LLVM 15.0.
 
 ## Building the compiler
 
