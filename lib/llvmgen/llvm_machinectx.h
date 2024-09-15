@@ -19,8 +19,6 @@
 #endif
 #include "llvm-c/Core.h"
 #include "llvm-c/Analysis.h"
-#include "llvm-c/Transforms/Scalar.h"
-#include "llvm-c/Transforms/AggressiveInstCombine.h"
 #include "llvm-c/Target.h"
 #include "llvm-c/TargetMachine.h"
 #include "llvm_helper.h"

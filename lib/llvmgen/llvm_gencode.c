@@ -14,6 +14,7 @@
  */
 
 #include "llvmgen.h"
+#include "llvm-c/Transforms/PassBuilder.h"
 #include "blissc/switches.h"
 #include <assert.h>
 
@@ -167,7 +168,6 @@ gencode_routine_end (gencodectx_t gctx, name_t *np)
     gctx->freerts = rt;
 
     LLVMVerifyFunction(thisfn, LLVMPrintMessageAction);
-    LLVMRunFunctionPassManager(gctx->passmgr, thisfn);
 
     return 1;
 
@@ -226,10 +226,6 @@ llvmgen_cast_trunc_ext (gencodectx_t gctx, LLVMValueRef val, LLVMTypeRef neededt
             }
             return LLVMBuildTrunc(builder, val, neededtype, llvmgen_temp(gctx));
         } else if (needbits > valbits) {
-            if (constcast) {
-                return (signext ? LLVMConstSExt(val, neededtype)
-                        : LLVMConstZExt(val, neededtype));
-            }
             if (signext) {
                 return LLVMBuildSExt(builder, val, neededtype, llvmgen_temp(gctx));
             }
@@ -312,12 +308,6 @@ gencode_module_begin (gencodectx_t gctx, name_t *modnp)
     if (gctx->module == 0) {
         return 0;
     }
-    gctx->passmgr = LLVMCreateFunctionPassManagerForModule(gctx->module);
-    if (gctx->passmgr == 0) {
-        LLVMDisposeModule(gctx->module);
-        gctx->module = 0;
-        return 0;
-    }
 
     triple = LLVMGetTargetMachineTriple(gctx->mctx->target_machine);
     LLVMSetTarget(gctx->module, triple);
@@ -325,14 +315,6 @@ gencode_module_begin (gencodectx_t gctx, name_t *modnp)
     dl = LLVMCreateTargetDataLayout(gctx->mctx->target_machine);
     LLVMSetModuleDataLayout(gctx->module, dl);
     LLVMDisposeTargetData(dl);
-
-    LLVMAddBasicAliasAnalysisPass(gctx->passmgr);
-    if (gctx->optlevel > 0) {
-        LLVMAddAggressiveInstCombinerPass(gctx->passmgr);
-        LLVMAddReassociatePass(gctx->passmgr);
-        LLVMAddGVNPass(gctx->passmgr);
-        LLVMAddCFGSimplificationPass(gctx->passmgr);
-    }
 
 #if 0 // XXX later
     headerlen = 0;
@@ -373,6 +355,21 @@ gencode_module_end (gencodectx_t gctx, name_t *np)
 {
     char *err;
 
+    if (gctx->optlevel > 0) {
+        LLVMPassBuilderOptionsRef pass_builder_options = LLVMCreatePassBuilderOptions();
+        LLVMErrorRef llvm_error;
+
+        LLVMPassBuilderOptionsSetVerifyEach(pass_builder_options, 1);
+        llvm_error = LLVMRunPasses(gctx->module,
+                                   "require<basic-aa>,aggressive-instcombine,reassociate,gvn,simplifycfg",
+                                   gctx->mctx->target_machine, pass_builder_options);
+        if (llvm_error) {
+            err = LLVMGetErrorMessage(llvm_error);
+            fprintf(stderr, "%s\n", err);
+            LLVMDisposeMessage(err);
+        }
+        LLVMDisposePassBuilderOptions(pass_builder_options);
+    }
     LLVMVerifyModule(gctx->module, LLVMPrintMessageAction, 0);
     if (gctx->mctx->irdumpfile != 0) {
         err = 0;
@@ -385,7 +382,6 @@ gencode_module_end (gencodectx_t gctx, name_t *np)
                                     gctx->mctx->outfile, gctx->mctx->outputtype, &err)) {
         if (err) { fprintf(stderr, "%s\n", err); LLVMDisposeMessage(err); }
     }
-    LLVMDisposePassManager(gctx->passmgr);
     LLVMDisposeModule(gctx->module);
 
     return 1;
