@@ -7,9 +7,9 @@ dnl
 dnl  Distributed under license.  See LICENSE.TXT for details.
 dnl --
 
-AC_INIT([blissc], [0.4.0], [http://github.com/madisongh/blissc/issues])
+AC_INIT([blissc], [0.5.0], [http://github.com/madisongh/blissc/issues])
 AC_DEFINE([BLISSC_VERSION_MAJOR], [0], [Major version of blissc])
-AC_DEFINE([BLISSC_VERSION_MINOR], [4], [Minor version of blissc])
+AC_DEFINE([BLISSC_VERSION_MINOR], [5], [Minor version of blissc])
 AC_DEFINE([BLISSC_VERSION_MAINT], [0], [Maintenance level of blissc])
 AM_INIT_AUTOMAKE([subdir-objects foreign])
 AM_SILENT_RULES([yes])
